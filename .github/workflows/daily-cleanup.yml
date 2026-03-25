@@ -15,14 +15,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Trigger Supabase Edge Function
+      - name: Trigger Location Cleanup Edge Function
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "Triggering location-cleanup Edge Function..."
-          curl -X POST "${SUPABASE_URL}/functions/v1/location-cleanup" \
+          echo "=== Triggering Edge Function ==="
+          echo "URL: ${SUPABASE_URL}/functions/v1/location-cleanup"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${SUPABASE_URL}/functions/v1/location-cleanup" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{"trigger": "scheduled-cleanup"}' \
-            -v
+            -d '{"trigger": "scheduled-cleanup"}')
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "Response: $BODY"
+          echo "HTTP Status: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Cleanup triggered successfully"
+            exit 0
+          else
+            echo "❌ Failed with status $HTTP_CODE"
+            exit 1
+          fi
