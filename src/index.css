@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  
+  body {
+    @apply bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* Modern heading hierarchy with better dark mode support */
+  h1 {
+    @apply text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl;
+    letter-spacing: -0.03em;
+  }
+  
+  h2 {
+    @apply text-2xl font-semibold tracking-tight text-gray-900 dark:text-white;
+    letter-spacing: -0.02em;
+  }
+  
+  h3 {
+    @apply text-lg font-semibold text-gray-900 dark:text-white tracking-tight;
+  }
+  
+  h4 {
+    @apply text-base font-semibold text-gray-900 dark:text-white;
+  }
+
+  /* Body text improvements */
+  p {
+    @apply text-gray-600 dark:text-gray-300 leading-relaxed;
+  }
+
+  /* Better form labels */
+  label {
+    @apply text-sm font-medium text-gray-700 dark:text-gray-300;
+  }
+
+  /* Input text visibility - CRITICAL FIX */
+  input, textarea, select {
+    @apply text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+
+  /* Better button text */
+  button {
+    @apply font-medium;
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer components {
+  /* Card text hierarchy */
+  .card-title {
+    @apply text-lg font-semibold text-gray-900 dark:text-white tracking-tight;
+  }
+  
+  .card-subtitle {
+    @apply text-sm text-gray-500 dark:text-gray-400 font-medium;
+  }
+  
+  .card-body {
+    @apply text-sm text-gray-600 dark:text-gray-300 leading-relaxed;
+  }
+
+  /* Status badges with better contrast */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  
+  .badge-active {
+    @apply badge bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300;
+  }
+  
+  .badge-pending {
+    @apply badge bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300;
+  }
+  
+  .badge-inactive {
+    @apply badge bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300;
+  }
+
+  /* Vehicle badge */
+  .vehicle-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-medium;
+  }
+
+  /* Table improvements */
+  .table-header {
+    @apply px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider;
+  }
+  
+  .table-cell {
+    @apply px-4 py-3 whitespace-nowrap text-sm;
+  }
+
+  /* Modern card style */
+  .modern-card {
+    @apply bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-card dark:shadow-card-dark;
+  }
+}
+
+/* Custom scrollbar hiding (for horizontal tabs) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area for mobile bottom notch */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0.5rem);
+}
