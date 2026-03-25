@@ -6,17 +6,27 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch: # Allow manual trigger for testing
 
+# Opt into Node.js 24 early to avoid deprecation warnings
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5  # ✅ Updated to v5
 
       - name: Setup Deno
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2  # ✅ Updated to v2
         with:
           deno-version: v1.x
+
+      - name: Debug: Show environment
+        run: |
+          echo "SUPABASE_URL set: ${{ env.SUPABASE_URL != '' }}"
+          echo "Current dir: $(pwd)"
+          ls -la supabase/functions/location-cleanup/ || echo "Directory not found"
 
       - name: Run location cleanup
         env:
@@ -24,4 +34,4 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           cd supabase/functions/location-cleanup
-          deno run --allow-net --allow-env index.ts
+          deno run --allow-net --allow-env --allow-read index.ts
