@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Tracking Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        .warning { background: #fff3cd; color: #856404; }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .location-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        @media (max-width: 600px) {
+            .location-info {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>GPS Tracking Test</h1>
+    
+    <div class="card">
+        <h3>Instructions</h3>
+        <p>1. Click "Start GPS" to begin tracking</p>
+        <p>2. Allow location permissions when prompted</p>
+        <p>3. Check the console for debug logs</p>
+        <p>4. Click "Stop GPS" when done</p>
+    </div>
+
+    <div class="card">
+        <div id="status" class="status info">Ready to test GPS tracking</div>
+        
+        <div style="margin: 20px 0;">
+            <button id="startBtn" class="btn-primary">Start GPS</button>
+            <button id="stopBtn" class="btn-danger" disabled>Stop GPS</button>
+            <button id="testBtn" class="btn-success">Test Database Connection</button>
+        </div>
+
+        <div class="location-info">
+            <div>
+                <h4>Current Location</h4>
+                <pre id="locationOutput">No location data yet</pre>
+            </div>
+            <div>
+                <h4>Console Logs</h4>
+                <pre id="consoleOutput" style="height: 200px; overflow-y: auto;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple console logger to display in UI
+        const consoleOutput = document.getElementById('consoleOutput');
+        const statusEl = document.getElementById('status');
+        const locationOutput = document.getElementById('locationOutput');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const testBtn = document.getElementById('testBtn');
+
+        let watchId = null;
+        let isTracking = false;
+
+        // Override console.log to show in UI
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        function logToUI(type, message) {
+            const timestamp = new Date().toLocaleTimeString();
+            consoleOutput.innerHTML += `[${timestamp}] ${type}: ${message}\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            logToUI('LOG', args.join(' '));
+        };
+
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            logToUI('WARN', args.join(' '));
+        };
+
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            logToUI('ERROR', args.join(' '));
+        };
+
+        function updateStatus(message, type = 'info') {
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        function updateLocation(data) {
+            locationOutput.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Test database connection
+        testBtn.addEventListener('click', async () => {
+            try {
+                updateStatus('Testing database connection...', 'info');
+                
+                // Test if patrol_locations table exists
+                const response = await fetch('/api/test-db', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ test: 'patrol_locations' })
+                });
+
+                if (response.ok) {
+                    updateStatus('Database connection successful!', 'success');
+                } else {
+                    updateStatus('Database connection failed', 'error');
+                }
+            } catch (error) {
+                console.error('Database test failed:', error);
+                updateStatus('Database test failed: ' + error.message, 'error');
+            }
+        });
+
+        // Start GPS tracking
+        startBtn.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                updateStatus('Geolocation is not supported by this browser', 'error');
+                return;
+            }
+
+            updateStatus('Requesting location permissions...', 'info');
+            startBtn.disabled = true;
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    isTracking = true;
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                    
+                    const locationData = {
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        accuracy: position.coords.accuracy,
+                        altitude: position.coords.altitude,
+                        speed: position.coords.speed,
+                        heading: position.coords.heading,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    updateStatus('GPS tracking active', 'success');
+                    updateLocation(locationData);
+                    
+                    console.log('📍 GPS Position:', locationData);
+                    
+                    // Test database insert
+                    testDatabaseInsert(locationData);
+                },
+                (error) => {
+                    startBtn.disabled = false;
+                    updateStatus('GPS Error: ' + error.message, 'error');
+                    console.error('GPS Error:', error);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0,
+                    distanceFilter: 10
+                }
+            );
+        });
+
+        // Stop GPS tracking
+        stopBtn.addEventListener('click', () => {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                isTracking = false;
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                updateStatus('GPS tracking stopped', 'info');
+                updateLocation('No location data yet');
+            }
+        });
+
+        // Test database insert
+        async function testDatabaseInsert(locationData) {
+            try {
+                console.log('Testing database insert with sample data...');
+                
+                // This would normally go through Supabase, but for testing we'll just log
+                const testData = {
+                    patrol_id: 'test-patrol-id',
+                    user_id: 'test-user-id',
+                    latitude: locationData.latitude,
+                    longitude: locationData.longitude,
+                    accuracy: locationData.accuracy,
+                    timestamp: locationData.timestamp
+                };
+
+                console.log('Sample insert data:', testData);
+                console.log('✅ Database insert test completed (data would be sent to Supabase)');
+                
+            } catch (error) {
+                console.error('Database insert test failed:', error);
+            }
+        }
+
+        // Show initial instructions
+        logToUI('INFO', 'GPS tracking test page loaded');
+        logToUI('INFO', 'Click "Start GPS" to begin testing');
+    </script>
+</body>
+</html>

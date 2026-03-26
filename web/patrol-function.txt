@@ -1,0 +1,75 @@
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+serve(async (req) => {
+  if (req.method !== 'POST') {
+    return new Response('Method not allowed', { status: 405 })
+  }
+
+  try {
+    const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY')
+    console.log('SERVICE_ROLE_KEY exists:', !!serviceRoleKey)
+    if (serviceRoleKey) {
+      console.log('SERVICE_ROLE_KEY (first 10 chars):', serviceRoleKey.substring(0, 10))
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    console.log('SUPABASE_URL exists:', !!supabaseUrl)
+
+    const supabase = createClient(supabaseUrl!, serviceRoleKey!)
+
+    const cutoffTime = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
+
+    const { data: oldPatrols, error: fetchError } = await supabase
+      .from('active_patrols')
+      .select('*')
+      .lt('start_time', cutoffTime)
+
+    if (fetchError) throw fetchError
+
+    if (!oldPatrols || oldPatrols.length === 0) {
+      return new Response('No stale patrols found', { status: 200 })
+    }
+
+    for (const patrol of oldPatrols) {
+      const endTime = new Date()
+      const durationMinutes = Math.floor(
+        (endTime.getTime() - new Date(patrol.start_time).getTime()) / 60000
+      )
+
+      const { error: insertError } = await supabase
+        .from('patrol_logs')
+        .insert({
+          user_id: patrol.user_id,
+          user_name: patrol.user_name,
+          start_time: patrol.start_time,
+          end_time: endTime.toISOString(),
+          duration_minutes: durationMinutes,
+          zone: patrol.zone || 'Unknown',
+          auto_closed: true,
+          admin_ended: false,
+          vehicle_make_model: patrol.vehicle_make_model || patrol.car_type || null,
+          vehicle_reg: patrol.vehicle_reg || patrol.reg_number || null,
+          vehicle_color: patrol.vehicle_color || 'gray',
+        })
+
+      if (insertError) throw insertError
+
+      const { error: deleteError } = await supabase
+        .from('active_patrols')
+        .delete()
+        .eq('user_id', patrol.user_id)
+
+      if (deleteError) throw deleteError
+    }
+
+    return new Response(`Auto-ended ${oldPatrols.length} patrols`, { status: 200 })
+  } catch (err) {
+    console.error(err)
+    // Return the full error details as JSON
+    return new Response(JSON.stringify({ error: err.message, details: err }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+})

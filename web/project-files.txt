@@ -1,0 +1,247 @@
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\android\app\src\main\assets\public\assets
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/26    02:04           4727 About-BnjDTRt3.js
+-a---          2026/03/26    02:04           8292 AdminChatLogs-DyFvYfWb.js
+-a---          2026/03/26    02:04          41517 AdminDashboard-BTkaqMIx.js
+-a---          2026/03/26    02:04         372471 BarChart-D9hJkJc-.js
+-a---          2026/03/26    02:04           2570 ConfirmEmail-zTCo4srQ.js
+-a---          2026/03/26    02:04          30579 Dashboard-BSJbWXs4.js
+-a---          2026/03/26    02:04          14345 EmergencyChat-DjlDb7tB.js
+-a---          2026/03/26    02:04         938758 exceljs.min-BgKZnpNa.js
+-a---          2026/03/26    02:04           5074 Guide-hVcsmqae.js
+-a---          2026/03/26    02:04           9405 IncidentForm-DZe_zoiL.js
+-a---          2026/03/26    02:04           7187 IncidentList-Bj802PAz.js
+-a---          2026/03/26    02:04          10106 IncidentModeration-Cx_VR1ZS.js
+-a---          2026/03/26    02:04          90112 index-CbWmFFjF.css
+-a---          2026/03/26    02:04         625313 index-CPnzgcwo.js
+-a---          2026/03/26    02:04          52182 Leaderboard-BvlnrxSz.js
+-a---          2026/03/26    02:04           1464 Login-crltB6hl.js
+-a---          2026/03/26    02:04          66372 OfflineBanner-nS_NOg8D.js
+-a---          2026/03/26    02:04           8505 PatrolSchedule-B5cRtnF1.js
+-a---          2026/03/26    02:04           3610 PrintIncidents-CzXfRNCT.js
+-a---          2026/03/26    02:04           4085 PrintPatrolLogs-BbzLdwGe.js
+-a---          2026/03/26    02:04          20924 Profile-Bn_lcKWr.js
+-a---          2026/03/26    02:04           6226 Profile-D8Md-CES.css
+-a---          2026/03/26    02:04           4006 Register-DP9S-pMA.js
+-a---          2026/03/26    02:04           3066 SOPFlashcards-BpgAChkX.js
+-a---          2026/03/26    02:04           4748 TileLayer-N2TpIwnz.js
+-a---          2026/03/26    02:04           3254 UserManagement-D5il8n5c.js
+-a---          2026/03/26    02:04           3556 VehicleIcon-Bnh9SZ7k.js
+-a---          2026/03/26    02:04          10375 Vehicles-Cx2q91q2.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\android\app\src\main\assets\public
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/26    02:04           1335 index.html
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/25    02:33           1495 eslint.config.js
+-a---          2026/03/23    02:44           1086 package-info.json
+-a---          2026/03/26    02:35         509489 package-lock.json
+-a---          2026/03/26    02:35           1282 package.json
+-a---          2026/02/14    19:16           1157 README.md
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/25    04:31            798 App.css
+-a---          2026/03/25    02:19           7130 App.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\auth
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/25    02:23            115 AuthContext.js
+-a---          2026/03/26    04:06           7779 AuthProvider.jsx
+-a---          2026/03/25    02:24            304 useAuth.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat\components
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/25    02:20          21273 ChatContainer.jsx
+-a---          2026/03/25    00:40           2685 ChatHeader.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat\components\common
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/22    18:30           1454 Avatar.jsx
+-a---          2026/03/22    19:33           3359 EmergencyButton.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat\components\MessageBubble
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/22    20:57           1392 ImageMessage.jsx
+-a---          2026/03/24    21:20           4074 index.jsx
+-a---          2026/03/25    00:41          14707 LocationMessage.jsx
+-a---          2026/03/22    20:58           1154 MessageStatus.jsx
+-a---          2026/03/24    00:23            771 TextMessage.jsx
+-a---          2026/03/23    01:51            806 VoiceMessage.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat\components
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/25    01:57          19303 MessageInput.jsx
+-a---          2026/03/24    21:07           1353 MessageList.jsx
+-a---          2026/03/22    18:34           1336 OfflineBanner.jsx
+-a---          2026/03/23    20:58           8117 QuickTemplates.jsx
+-a---          2026/03/22    18:35            843 TypingIndicator.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat\components\voice
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/23    02:26           9004 VoicePlayer.jsx
+-a---          2026/03/25    02:06          12379 VoiceRecorder.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat\hooks
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/24    21:33           1464 useChatNotifications.js
+-a---          2026/03/25    01:07           2397 useEmergencyMode.js
+-a---          2026/03/25    01:02           1704 useMessageQueue.js
+-a---          2026/03/22    18:24            619 useNetworkStatus.js
+-a---          2026/03/25    02:58           1115 useScrollToBottom.js
+-a---          2026/03/22    18:58           1856 useSound.js
+-a---          2026/03/25    01:14           1921 useUnreadCount.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/22    20:59           1686 index.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat\services
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/22    22:40           4667 messageService.js
+-a---          2026/03/23    02:23           2042 storageService.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\chat\utils
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/23    02:49           8346 constants.js
+-a---          2026/03/22    19:03           4296 emergencyDetection.js
+-a---          2026/03/23    01:14           1811 formatters.js
+-a---          2026/03/22    18:22           1322 mediaCompression.js
+-a---          2026/03/22    18:22            567 objectUrlManager.js
+-a---          2026/03/22    18:21           1954 security.js
+-a---          2026/03/22    18:58           1563 validators.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\components
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/24    21:27           2060 ChatErrorBoundary.jsx
+-a---          2026/03/22    14:18           3846 ErrorBoundary.jsx
+-a---          2026/03/26    00:45          17583 LivePatrolMap.jsx
+-a---          2026/03/25    02:20           1118 RequireRole.jsx
+-a---          2026/03/22    14:22           1629 SoundToggle.jsx
+-a---          2026/03/22    14:24           2182 ThemeToggle.jsx
+-a---          2026/03/26    00:36           6692 VehicleIcon.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\hooks
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/22    18:20           3292 useChatNotifications.js
+-a---          2026/03/26    00:05           8823 useGPSTracking.js
+-a---          2026/03/25    19:51           6848 useLiveLocation.js
+-a---          2026/03/25    02:58           2718 useSupabaseQuery.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/26    00:28           6873 index.css
+-a---          2026/03/23    21:46            762 main.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\pages
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/22    14:26           7517 About.jsx
+-a---          2026/03/25    02:34          14880 AdminChatLogs.jsx
+-a---          2026/03/26    00:34          36837 AdminDashboard.jsx
+-a---          2026/03/22    14:38           3811 ConfirmEmail.jsx
+-a---          2026/03/26    04:34          38538 Dashboard.jsx
+-a---          2026/03/22    18:20            340 EmergencyChat.jsx
+-a---          2026/03/22    15:09           7070 Guide.jsx
+-a---          2026/03/25    02:22          15267 IncidentForm.jsx
+-a---          2026/03/25    02:48          10503 IncidentList.jsx
+-a---          2026/03/25    02:22          18424 IncidentModeration.jsx
+-a---          2026/03/25    04:34          34047 Leaderboard.jsx
+-a---          2026/03/25    02:23           2465 Login.jsx
+-a---          2026/03/25    02:21          17617 PatrolSchedule.jsx
+-a---          2026/03/21    02:05           4721 PrintIncidents.jsx
+-a---          2026/03/21    02:05           5166 PrintPatrolLogs.jsx
+-a---          2026/03/25    02:21          11199 Profile.jsx
+-a---          2026/03/25    02:21           6453 Register.jsx
+-a---          2026/03/25    02:20           4873 UserManagement.jsx
+-a---          2026/03/25    02:30          20041 Vehicles.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\sop
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/25    02:20           5082 SOPFlashcards.jsx
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\styles
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/25    05:09           1670 map.css
+-a---          2026/03/25    21:53           1652 patrol-map.css
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\supabase
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/22    16:13            420 client.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\src\utils
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/23    21:48            486 leaflet-icons.js
+-a---          2026/03/25    20:47           1376 patrolColors.js
+-a---          2026/03/22    22:59           4166 sound.js
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\supabase\functions\auto-end-patrols
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/10    02:46             85 deno.json
+-a---          2026/03/10    05:00           2481 index.ts
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web\supabase\functions\location-cleanup
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/24    22:14            150 deno.json
+-a---          2026/03/24    22:14           2782 index.js
+-a---          2026/03/24    22:21           6854 index.ts
+
+    Directory: F:\Projects\Neighborhood Watch Platform\web
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---          2026/03/23    03:52            529 tailwind-info.js
+-a---          2026/03/23    22:34           2613 tailwind.config.js
+-a---          2026/03/08    15:07           1376 vite-info.js
+-a---          2026/03/24    20:39           1840 vite.config.js
+
