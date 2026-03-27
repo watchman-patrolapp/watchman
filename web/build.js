@@ -18,8 +18,31 @@ try {
     fs.rmSync(distPath, { recursive: true, force: true });
   }
   
-  execSync('npx vite build', { stdio: 'inherit' });
-  console.log('Build completed successfully!');
+  // Try different build commands
+  const commands = [
+    'npx vite build',
+    'npm run build',
+    'vite build'
+  ];
+  
+  let buildSuccess = false;
+  
+  for (const cmd of commands) {
+    try {
+      console.log(`Trying command: ${cmd}`);
+      execSync(cmd, { stdio: 'inherit' });
+      console.log(`Build completed successfully with: ${cmd}`);
+      buildSuccess = true;
+      break;
+    } catch (cmdError) {
+      console.log(`Command failed: ${cmd}`);
+      continue;
+    }
+  }
+  
+  if (!buildSuccess) {
+    throw new Error('All build commands failed');
+  }
 } catch (error) {
   console.error('Build failed:', error);
   process.exit(1);
