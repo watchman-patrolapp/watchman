@@ -1,5 +1,6 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
 console.log('Installing dependencies...');
 try {
@@ -11,7 +12,13 @@ try {
 
 console.log('Building application...');
 try {
-  execSync('npx vite build --outDir dist --emptyOutDir', { stdio: 'inherit' });
+  // Check if dist directory exists and remove it
+  const distPath = path.join(__dirname, 'dist');
+  if (fs.existsSync(distPath)) {
+    fs.rmSync(distPath, { recursive: true, force: true });
+  }
+  
+  execSync('npx vite build', { stdio: 'inherit' });
   console.log('Build completed successfully!');
 } catch (error) {
   console.error('Build failed:', error);
