@@ -395,7 +395,7 @@ export const MessageInput = React.memo(function MessageInput({
                 placeholder={isOnline ? "Type message..." : "Offline..."}
                 maxLength={APP_CONFIG.MAX_MESSAGE_LENGTH}
                 disabled={disabled || !isOnline}
-                className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 pr-16 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-gray-900 text-base disabled:opacity-50 placeholder-gray-500 dark:placeholder-gray-400"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 pr-16 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:text-white text-gray-900 text-base disabled:opacity-50 placeholder-gray-500 dark:placeholder-gray-400"
                 aria-label="Message input"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 dark:text-gray-500">
@@ -451,7 +451,7 @@ export const MessageInput = React.memo(function MessageInput({
               <button
                 type="submit"
                 disabled={!text.trim() || isSending || disabled || !isOnline}
-                className="p-2.5 sm:p-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition flex items-center justify-center min-w-[40px] sm:min-w-[48px]"
+                className="p-2.5 sm:p-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl transition flex items-center justify-center min-w-[40px] sm:min-w-[48px]"
                 title="Send message"
                 aria-label="Send message"
               >

@@ -284,7 +284,7 @@ export default function Profile() {
           )}
           <button
             onClick={() => navigate('/vehicles')}
-            className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 text-sm"
+            className="mt-2 bg-teal-600 text-white px-4 py-2 rounded hover:bg-teal-700 text-sm"
           >
             Manage Vehicles
           </button>

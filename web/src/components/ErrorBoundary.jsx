@@ -60,7 +60,7 @@ class ErrorBoundary extends React.Component {
           <div className="flex gap-3 justify-center mb-6">
             <button
               onClick={this.handleReset}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition"
+              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-xl transition"
             >
               Try to recover
             </button>

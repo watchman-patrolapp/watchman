@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useContext } from 'react'
 import { supabase } from '../supabase/client'
+import { clearAllSupabaseAuthKeys } from '../supabase/authStorage'
 import { AuthContext } from './AuthContext'
 import { devLog } from '../utils/devLog'
 
@@ -209,6 +210,7 @@ export const AuthProvider = ({ children }) => {
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
     signOut: async () => {
       await supabase.auth.signOut()
+      clearAllSupabaseAuthKeys()
     },
     signUp: (email, password, options) => 
       supabase.auth.signUp({ 

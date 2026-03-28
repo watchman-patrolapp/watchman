@@ -211,7 +211,7 @@ export default function IncidentList() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin mx-auto mb-3" />
           <p className="text-gray-500 dark:text-gray-400">Loading incidents...</p>
         </div>
       </div>
@@ -246,7 +246,7 @@ export default function IncidentList() {
             </button>
             <button
               onClick={() => navigate("/incident/new")}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
             >
               <FaPlus className="w-4 h-4" />
               Report

@@ -75,7 +75,7 @@ export default function CriminalProfileCard({ profile, stats = {} }) {
             {profile.nationality?.length > 0 && (
               <span>• {profile.nationality.join(', ')}</span>
             )}
-            <span>• Status: <span className="capitalize font-medium text-indigo-600">{profile.status}</span></span>
+            <span>• Status: <span className="capitalize font-medium text-teal-600">{profile.status}</span></span>
           </div>
 
           {/* Aliases */}
@@ -128,7 +128,7 @@ export default function CriminalProfileCard({ profile, stats = {} }) {
         {(profile.height_cm || profile.build_type || profile.eye_color) && (
           <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <FaIdCard className="text-indigo-600" />
+              <FaIdCard className="text-teal-600" />
               Physical Description
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -164,7 +164,7 @@ export default function CriminalProfileCard({ profile, stats = {} }) {
         {profile.mo_signature && (
           <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <FaChartLine className="text-indigo-600" />
+              <FaChartLine className="text-teal-600" />
               Modus Operandi Signature
             </h3>
             <div className="space-y-3">

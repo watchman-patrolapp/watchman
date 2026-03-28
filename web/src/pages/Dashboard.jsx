@@ -3,12 +3,13 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
-import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaComment, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRuler, FaRoute, FaRoad, FaExclamationTriangle } from "react-icons/fa";
+import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaComment, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRoute, FaRoad, FaExclamationTriangle } from "react-icons/fa";
 import ActiveThreatsBanner from "../components/patrol/ActiveThreatsBanner";
 import toast from 'react-hot-toast';
 import ThemeToggle from "../components/ThemeToggle";
 import SoundToggle from "../components/SoundToggle";
-import VehicleIcon, { getVehicleDisplayInfo, COLOR_HEX, normalizeVehicleType } from '../components/VehicleIcon';
+import VehicleIcon, { normalizeVehicleType } from '../components/VehicleIcon';
+import { getVehicleDisplayText } from '../utils/vehicleDisplay';
 import { 
   playChatNotification,
   playPatrolStart, 
@@ -230,7 +231,6 @@ export default function Dashboard() {
   // ✅ FIXED: Use user_id instead of id (active_patrols uses user_id as primary key)
   const { 
     isTracking, 
-    currentLocation, 
     totalDistance, 
     routePoints,
     startTracking, 
@@ -438,31 +438,31 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 md:pb-8 motion-safe:scroll-smooth">
       {/* ACTIVE THREATS BANNER - CRITICAL INTEGRATION */}
       {userLocation && (
         <ActiveThreatsBanner userLocation={userLocation} maxDistanceKm={2} />
       )}
 
-      <div className="max-w-3xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
 
-        {/* Header Card */}
-        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 dark:from-indigo-800 dark:to-indigo-900 rounded-3xl shadow-xl overflow-hidden mb-8">
-          <div className="px-6 py-8 sm:px-8 sm:py-10">
+        {/* Header — compact bento strip */}
+        <div className="bg-gradient-to-r from-teal-600 to-teal-700 dark:from-teal-800 dark:to-teal-900 rounded-2xl shadow-xl overflow-hidden mb-6 motion-safe:transition-shadow">
+          <div className="px-5 py-6 sm:px-8 sm:py-7">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center space-x-4">
-                <button onClick={() => navigate('/profile')} className="focus:outline-none">
+              <div className="flex items-center space-x-4 min-w-0">
+                <button type="button" onClick={() => navigate('/profile')} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-full shrink-0">
                   {user?.avatarUrl ? (
                     <img src={user.avatarUrl} alt="Avatar" className="h-16 w-16 rounded-full object-cover ring-2 ring-white dark:ring-gray-300 shadow-md" />
                   ) : (
-                    <div className="h-16 w-16 rounded-full bg-white dark:bg-gray-200 text-indigo-600 dark:text-indigo-800 flex items-center justify-center text-2xl font-bold shadow-md">
+                    <div className="h-16 w-16 rounded-full bg-white dark:bg-gray-200 text-teal-600 dark:text-teal-800 flex items-center justify-center text-2xl font-bold shadow-md">
                       {initials}
                     </div>
                   )}
                 </button>
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-bold text-white">Welcome back, {firstName}!</h1>
-                  <p className="text-indigo-100 text-sm mt-1">{todayDate}</p>
+                  <p className="text-teal-100 text-sm mt-1">{todayDate}</p>
                   <div className="mt-2">
                     <span className="inline-block bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-1 rounded-full">
                       Free Beta
@@ -470,8 +470,8 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-              <div className="flex space-x-3">
-                <button onClick={refreshData} className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition" title="Refresh data">
+              <div className="flex space-x-3 shrink-0">
+                <button type="button" onClick={refreshData} className="p-2 rounded-full bg-white/20 hover:bg-white/30 motion-safe:transition" title="Refresh data">
                   <FaSync className="w-4 h-4 text-white" />
                 </button>
                 <SoundToggle />
@@ -492,50 +492,51 @@ export default function Dashboard() {
             <p className="text-yellow-800 dark:text-yellow-200">Loading active patrols...</p>
           </div>
         ) : allActivePatrols.length > 0 && (
-          <div className="bg-yellow-50 dark:bg-gray-800 border border-yellow-300 dark:border-gray-600 rounded-2xl shadow-soft overflow-hidden mb-8">
-            <div className="px-6 py-5 border-b border-yellow-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold text-yellow-800 dark:text-white">🟡 Currently on Patrol</h2>
+          <div className="mb-8 rounded-2xl border border-green-200 dark:border-green-800 bg-green-50/90 dark:bg-green-950/25 shadow-soft overflow-hidden">
+            <div className="px-6 py-4 border-b border-green-200/80 dark:border-green-800/80 bg-green-100/50 dark:bg-green-900/20">
+              <h2 className="text-lg font-semibold text-green-900 dark:text-green-100">🟢 Currently on Patrol</h2>
             </div>
-            <div className="divide-y divide-yellow-200 dark:divide-gray-700">
-              {allActivePatrols.map(p => {
-                const started = new Date(p.start_time);
-                const elapsedSec = Math.floor((new Date() - started) / 1000);
-                const vehicleType = normalizeVehicleType(p.vehicle_type, p.car_type);
-                const vehicleColor = p.vehicle_color || 'gray';
-                const vehicleInfo = getVehicleDisplayInfo(
-                  vehicleType, 
-                  vehicleColor, 
-                  p.vehicle_make_model, 
-                  p.vehicle_reg
-                );
+            <div className="p-4 sm:p-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {allActivePatrols.map((p) => {
+                  const started = new Date(p.start_time);
+                  const elapsedSec = Math.floor((Date.now() - started) / 1000);
+                  const vehicleType = normalizeVehicleType(p.vehicle_type, p.car_type);
+                  const vehicleColor = p.vehicle_color || 'gray';
+                  const vehicleDisplay = getVehicleDisplayText(
+                    p.vehicle_type,
+                    p.car_type,
+                    p.vehicle_make_model,
+                    p.vehicle_reg,
+                    p.reg_number
+                  );
 
-                return (
-                  <div key={p.user_id} className="px-6 py-4 flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{p.user_name}</p>
-                      <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1 mt-1">
-                        <div className="flex items-center gap-2">
-                          <VehicleIcon 
-                            type={vehicleType} 
-                            color={vehicleColor} 
-                            size="sm"
-                          />
-                          <span>{vehicleInfo.displayText}</span>
+                  return (
+                    <div
+                      key={p.user_id}
+                      className="rounded-xl border border-green-200 dark:border-green-800 bg-white/80 dark:bg-gray-900/60 p-4 shadow-sm"
+                    >
+                      <p className="font-semibold text-gray-900 dark:text-white">{p.user_name}</p>
+                      <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-1.5">
+                          <VehicleIcon type={vehicleType} color={vehicleColor} size="sm" />
+                          <span>{vehicleDisplay}</span>
                         </div>
-                        <div>Started: {started.toLocaleTimeString()}</div>
-                        <div>Elapsed: {formatElapsed(elapsedSec)}</div>
+                        <p>Started: {started.toLocaleTimeString()}</p>
+                        <p>Elapsed: {formatElapsed(elapsedSec)}</p>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Patrol Status Card - Modern Design */}
-        <div className="mb-8">
-          <div className={`relative overflow-hidden rounded-2xl p-6 transition-all duration-300
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-8 items-stretch">
+        {/* Patrol status — primary bento cell */}
+        <div className="lg:col-span-7 min-h-0">
+          <div className={`relative overflow-hidden rounded-2xl p-6 motion-safe:transition-all motion-safe:duration-300
             ${activePatrol 
               ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25' 
               : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-card'
@@ -579,6 +580,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 {activePatrol && (
                   <button
+                    type="button"
                     onClick={() => handleCheckOut(false)}
                     className="btn bg-red-500 text-white hover:bg-red-600 focus:ring-red-500 shadow-lg shadow-red-500/30"
                   >
@@ -587,6 +589,7 @@ export default function Dashboard() {
                 )}
                 {!activePatrol && (
                   <button
+                    type="button"
                     onClick={handleCheckIn}
                     disabled={loadingPatrol}
                     className="btn bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500 shadow-lg shadow-emerald-500/30"
@@ -599,90 +602,21 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* GPS Tracking Status - Modern */}
-        {activePatrol && (
-          <div className="card mb-8 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-b border-blue-100 dark:border-blue-800">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isTracking ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
-                <h3 className="font-semibold text-gray-900 dark:text-white">GPS Tracking</h3>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center
-                    ${isTracking ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-500'}
-                  `}>
-                    <FaMapMarkerAlt className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</p>
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      {isTracking ? 'Active' : 'Inactive'}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                    <FaRuler className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Accuracy</p>
-                    <p className="font-semibold text-gray-900 dark:text-white">
-                      {currentLocation ? `${Math.round(currentLocation.accuracy)}m` : '--'}
-                    </p>
-                  </div>
-                </div>
-                
-                {totalDistance > 0 && (
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
-                      <FaRoad className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Distance</p>
-                      <p className="font-semibold text-gray-900 dark:text-white">
-                        {totalDistance.toFixed(2)} km
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {routePoints.length > 0 && (
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-                    <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
-                      <FaRoute className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Points</p>
-                      <p className="font-semibold text-gray-900 dark:text-white">
-                        {routePoints.length}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Profile — secondary bento cell */}
+        <div className="lg:col-span-5 bento-tile overflow-hidden flex flex-col min-h-[12rem]">
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 shrink-0">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Your profile</h2>
           </div>
-        )}
-
-        {/* Profile Information Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-soft border border-gray-100 dark:border-gray-700 overflow-hidden mb-8">
-          <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-700">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Your Profile</h2>
-          </div>
-          <div className="p-6 space-y-4">
+          <div className="p-5 space-y-3 flex-1">
             <div className="flex items-center space-x-3">
-              <FaUser className="text-indigo-500 dark:text-indigo-400 w-5 h-5" />
-              <span className="text-gray-700 dark:text-gray-300">
+              <FaUser className="text-teal-500 dark:text-teal-400 w-5 h-5 shrink-0" />
+              <span className="text-gray-700 dark:text-gray-300 text-sm">
                 <span className="font-medium">Name:</span> {user?.fullName || "Not provided"}
               </span>
             </div>
             <div className="flex items-center space-x-3">
-              <FaMapMarkerAlt className="text-indigo-500 dark:text-indigo-400 w-5 h-5" />
-              <span className="text-gray-700 dark:text-gray-300">
+              <FaMapMarkerAlt className="text-teal-500 dark:text-teal-400 w-5 h-5 shrink-0" />
+              <span className="text-gray-700 dark:text-gray-300 text-sm">
                 <span className="font-medium">Address:</span> {user?.address || "Not provided"}
               </span>
             </div>
@@ -693,8 +627,8 @@ export default function Dashboard() {
                   color={primaryVehicle.color || 'gray'} 
                   size="sm"
                 />
-                <span className="text-gray-700 dark:text-gray-300">
-                  <span className="font-medium">Primary Vehicle:</span>{" "}
+                <span className="text-gray-700 dark:text-gray-300 text-sm">
+                  <span className="font-medium">Primary vehicle:</span>{" "}
                   {normalizeVehicleType(primaryVehicle.vehicle_type, primaryVehicle.car_type || user.carType) === 'on_foot'
                     ? 'On foot'
                     : `${primaryVehicle.make_model}${primaryVehicle.registration ? ` (${primaryVehicle.registration})` : ''}`}
@@ -707,7 +641,7 @@ export default function Dashboard() {
                   color={user.vehicleColor || 'gray'}
                   size="sm"
                 />
-                <span className="text-gray-700 dark:text-gray-300">
+                <span className="text-gray-700 dark:text-gray-300 text-sm">
                   <span className="font-medium">Vehicle:</span>{" "}
                   {user.carType && user.registrationNumber
                     ? `${user.carType} (${user.registrationNumber})`
@@ -716,67 +650,162 @@ export default function Dashboard() {
               </div>
             )}
             <div className="flex items-center space-x-3">
-              <FaEnvelope className="text-indigo-500 dark:text-indigo-400 w-5 h-5" />
-              <span className="text-gray-700 dark:text-gray-300">
+              <FaEnvelope className="text-teal-500 dark:text-teal-400 w-5 h-5 shrink-0" />
+              <span className="text-gray-700 dark:text-gray-300 text-sm break-all">
                 <span className="font-medium">Email:</span> {user?.email}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-          <button onClick={() => navigate("/guide")} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition text-sm font-medium">Guide</button>
-          <button onClick={() => navigate("/about")} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition text-sm font-medium">About</button>
-          <button onClick={() => navigate("/vehicles")} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition text-sm font-medium">Vehicles</button>
-          <button onClick={() => navigate("/leaderboard")} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition text-sm font-medium flex items-center justify-center gap-1">
-            <FaTrophy className="text-yellow-500" /> Leaderboard
-          </button>
+        {/* GPS — title + live status on one row; metrics below when available */}
+        {activePatrol && (
+          <div className="lg:col-span-12 mb-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-card">
+            <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-6 sm:py-5 bg-gradient-to-r from-slate-50 via-teal-50/60 to-teal-50/80 dark:from-gray-800 dark:via-teal-950/25 dark:to-teal-950/35 border-b border-gray-200/90 dark:border-gray-700/90">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700 shadow-sm dark:bg-teal-900/50 dark:text-teal-200">
+                  <FaMapMarkerAlt className="w-5 h-5" aria-hidden />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white tracking-tight">
+                    GPS tracking
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 hidden sm:block">
+                    Your route is saved while this patrol is active
+                  </p>
+                </div>
+              </div>
+              <div
+                className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold tabular-nums shadow-sm border ${
+                  isTracking
+                    ? 'bg-green-100 text-green-900 border-green-200/80 dark:bg-green-900/35 dark:text-green-100 dark:border-green-700/50'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700/80 dark:text-gray-200 dark:border-gray-600'
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full motion-safe:transition-colors ${
+                    isTracking ? 'bg-green-500 motion-safe:animate-pulse' : 'bg-gray-400 dark:bg-gray-500'
+                  }`}
+                  aria-hidden
+                />
+                {isTracking ? 'Live · Active' : 'Inactive'}
+              </div>
+            </div>
+
+            {(totalDistance > 0 || routePoints.length > 0) && (
+              <div className="px-5 py-4 sm:px-6 flex flex-wrap gap-3 bg-gray-50/70 dark:bg-gray-900/30">
+                {totalDistance > 0 && (
+                  <div className="flex flex-1 min-w-[10rem] items-center gap-3 rounded-xl border border-gray-200/80 dark:border-gray-600/80 bg-white dark:bg-gray-800/80 px-4 py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                      <FaRoad className="w-4 h-4" aria-hidden />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Distance
+                      </p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {totalDistance.toFixed(2)} km
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {routePoints.length > 0 && (
+                  <div className="flex flex-1 min-w-[10rem] items-center gap-3 rounded-xl border border-gray-200/80 dark:border-gray-600/80 bg-white dark:bg-gray-800/80 px-4 py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                      <FaRoute className="w-4 h-4" aria-hidden />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Route points
+                      </p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {routePoints.length}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button onClick={() => navigate("/schedule")} className="px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition text-sm font-medium">Patrol Schedule</button>
-          <button onClick={() => navigate("/incidents")} className="px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition text-sm font-medium">View Incidents</button>
-          <button onClick={() => navigate("/incident/new")} className="px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition text-sm font-medium">Report Incident</button>
-          
-          {/* ✅ FIXED: Emergency Chat button now navigates to /chat */}
-          <button 
-            onClick={() => {
-              localStorage.setItem('lastChatVisit', new Date().toISOString());
-              navigate("/chat");
-            }} 
-            className="relative px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition text-sm font-medium flex items-center justify-center gap-1"
-            aria-label="Open Emergency Chat"
+        {/* Primary actions — bento tiles (priority order) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 mb-4">
+          <button
+            type="button"
+            onClick={() => navigate("/incident/new")}
+            className="bento-tile-interactive p-4 flex flex-col items-center justify-center gap-2 min-h-[5.5rem] bg-gradient-to-br from-emerald-600 to-teal-700 text-white border-0 shadow-lg shadow-emerald-900/20"
           >
-            <FaComment />
-            <span>Emergency Chat</span>
+            <span className="text-2xl" aria-hidden>＋</span>
+            <span className="text-sm font-semibold text-center leading-tight">Report incident</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.setItem('lastChatVisit', new Date().toISOString());
+              } catch {
+                /* ignore */
+              }
+              navigate('/chat');
+            }}
+            className="bento-tile-interactive relative p-4 flex flex-col items-center justify-center gap-2 min-h-[5.5rem] bg-gradient-to-br from-violet-600 to-purple-800 text-white border-0 shadow-lg shadow-purple-900/25"
+            aria-label="Open emergency chat"
+          >
+            <FaComment className="text-xl" aria-hidden />
+            <span className="text-sm font-semibold text-center leading-tight">Emergency chat</span>
             {unreadCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+              <span className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center motion-safe:animate-pulse">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
-          
-          {/* Intelligence Dashboard Button */}
-          <button 
-            onClick={() => navigate("/intelligence")} 
-            className="px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition text-sm font-medium flex items-center justify-center gap-1"
+          <button
+            type="button"
+            onClick={() => navigate('/intelligence')}
+            className="bento-tile-interactive col-span-2 sm:col-span-1 p-4 flex flex-col items-center justify-center gap-2 min-h-[5.5rem] bg-gradient-to-br from-rose-600 to-red-800 text-white border-0 shadow-lg shadow-red-900/20"
           >
-            <FaExclamationTriangle />
-            <span>Intelligence</span>
+            <FaExclamationTriangle className="text-xl" aria-hidden />
+            <span className="text-sm font-semibold text-center leading-tight">Intelligence</span>
           </button>
-          
-          {(user?.role === "admin" || user?.role === "committee") && (
-            <button onClick={() => navigate("/admin")} className="px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition text-sm font-medium">Admin Panel</button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+          <button type="button" onClick={() => navigate('/schedule')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center text-center">
+            Patrol schedule
+          </button>
+          <button type="button" onClick={() => navigate('/incidents')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center text-center">
+            View incidents
+          </button>
+          <button type="button" onClick={() => navigate('/guide')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center text-center">
+            Guide
+          </button>
+          <button type="button" onClick={() => navigate('/about')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center text-center">
+            About
+          </button>
+          <button type="button" onClick={() => navigate('/vehicles')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center text-center">
+            Vehicles
+          </button>
+          <button type="button" onClick={() => navigate('/leaderboard')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-1 text-center">
+            <FaTrophy className="text-amber-500 shrink-0" aria-hidden /> Leaderboard
+          </button>
+          {(user?.role === 'admin' || user?.role === 'committee') && (
+            <button type="button" onClick={() => navigate('/admin')} className="bento-tile-interactive col-span-2 md:col-span-3 lg:col-span-6 p-3 text-sm font-semibold text-teal-700 dark:text-teal-300 flex items-center justify-center text-center bg-teal-50/80 dark:bg-teal-950/40 border-teal-200/60 dark:border-teal-800/60">
+              Admin panel
+            </button>
           )}
         </div>
 
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-500 dark:text-gray-400 flex justify-between items-center border-t border-gray-200 dark:border-gray-700 pt-4">
           <span>Neighbourhood Watch Platform • Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "recently"}</span>
-          <button onClick={signOut} className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition text-xs underline">Sign Out</button>
+          <button type="button" onClick={signOut} className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition text-xs underline">Sign Out</button>
         </div>
       </div>
+
 
       {/* Patrol Time Warning Modal */}
       {showWarning && (

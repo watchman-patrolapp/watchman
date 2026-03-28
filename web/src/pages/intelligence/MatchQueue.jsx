@@ -181,7 +181,7 @@ export default function MatchQueue() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {loading ? (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
           </div>
         ) : matches.length === 0 ? (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">
@@ -199,7 +199,7 @@ export default function MatchQueue() {
                     key={match.id}
                     onClick={() => setSelectedMatch(match)}
                     className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:shadow-md transition ${
-                      selectedMatch?.id === match.id ? 'ring-2 ring-indigo-500' : ''
+                      selectedMatch?.id === match.id ? 'ring-2 ring-teal-500' : ''
                     }`}
                   >
                     <div className="flex items-start gap-4">
@@ -221,7 +221,7 @@ export default function MatchQueue() {
                           <span className={`px-2 py-1 rounded-full text-xs font-bold ${getRiskBadgeClass(match.profile?.risk_level)}`}>
                             {match.profile?.risk_level?.toUpperCase()} RISK
                           </span>
-                          <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 text-xs rounded-full capitalize">
+                          <span className="px-2 py-0.5 bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-300 text-xs rounded-full capitalize">
                             {formatSourceType(match.source_type)}
                           </span>
                         </div>

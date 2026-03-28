@@ -412,7 +412,7 @@ export default function IncidentModeration() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <div className="text-center">
-          <FaSpinner className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-3" />
+          <FaSpinner className="w-8 h-8 text-teal-600 animate-spin mx-auto mb-3" />
           <p className="text-gray-500 dark:text-gray-400">Loading pending incidents...</p>
         </div>
       </div>
@@ -440,7 +440,7 @@ export default function IncidentModeration() {
           <button
             onClick={() => fetchPendingIncidents({ force: true })}
             disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition text-sm font-medium shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl transition text-sm font-medium shadow-sm"
           >
             <FaSync className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh

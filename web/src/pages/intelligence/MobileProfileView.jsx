@@ -12,7 +12,7 @@ const ActionButton = ({ icon: Icon, label, color, onClick }) => (
 const InfoCard = ({ title, icon: Icon, children, className = "" }) => (
   <div className={`flex-shrink-0 w-64 snap-start bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 ${className}`}>
     <div className="flex items-center gap-2 mb-3">
-      <Icon className="w-5 h-5 text-indigo-600" />
+      <Icon className="w-5 h-5 text-teal-600" />
       <h3 className="font-semibold text-gray-900 dark:text-white">{title}</h3>
     </div>
     <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
@@ -93,7 +93,7 @@ const MobileProfileView = () => {
           <p className="text-gray-400">The requested profile could not be found.</p>
           <button
             onClick={() => navigate(-1)}
-            className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
           >
             Go Back
           </button>
@@ -238,7 +238,7 @@ const MobileProfileView = () => {
                   </span>
                 </div>
                 <div className="mt-2 text-xs text-gray-500">
-                  <span className="capitalize font-medium text-indigo-400">{link.connection_type.replace(/_/g, ' ')}</span>
+                  <span className="capitalize font-medium text-teal-400">{link.connection_type.replace(/_/g, ' ')}</span>
                   {' • '} {new Date(link.created_at).toLocaleDateString()}
                 </div>
               </div>

@@ -54,9 +54,9 @@ const TIME_RANGES = {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatCard({ label, value, sub, color = 'indigo', trend }) {
+function StatCard({ label, value, sub, color = 'teal', trend }) {
   const colors = {
-    indigo: 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400',
+    teal: 'bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400',
     emerald: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
     amber: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400',
     rose: 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400',
@@ -100,15 +100,15 @@ function PodiumCard({ rank, entry, isCurrentUser }) {
   return (
     <div className={`relative rounded-2xl border-2 p-4 text-center transition hover:shadow-lg ${
       rankStyles[rank] || 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-    } ${isCurrentUser ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}>
+    } ${isCurrentUser ? 'ring-2 ring-teal-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}>
       <div className="text-4xl mb-2">{medals[rank] || rank}</div>
       <p className="font-bold text-gray-900 dark:text-white truncate">{entry.name}</p>
-      <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+      <p className="text-2xl font-bold text-teal-600 dark:text-teal-400 mt-1">
         {Math.floor(entry.totalMinutes / 60)}h
       </p>
       <p className="text-xs text-gray-500 dark:text-gray-400">{entry.patrols} patrols</p>
       {isCurrentUser && (
-        <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-xs px-2 py-1 rounded-full">
+        <span className="absolute -top-2 -right-2 bg-teal-600 text-white text-xs px-2 py-1 rounded-full">
           You
         </span>
       )}
@@ -159,7 +159,7 @@ function ActivityHeatmap({ patrolData }) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 min-w-0">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
         <FaCalendarAlt className="text-emerald-500" />
         Activity Heatmap
@@ -171,7 +171,7 @@ function ActivityHeatmap({ patrolData }) {
               <div
                 key={dayIdx}
                 title={`${day.date}: ${day.count} patrol${day.count !== 1 ? 's' : ''}`}
-                className={`w-3 h-3 rounded-sm ${getIntensity(day.count)} transition hover:ring-2 hover:ring-indigo-500`}
+                className={`w-3 h-3 rounded-sm ${getIntensity(day.count)} transition hover:ring-2 hover:ring-teal-500`}
               />
             ))}
           </div>
@@ -198,12 +198,12 @@ function FavoriteTimeRadar({ timeDistribution }) {
   }));
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 min-w-0">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
         <FaClock className="text-violet-500" />
         Patrol Preferences
       </h3>
-      <div className="h-64">
+      <div className="h-64 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data}>
             <PolarGrid stroke="#e5e7eb" />
@@ -240,8 +240,8 @@ function RecentPatrols({ patrols }) {
         {recentPatrols.map((patrol, idx) => (
           <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                <FaMapMarkerAlt className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+                <FaMapMarkerAlt className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -475,7 +475,7 @@ export default function Leaderboard() {
             <button
               onClick={fetchData}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition text-sm font-medium shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl transition text-sm font-medium shadow-sm"
             >
               <FaSync className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -536,8 +536,8 @@ export default function Leaderboard() {
               </div>
               
               {/* Mini bar chart */}
-              <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-                <div className="h-48">
+              <div className="p-6 border-b border-gray-100 dark:border-gray-700 min-w-0">
+                <div className="h-48 w-full min-w-0">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={leaderboard.slice(0, 10)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -556,7 +556,7 @@ export default function Leaderboard() {
                       />
                       <Bar 
                         dataKey="totalMinutes" 
-                        fill="#6366f1" 
+                        fill="#0d9488" 
                         radius={[4, 4, 0, 0]}
                         name="Minutes"
                       />
@@ -581,7 +581,7 @@ export default function Leaderboard() {
                       <tr 
                         key={entry.name} 
                         className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition ${
-                          entry.userId === user?.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                          entry.userId === user?.id ? 'bg-teal-50 dark:bg-teal-900/20' : ''
                         }`}
                       >
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -596,7 +596,7 @@ export default function Leaderboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                           {entry.name}
                           {entry.userId === user?.id && (
-                            <span className="ml-2 text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">
+                            <span className="ml-2 text-xs bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-full">
                               You
                             </span>
                           )}
@@ -622,7 +622,7 @@ export default function Leaderboard() {
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
               <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <FaUser className="text-indigo-500" />
+                <FaUser className="text-teal-500" />
                 Your Personal Stats
               </h2>
               <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
@@ -635,7 +635,7 @@ export default function Leaderboard() {
                 label="Total Hours"
                 value={`${Math.floor(userStats.totalMinutes / 60)}h`}
                 sub={`${userStats.totalMinutes % 60}m total`}
-                color="indigo"
+                color="teal"
               />
               <StatCard
                 icon={FaTrophy}
@@ -682,8 +682,7 @@ export default function Leaderboard() {
               </div>
             )}
 
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
               <ActivityHeatmap patrolData={userPatrols} />
               <FavoriteTimeRadar timeDistribution={userStats.timeDistribution} />
             </div>
@@ -746,9 +745,9 @@ export default function Leaderboard() {
             )}
 
             {/* Weekly Trend */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 min-w-0">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">8-Week Trend</h3>
-              <div className="h-64">
+              <div className="h-64 w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={userStats.weeklyTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -783,7 +782,7 @@ export default function Leaderboard() {
             <p className="text-gray-500 dark:text-gray-400 mb-6">Start patrolling to see your stats and climb the leaderboard!</p>
             <button
               onClick={() => navigate("/dashboard")}
-              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition"
+              className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium transition"
             >
               Start Your First Patrol
             </button>

@@ -1,6 +1,7 @@
 // src/main.jsx
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { applyInitialTheme } from './utils/theme'
 import App from './App'
 import './index.css'
 import 'leaflet/dist/leaflet.css'  // ✅ ADD THIS - Leaflet base styles
@@ -24,6 +25,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+applyInitialTheme()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

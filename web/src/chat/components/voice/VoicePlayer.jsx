@@ -190,7 +190,7 @@ export const VoicePlayer = React.memo(function VoicePlayer({
       status === 'sending' ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-200' :
       status === 'failed' ? 'bg-red-100 dark:bg-red-900/30 border border-red-200' :
       error ? 'bg-red-50 dark:bg-red-900/20 border border-red-200' :
-      'bg-indigo-100 dark:bg-indigo-900/30'
+      'bg-teal-100 dark:bg-teal-900/30'
     }`}>
       <audio ref={audioRef} src={effectiveSrc} preload="auto" crossOrigin="anonymous" />
       
@@ -198,28 +198,28 @@ export const VoicePlayer = React.memo(function VoicePlayer({
         onClick={error ? handleRetry : togglePlay}
         disabled={isUploading || (!effectiveSrc && !blob)}
         className={`w-10 h-10 rounded-full flex items-center justify-center transition shadow-md flex-shrink-0 ${
-          isPlaying ? 'bg-indigo-600 text-white' : 
+          isPlaying ? 'bg-teal-600 text-white' : 
           isUploading ? 'bg-amber-400 text-white' :
           status === 'failed' ? 'bg-red-500 text-white' :
           error ? 'bg-red-400 text-white hover:bg-red-500' :
-          'bg-white text-indigo-600 hover:bg-indigo-50'
+          'bg-white text-teal-600 hover:bg-teal-50'
         } disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {getButtonIcon()}
       </button>
 
       <div className="flex-1 flex flex-col gap-1 min-w-0">
-        <div className="h-2 bg-indigo-200 dark:bg-indigo-800 rounded-full overflow-hidden">
+        <div className="h-2 bg-teal-200 dark:bg-teal-800 rounded-full overflow-hidden">
           <div 
             className={`h-full transition-all duration-100 rounded-full ${
               isUploading ? 'bg-amber-400 animate-pulse' : 
-              status === 'failed' || error ? 'bg-red-500' : 'bg-indigo-600'
+              status === 'failed' || error ? 'bg-red-500' : 'bg-teal-600'
             }`}
             style={{ width: `${progressPercent}%` }}
           />
         </div>
         
-        <div className="flex justify-between items-center text-xs text-indigo-700 dark:text-indigo-300 font-medium">
+        <div className="flex justify-between items-center text-xs text-teal-700 dark:text-teal-300 font-medium">
           <span className="font-mono">{formatTime(currentTime)}</span>
           <div className="flex items-center gap-2">
             {isUploading && <span className="text-amber-600 dark:text-amber-400 animate-pulse">Uploading...</span>}

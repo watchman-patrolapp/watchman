@@ -263,11 +263,11 @@ export default function PatrolSchedule() {
             Others
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 rounded-sm bg-indigo-600" />
+            <span className="inline-block w-3 h-3 rounded-sm bg-teal-600" />
             Available
           </span>
           <span className="flex items-center gap-1">
-            <FaUsers className="w-3 h-3 text-indigo-400" />
+            <FaUsers className="w-3 h-3 text-teal-400" />
             Team slot
           </span>
         </div>
@@ -291,13 +291,13 @@ export default function PatrolSchedule() {
                         key={date}
                         className={`px-3 py-3 text-center text-xs font-semibold uppercase tracking-wider whitespace-nowrap ${
                           isToday(date)
-                            ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
+                            ? "text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20"
                             : "text-gray-500 dark:text-gray-400"
                         }`}
                       >
                         {formatDateHeader(date)}
                         {isToday(date) && (
-                          <span className="block text-[10px] normal-case font-normal text-indigo-400">
+                          <span className="block text-[10px] normal-case font-normal text-teal-400">
                             today
                           </span>
                         )}
@@ -326,14 +326,14 @@ export default function PatrolSchedule() {
                           <td
                             key={date}
                             className={`px-2 py-2 text-center align-top ${
-                              isToday(date) ? "bg-indigo-50/40 dark:bg-indigo-900/10" : ""
+                              isToday(date) ? "bg-teal-50/40 dark:bg-teal-900/10" : ""
                             }`}
                           >
                             <div className="flex flex-col items-center gap-1 min-w-[72px]">
 
                               {/* Team badge — only shows when 2+ volunteers in this slot */}
                               {isTeam && (
-                                <span className="flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400 font-medium">
+                                <span className="flex items-center gap-1 text-[10px] text-teal-500 dark:text-teal-400 font-medium">
                                   <FaUsers className="w-2.5 h-2.5" />
                                   {cellSlots.length}
                                 </span>
@@ -371,8 +371,8 @@ export default function PatrolSchedule() {
                                   disabled={isSigningUp}
                                   className={`px-2 py-1 disabled:opacity-50 text-white text-[11px] rounded-lg transition shadow-sm whitespace-nowrap ${
                                     cellSlots.length > 0
-                                      ? "bg-indigo-400 hover:bg-indigo-500"
-                                      : "bg-indigo-600 hover:bg-indigo-700"
+                                      ? "bg-teal-400 hover:bg-teal-500"
+                                      : "bg-teal-600 hover:bg-teal-700"
                                   }`}
                                 >
                                   {isSigningUp ? "..." : cellSlots.length > 0 ? "Join" : "Sign Up"}

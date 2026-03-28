@@ -66,7 +66,7 @@ export default function IncidentDetail() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
       </div>
     );
   }
@@ -124,7 +124,7 @@ export default function IncidentDetail() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 py-4 border-b-2 font-medium text-sm transition ${
                   activeTab === tab.id
-                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    ? 'border-teal-600 text-teal-600 dark:text-teal-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                 }`}
               >
@@ -256,7 +256,7 @@ export default function IncidentDetail() {
                 </p>
                 <button 
                   onClick={() => navigate(`/incident-form?link=${id}`)}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition"
                 >
                   Link Suspect to Profile
                 </button>
@@ -308,7 +308,7 @@ export default function IncidentDetail() {
                       </div>
                       <button 
                         onClick={() => navigate(`/intelligence/profiles/${link.profile_id}`)}
-                        className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-lg text-sm font-medium hover:bg-indigo-200 transition"
+                        className="px-4 py-2 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded-lg text-sm font-medium hover:bg-teal-200 transition"
                       >
                         View Full Profile
                       </button>

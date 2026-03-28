@@ -91,37 +91,20 @@ export default function Vehicles() {
   const [confirmId, setConfirmId]     = useState(null);
   const [settingPrimary, setSettingPrimary] = useState(null);
 
-  // Add this right after const { user, refreshUser } = useAuth();
-  useEffect(() => {
-    console.log('🚗 DEBUG: Component mounted, user:', user);
-    console.log('🚗 DEBUG: User ID from auth:', user?.id);
-  }, [user]);
-
   // ---------------------------------------------------------------------------
   // Load vehicles
   // ---------------------------------------------------------------------------
 
   const loadVehicles = useCallback(async () => {
-    console.log('🚗 DEBUG: Starting vehicle fetch');
-    console.log('🚗 DEBUG: User object:', user);
-    console.log('🚗 DEBUG: User ID:', user?.id);
-    console.log('🚗 DEBUG: User ID type:', typeof user?.id);
-    
     const { data, error } = await supabase
       .from('user_vehicles')
       .select('*')
       .eq('user_id', user.id)
       .order('is_primary', { ascending: false });
 
-    console.log('🚗 DEBUG: Supabase response:', { data, error });
-    console.log('🚗 DEBUG: Data length:', data?.length);
-    console.log('🚗 DEBUG: Error details:', error);
-
     if (error) {
-      console.error('🚗 DEBUG: Error fetching vehicles:', error);
       toast.error('Failed to load vehicles: ' + error.message);
     } else {
-      console.log('🚗 DEBUG: Vehicles loaded:', data);
       setVehicles(data || []);
     }
     setLoading(false);
@@ -219,8 +202,7 @@ export default function Vehicles() {
       toast.success('Primary vehicle updated');
       await loadVehicles();
       refreshUser?.();
-    } catch (err) {
-      console.error('Set primary failed:', err);
+    } catch {
       toast.error('Failed to update primary vehicle');
       await loadVehicles();
     } finally {
@@ -328,7 +310,7 @@ export default function Vehicles() {
                           <button
                             onClick={() => handleSetPrimary(v.id)}
                             disabled={settingPrimary === v.id}
-                            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 text-xs font-medium disabled:opacity-50 transition"
+                            className="text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-200 text-xs font-medium disabled:opacity-50 transition"
                           >
                             {settingPrimary === v.id ? 'Setting...' : 'Set Primary'}
                           </button>
@@ -359,31 +341,22 @@ export default function Vehicles() {
             <div className="space-y-3">
 
               {/* Type picker */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                {VEHICLE_TYPES.map(({ value, label, icon }) => {
+              <div className="grid grid-cols-3 gap-2">
+                {VEHICLE_TYPES.map(({ value, label, icon: Icon }) => {
                   const active = form.vehicle_type === value;
                   return (
                     <button
+                      type="button"
                       key={value}
                       onClick={() => setForm({ ...EMPTY_FORM, vehicle_type: value })}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '12px 8px',
-                        borderRadius: '12px',
-                        border: `2px solid ${active ? '#6366f1' : '#e5e7eb'}`,
-                        backgroundColor: active ? '#eef2ff' : 'transparent',
-                        color: active ? '#4338ca' : '#6b7280',
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
+                      className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border-2 text-[13px] font-medium transition cursor-pointer
+                        ${active
+                          ? 'border-teal-600 bg-teal-50 text-teal-800 dark:border-teal-500 dark:bg-teal-950/45 dark:text-teal-100'
+                          : 'border-gray-200 bg-transparent text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700/40'
+                        }`}
                       aria-pressed={active}
                     >
-                      {icon && <icon style={{ width: '20px', height: '20px' }} aria-hidden="true" />}
+                      {Icon ? <Icon className="w-5 h-5 shrink-0" aria-hidden="true" /> : null}
                       {label}
                     </button>
                   );
@@ -400,7 +373,7 @@ export default function Vehicles() {
                   }
                   value={form.make_model}
                   onChange={(e) => setForm({ ...form, make_model: e.target.value })}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   aria-label={form.vehicle_type === 'car' ? 'Car make and model' : 'Bicycle description'}
                 />
               )}
@@ -415,7 +388,7 @@ export default function Vehicles() {
                   }
                   value={form.registration}
                   onChange={(e) => setForm({ ...form, registration: e.target.value })}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   aria-label={form.vehicle_type === 'car' ? 'Vehicle registration number' : 'Bicycle ID or serial'}
                 />
               )}
@@ -423,36 +396,33 @@ export default function Vehicles() {
               {showColor && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Colour</p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+                  <div className="flex flex-wrap gap-2.5 items-center">
                     {COLORS.map(({ value, label }) => {
                       const selected = form.color === value;
                       const hex = COLOR_HEX[value] || '#6b7280';
-                      const baseBorder = value === 'white' ? '#cbd5e1' : 'transparent';
                       return (
                         <button
+                          type="button"
                           key={value}
                           title={label}
                           onClick={() => setForm({ ...form, color: value })}
-                          style={{
-                            width: '28px',
-                            height: '28px',
-                            borderRadius: '50%',
-                            backgroundColor: hex,
-                            border: `2px solid ${selected ? '#6366f1' : baseBorder}`,
-                            outline: selected ? '2px solid #c7d2fe' : 'none',
-                            outlineOffset: '1px',
-                            transform: selected ? 'scale(1.18)' : 'scale(1)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                            flexShrink: 0,
-                          }}
+                          className={`
+                            h-7 w-7 shrink-0 rounded-full transition-all duration-150 cursor-pointer
+                            focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2
+                            focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-800
+                            ${selected
+                              ? 'ring-2 ring-teal-500 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-800 scale-[1.12] shadow-sm'
+                              : 'ring-2 ring-gray-300/95 dark:ring-gray-200/85 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 scale-100 hover:ring-gray-400 dark:hover:ring-gray-100'
+                            }
+                          `}
+                          style={{ backgroundColor: hex }}
                           aria-label={`Select ${label} color`}
                           aria-pressed={selected}
                         />
                       );
                     })}
                   </div>
-                  <p style={{ marginTop: '6px', fontSize: '12px', color: '#6b7280', textTransform: 'capitalize' }}>
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 capitalize">
                     Selected: {form.color}
                   </p>
                 </div>
@@ -487,7 +457,7 @@ export default function Vehicles() {
         ) : (
           <button
             onClick={() => setShowForm(true)}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-medium text-sm transition shadow"
+            className="w-full flex items-center justify-center gap-2 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-medium text-sm transition shadow"
           >
             <FaPlus className="w-3.5 h-3.5" aria-hidden="true" />
             Add Vehicle

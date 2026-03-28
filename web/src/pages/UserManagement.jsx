@@ -89,6 +89,8 @@ export default function UserManagement() {
                       ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
                       : u.role === 'committee' 
                       ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
+                      : u.role === 'patroller' || u.role === 'investigator'
+                      ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200'
                       : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                   }`}>
                     {u.role || 'volunteer'}
@@ -102,6 +104,8 @@ export default function UserManagement() {
                     disabled={u.uid === currentUser?.id}
                   >
                     <option value="volunteer" className="dark:bg-gray-700">Volunteer</option>
+                    <option value="patroller" className="dark:bg-gray-700">Patroller</option>
+                    <option value="investigator" className="dark:bg-gray-700">Investigator</option>
                     <option value="admin" className="dark:bg-gray-700">Admin</option>
                     <option value="committee" className="dark:bg-gray-700">Committee</option>
                   </select>

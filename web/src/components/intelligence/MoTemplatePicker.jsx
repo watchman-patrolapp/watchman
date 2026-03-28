@@ -54,7 +54,7 @@ export default function MoTemplatePicker({ moSignature, setMoSignature }) {
                     onClick={() => setMoSignature((prev) => applyMoTemplate(prev, tpl))}
                     className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800"
                   >
-                    <FaPlus className="mt-0.5 h-3 w-3 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                    <FaPlus className="mt-0.5 h-3 w-3 shrink-0 text-teal-600 dark:text-teal-400" />
                     <span>{tpl.label}</span>
                   </button>
                 </li>

@@ -155,7 +155,7 @@ const GlobalSearch = () => {
       {showResults && isLoading && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50 p-4">
           <div className="flex items-center justify-center space-x-2">
-            <div className="w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-teal-200 border-t-teal-600 rounded-full animate-spin" />
             <span className="text-sm text-gray-600 dark:text-gray-400">Searching...</span>
           </div>
         </div>

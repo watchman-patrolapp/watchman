@@ -33,7 +33,7 @@ export const Avatar = React.memo(function Avatar({
       )}
       
       {(hasError || !avatarUrl) && (
-        <div className={`${sizeClass} rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 
+        <div className={`${sizeClass} rounded-full bg-gradient-to-br from-teal-500 to-purple-600 
           flex items-center justify-center font-bold text-white`}>
           {getInitials(name)}
         </div>

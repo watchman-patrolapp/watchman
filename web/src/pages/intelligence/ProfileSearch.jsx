@@ -75,7 +75,7 @@ export default function ProfileSearch() {
                 <FaArrowLeft /> Intelligence home
               </button>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <FaUserSecret className="text-indigo-600" />
+                <FaUserSecret className="text-teal-600" />
                 Criminal Intelligence Database
               </h1>
             </div>
@@ -113,7 +113,7 @@ export default function ProfileSearch() {
             </div>
             <button 
               type="submit"
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+              className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition"
             >
               Search
             </button>
@@ -153,7 +153,7 @@ export default function ProfileSearch() {
                 type="checkbox"
                 checked={filters.watchlist_only}
                 onChange={(e) => setFilters({...filters, watchlist_only: e.target.checked})}
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
               />
               Watchlist only
             </label>
@@ -163,7 +163,7 @@ export default function ProfileSearch() {
         {/* Results */}
         {loading ? (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
           </div>
         ) : results.length === 0 ? (
           <div className="text-center py-12 text-gray-500 dark:text-gray-400">

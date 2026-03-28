@@ -154,7 +154,7 @@ const ReportSightingModal = ({ isOpen, onClose, profileId, profileName }) => {
               value={formData.description}
               onChange={handleChange}
               placeholder="Describe what you saw (e.g., 'Suspect seen walking towards Kragga Kamma Road')"
-              className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-y"
+              className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition resize-y"
               rows={3}
               required
             />
@@ -171,7 +171,7 @@ const ReportSightingModal = ({ isOpen, onClose, profileId, profileName }) => {
                 name="timestamp"
                 value={formData.timestamp.slice(0, 16)}
                 onChange={handleChange}
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
               />
             </div>
             <div>

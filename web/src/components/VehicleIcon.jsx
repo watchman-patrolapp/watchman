@@ -1,19 +1,19 @@
 import React from 'react';
 import { FaCar, FaMotorcycle, FaBicycle, FaWalking, FaTruck, FaBus, FaAmbulance } from 'react-icons/fa';
 
-// High-contrast color palette
+// Light mode: pastel fill + saturated icon. Dark mode: brighter circle fill (same hue family) so icon stays the chosen colour and reads on dark pages.
 export const COLOR_MAP = {
-  red:     { bg: 'bg-red-100',    darkBg: 'dark:bg-red-900/40',    text: 'text-red-600',    darkText: 'dark:text-red-300',    border: 'border-red-200',    darkBorder: 'dark:border-red-800',    hex: '#dc2626' },
-  blue:    { bg: 'bg-blue-100',   darkBg: 'dark:bg-blue-900/40',   text: 'text-blue-600',   darkText: 'dark:text-blue-300',   border: 'border-blue-200',   darkBorder: 'dark:border-blue-800',   hex: '#2563eb' },
-  green:   { bg: 'bg-emerald-100',darkBg: 'dark:bg-emerald-900/40',text: 'text-emerald-600',darkText: 'dark:text-emerald-300',border: 'border-emerald-200',darkBorder: 'dark:border-emerald-800',hex: '#059669' },
-  yellow:  { bg: 'bg-amber-100',  darkBg: 'dark:bg-amber-900/40',  text: 'text-amber-600',  darkText: 'dark:text-amber-300',  border: 'border-amber-200',  darkBorder: 'dark:border-amber-800',  hex: '#d97706' },
-  orange:  { bg: 'bg-orange-100', darkBg: 'dark:bg-orange-900/40', text: 'text-orange-600', darkText: 'dark:text-orange-300', border: 'border-orange-200', darkBorder: 'dark:border-orange-800', hex: '#ea580c' },
-  purple:  { bg: 'bg-violet-100', darkBg: 'dark:bg-violet-900/40', text: 'text-violet-600', darkText: 'dark:text-violet-300', border: 'border-violet-200', darkBorder: 'dark:border-violet-800', hex: '#7c3aed' },
-  pink:    { bg: 'bg-pink-100',   darkBg: 'dark:bg-pink-900/40',   text: 'text-pink-600',   darkText: 'dark:text-pink-300',   border: 'border-pink-200',   darkBorder: 'dark:border-pink-800',   hex: '#db2777' },
-  teal:    { bg: 'bg-teal-100',   darkBg: 'dark:bg-teal-900/40',   text: 'text-teal-600',   darkText: 'dark:text-teal-300',   border: 'border-teal-200',   darkBorder: 'dark:border-teal-800',   hex: '#0d9488' },
-  gray:    { bg: 'bg-gray-100',   darkBg: 'dark:bg-gray-800',       text: 'text-gray-600',   darkText: 'dark:text-gray-300',   border: 'border-gray-200',   darkBorder: 'dark:border-gray-700',   hex: '#4b5563' },
-  black:   { bg: 'bg-gray-200',   darkBg: 'dark:bg-gray-700',       text: 'text-gray-900',   darkText: 'dark:text-gray-100',   border: 'border-gray-300',   darkBorder: 'dark:border-gray-600',   hex: '#1f2937' },
-  white:   { bg: 'bg-white',      darkBg: 'dark:bg-gray-800',       text: 'text-gray-600',   darkText: 'dark:text-gray-300',   border: 'border-gray-200',   darkBorder: 'dark:border-gray-700',   hex: '#9ca3af' },
+  red:     { bg: 'bg-red-100',    darkBg: 'dark:bg-red-100',    text: 'text-red-600',    darkText: 'dark:text-red-600',    border: 'border-red-200',    darkBorder: 'dark:border-red-300/90',    hex: '#dc2626' },
+  blue:    { bg: 'bg-blue-100',   darkBg: 'dark:bg-blue-100',   text: 'text-blue-600',   darkText: 'dark:text-blue-600',   border: 'border-blue-200',   darkBorder: 'dark:border-blue-300/90',   hex: '#2563eb' },
+  green:   { bg: 'bg-emerald-100',darkBg: 'dark:bg-emerald-100',text: 'text-emerald-600',darkText: 'dark:text-emerald-600',border: 'border-emerald-200',darkBorder: 'dark:border-emerald-300/90',hex: '#059669' },
+  yellow:  { bg: 'bg-amber-100',  darkBg: 'dark:bg-amber-100',  text: 'text-amber-600',  darkText: 'dark:text-amber-600',  border: 'border-amber-200',  darkBorder: 'dark:border-amber-300/90',  hex: '#d97706' },
+  orange:  { bg: 'bg-orange-100', darkBg: 'dark:bg-orange-100', text: 'text-orange-600', darkText: 'dark:text-orange-600', border: 'border-orange-200', darkBorder: 'dark:border-orange-300/90', hex: '#ea580c' },
+  purple:  { bg: 'bg-violet-100', darkBg: 'dark:bg-violet-100', text: 'text-violet-600', darkText: 'dark:text-violet-600', border: 'border-violet-200', darkBorder: 'dark:border-violet-300/90', hex: '#7c3aed' },
+  pink:    { bg: 'bg-pink-100',   darkBg: 'dark:bg-pink-100',   text: 'text-pink-600',   darkText: 'dark:text-pink-600',   border: 'border-pink-200',   darkBorder: 'dark:border-pink-300/90',   hex: '#db2777' },
+  teal:    { bg: 'bg-teal-100',   darkBg: 'dark:bg-teal-100',   text: 'text-teal-600',   darkText: 'dark:text-teal-600',   border: 'border-teal-200',   darkBorder: 'dark:border-teal-300/90',   hex: '#0d9488' },
+  gray:    { bg: 'bg-gray-100',   darkBg: 'dark:bg-gray-200',   text: 'text-gray-600',   darkText: 'dark:text-gray-600',   border: 'border-gray-200',   darkBorder: 'dark:border-gray-400/80',   hex: '#4b5563' },
+  black:   { bg: 'bg-gray-200',   darkBg: 'dark:bg-gray-300',   text: 'text-gray-900',   darkText: 'dark:text-gray-900',   border: 'border-gray-300',   darkBorder: 'dark:border-gray-500/90',   hex: '#1f2937' },
+  white:   { bg: 'bg-white',      darkBg: 'dark:bg-gray-100',   text: 'text-gray-600',   darkText: 'dark:text-gray-600',   border: 'border-gray-200',   darkBorder: 'dark:border-gray-400/80',   hex: '#9ca3af' },
 };
 
 // Export COLOR_HEX for backward compatibility

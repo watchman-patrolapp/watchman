@@ -76,7 +76,7 @@ export const MessageBubble = React.memo(function MessageBubble({
           
             <div className={`px-4 py-3 rounded-2xl shadow-sm relative ${
               isMe
-                ? 'bg-indigo-600 text-white rounded-br-md'
+                ? 'bg-teal-600 text-white rounded-br-md'
                 : isCritical
                 ? 'bg-red-50 text-red-800 border-2 border-red-200 dark:bg-red-900/30 dark:border-red-700 dark:text-red-200 rounded-bl-md'
                 : 'bg-white text-gray-900 border border-gray-200 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 rounded-bl-md'
@@ -85,7 +85,7 @@ export const MessageBubble = React.memo(function MessageBubble({
             
               <div className={`flex items-center gap-2 mt-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <time 
-                  className={`text-xs ${isMe ? 'text-indigo-200' : 'text-gray-500 dark:text-gray-300'}`}
+                  className={`text-xs ${isMe ? 'text-teal-200' : 'text-gray-500 dark:text-gray-300'}`}
                   aria-label={`Sent at ${formattedTime}`}
                 >
                   {formattedTime}

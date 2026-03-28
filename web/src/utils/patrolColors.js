@@ -20,8 +20,8 @@ export const PATROL_COLORS = [
 
 // Vehicle type colors (for legend consistency)
 export const VEHICLE_COLORS = {
-  on_foot: '#14b8a6',   // teal-500
-  bicycle: '#6366f1',   // indigo-500
+  on_foot: '#14b8a6',   // teal-500 (brand / foot patrol)
+  bicycle: '#7c3aed',   // violet-600 — distinct from primary teal
   vehicle: '#3b82f6',   // blue-500
   car: '#3b82f6',
 };

@@ -34,10 +34,10 @@ export default function IntelligenceFieldGuide({ className = '', defaultOpen = f
   return (
     <details
       open={defaultOpen}
-      className={`group rounded-xl border border-indigo-200/80 bg-indigo-50/50 dark:border-indigo-900/50 dark:bg-indigo-950/20 ${className}`}
+      className={`group rounded-xl border border-teal-200/80 bg-teal-50/50 dark:border-teal-900/50 dark:bg-teal-950/20 ${className}`}
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-left [&::-webkit-details-marker]:hidden">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 text-white">
           <FaBook className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
@@ -46,10 +46,10 @@ export default function IntelligenceFieldGuide({ className = '', defaultOpen = f
             Risk, priority, status, watchlist flags, and modus operandi — how terms are used in this app.
           </p>
         </div>
-        <FaChevronDown className="h-4 w-4 shrink-0 text-indigo-600 transition group-open:rotate-180 dark:text-indigo-400" />
+        <FaChevronDown className="h-4 w-4 shrink-0 text-teal-600 transition group-open:rotate-180 dark:text-teal-400" />
       </summary>
 
-      <div className="space-y-3 border-t border-indigo-200/60 px-4 py-4 dark:border-indigo-900/50">
+      <div className="space-y-3 border-t border-teal-200/60 px-4 py-4 dark:border-teal-900/50">
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Definitions support consistent reporting across patrollers and committees. Align serious incidents with SAPS and
           your watch&apos;s SOP.

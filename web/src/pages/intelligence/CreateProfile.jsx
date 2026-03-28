@@ -301,7 +301,7 @@ export default function CreateProfile() {
   return (
     <div className="p-6 max-w-4xl mx-auto bg-gray-50 min-h-screen">
       {returnTo && (
-        <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+        <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900">
           Opened from an incident report: your report text is auto-saved.{" "}
           <strong>Resume incident report</strong> brings you back; re-attach any photos that were not yet
           submitted.
@@ -314,7 +314,7 @@ export default function CreateProfile() {
             <button
               type="button"
               onClick={() => navigate(returnTo)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors"
             >
               <FaArrowLeft /> Resume incident report
             </button>
@@ -475,7 +475,7 @@ export default function CreateProfile() {
             <button
               type="button"
               onClick={() => navigate('/intelligence/search')}
-              className="font-medium text-indigo-600 underline hover:text-indigo-800"
+              className="font-medium text-teal-600 underline hover:text-teal-800"
             >
               Open the Intelligence field guide
             </button>

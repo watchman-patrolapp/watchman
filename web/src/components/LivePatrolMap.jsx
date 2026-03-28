@@ -4,7 +4,17 @@ import { supabase } from '../supabase/client';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { COLOR_MAP, normalizeVehicleType } from './VehicleIcon';
-import { FaClock, FaMapMarkerAlt, FaRuler, FaUser, FaRoad, FaRoute } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaUser } from 'react-icons/fa';
+
+/** GPS uncertainty ring — standard red “accuracy” treatment; marker pin uses neutral fill so vehicle colour never clashes */
+const ACCURACY_CIRCLE_STYLE = {
+  fillColor: '#dc2626',
+  fillOpacity: 0.14,
+  color: '#b91c1c',
+  weight: 2,
+  opacity: 0.85,
+  dashArray: '8, 6',
+};
 
 // Custom hook for map bounds
 function MapBoundsSetter({ patrols }) {
@@ -45,8 +55,8 @@ const createPatrolIcon = (patrol, isActive) => {
     className: 'custom-patrol-marker',
     html: `
       <div class="relative flex flex-col items-center">
-        <div class="w-10 h-10 rounded-full border-2 border-white dark:border-gray-800 shadow-lg flex items-center justify-center text-lg ${isActive ? 'marker-active' : ''}"
-             style="background-color: ${colorData.hex};">
+        <div class="w-10 h-10 rounded-full shadow-lg flex items-center justify-center text-lg ${isActive ? 'marker-active' : ''}"
+             style="background-color: #ffffff; border: 3px solid ${colorData.hex}; box-shadow: 0 1px 4px rgba(0,0,0,0.2);">
           ${normalizeVehicleType(patrol.vehicle_type) === 'on_foot' ? '🚶' : 
             normalizeVehicleType(patrol.vehicle_type) === 'bicycle' ? '🚲' : 
             normalizeVehicleType(patrol.vehicle_type) === 'motorcycle' ? '🏍️' : '🚗'}
@@ -216,7 +226,7 @@ export default function LivePatrolMap() {
               {patrol.route?.length > 1 && (
                 <Polyline
                   positions={patrol.route.map(r => [r.latitude, r.longitude])}
-                  color={COLOR_MAP[patrol.vehicleColor]?.hex || '#6366f1'}
+                  color={COLOR_MAP[patrol.vehicleColor]?.hex || '#0d9488'}
                   weight={4}
                   opacity={0.8}
                   dashArray="6, 6"
@@ -229,14 +239,7 @@ export default function LivePatrolMap() {
                 <Circle
                   center={pos}
                   radius={accuracy}
-                  pathOptions={{
-                    fillColor: COLOR_MAP[patrol.vehicleColor]?.hex || '#6366f1',
-                    fillOpacity: 0.1,
-                    color: COLOR_MAP[patrol.vehicleColor]?.hex || '#6366f1',
-                    weight: 1,
-                    opacity: 0.3,
-                    dashArray: '4, 4'
-                  }}
+                  pathOptions={ACCURACY_CIRCLE_STYLE}
                 />
               )}
 
@@ -249,10 +252,10 @@ export default function LivePatrolMap() {
                   <div className="p-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg min-w-[250px]">
                     <div className="flex items-center gap-3 mb-3">
                       <div 
-                        className="w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-md"
-                        style={{ backgroundColor: COLOR_MAP[patrol.vehicleColor]?.hex || '#6366f1' }}
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-md bg-white dark:bg-gray-800"
+                        style={{ border: `3px solid ${COLOR_MAP[patrol.vehicleColor]?.hex || '#0d9488'}` }}
                       >
-                        <span className="text-white text-lg">
+                        <span className="text-lg leading-none">
                           {normalizeVehicleType(patrol.vehicle_type) === 'on_foot' ? '🚶' : 
                            normalizeVehicleType(patrol.vehicle_type) === 'bicycle' ? '🚲' : '🚗'}
                         </span>
@@ -278,10 +281,6 @@ export default function LivePatrolMap() {
                         <span className="font-medium text-gray-900 dark:text-white">{patrol.vehicle_reg || patrol.reg_number || 'N/A'}</span>
                       </div>
                       <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                        <span className="text-gray-500 dark:text-gray-400">Accuracy</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{Math.round(accuracy)}m</span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <span className="text-gray-500 dark:text-gray-400">Last Update</span>
                         <span className="font-medium text-gray-900 dark:text-white">{new Date(patrol.currentLocation.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                       </div>
@@ -298,7 +297,7 @@ export default function LivePatrolMap() {
       {loading && (
         <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-[1000]">
           <div className="flex flex-col items-center">
-            <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-3"></div>
+            <div className="w-12 h-12 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin mb-3"></div>
             <p className="text-gray-600 dark:text-gray-300 font-medium">Loading patrol data...</p>
           </div>
         </div>
@@ -322,7 +321,7 @@ export default function LivePatrolMap() {
       {/* Patrol list sidebar */}
       <div className="absolute top-4 left-4 z-[1000] w-64 max-w-[calc(100%-2rem)]">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 border-b border-indigo-500">
+          <div className="px-4 py-3 bg-gradient-to-r from-teal-600 to-violet-600 border-b border-teal-500">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-white flex items-center gap-2">
                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
@@ -340,8 +339,8 @@ export default function LivePatrolMap() {
               validPatrols.map((patrol) => (
                 <div key={patrol.id} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   <div 
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-sm"
-                    style={{ backgroundColor: COLOR_MAP[patrol.vehicleColor]?.hex || '#6366f1' }}
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                    style={{ border: `3px solid ${COLOR_MAP[patrol.vehicleColor]?.hex || '#0d9488'}` }}
                   >
                     {(patrol.user_name || 'U')[0].toUpperCase()}
                   </div>

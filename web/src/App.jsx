@@ -5,6 +5,8 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { useAuth } from "./auth/useAuth";
 import RequireRole from "./components/RequireRole";
 import ChatErrorBoundary from './components/ChatErrorBoundary'; // ✅ NEW IMPORT
+import PageSkeleton from "./components/layout/PageSkeleton";
+import MobilePatrolDockHost from "./components/layout/MobilePatrolDockHost";
 
 // Lazy load page components
 const Login = lazy(() => import("./pages/Login"));
@@ -44,11 +46,7 @@ const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
-      </div>
-    );
+    return <PageSkeleton message="Signing you in…" />;
   }
   return user ? children : <Navigate to="/login" />;
 }
@@ -65,7 +63,7 @@ function SOPGuard({ children }) {
 
 function AppRoutes() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading chat...</div>}>
+    <Suspense fallback={<PageSkeleton message="Loading…" />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -275,7 +273,9 @@ function AppRoutes() {
           path="/intelligence/profiles/:id"
           element={
             <PrivateRoute>
-              <RequireRole allowedRoles={["admin", "investigator", "patrol"]}>
+              <RequireRole
+                allowedRoles={["admin", "committee", "patroller", "investigator"]}
+              >
                 <CriminalProfileDetail />
               </RequireRole>
             </PrivateRoute>
@@ -302,7 +302,7 @@ function AppRoutes() {
                   <div className="max-w-4xl mx-auto">
                     <Link
                       to="/intelligence"
-                      className="inline-flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-6"
+                      className="inline-flex items-center gap-2 text-sm text-teal-600 dark:text-teal-400 hover:underline mb-6"
                     >
                       ← Intelligence home
                     </Link>
@@ -361,6 +361,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
+        <MobilePatrolDockHost />
       </AuthProvider>
     </BrowserRouter>
   );

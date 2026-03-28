@@ -150,3 +150,7 @@ If deployment issues occur:
    - Navigate to Deployments
    - Select previous successful deployment
    - Promote to Production
+
+## Repository layout (canonical frontend)
+
+The deployable React app lives under **`web/`** (`web/src`, `web/vite.config.js`). A duplicate **`src/`** at the repository root is not the build entrypoint—edit **`web/src`** only unless you are intentionally syncing a mirror.

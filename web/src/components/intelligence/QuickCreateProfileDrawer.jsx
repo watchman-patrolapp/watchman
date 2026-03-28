@@ -252,7 +252,7 @@ export default function QuickCreateProfileDrawer({
 
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <FaUserSecret className="text-indigo-600" />
+            <FaUserSecret className="text-teal-600" />
             <h2 id="quick-profile-title" className="text-lg font-semibold text-gray-900 dark:text-white">
               Quick profile
             </h2>
@@ -379,7 +379,7 @@ export default function QuickCreateProfileDrawer({
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-lg bg-indigo-600 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="w-full rounded-lg bg-teal-600 py-2.5 font-medium text-white hover:bg-teal-700 disabled:opacity-50"
               >
                 {submitting ? 'Saving…' : 'Create & link to this suspect'}
               </button>

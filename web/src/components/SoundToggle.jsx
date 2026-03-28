@@ -38,7 +38,7 @@ export default function SoundToggle() {
   return (
     <button
       onClick={toggleSound}
-      className="p-1 rounded-full text-white hover:bg-indigo-500 transition"
+      className="p-1 rounded-full text-white hover:bg-teal-500 transition"
       title={soundEnabled ? 'Sound on (click to mute)' : 'Sound off (click to enable)'}
       aria-label={soundEnabled ? 'Mute sounds' : 'Enable sounds'}
       aria-pressed={soundEnabled}

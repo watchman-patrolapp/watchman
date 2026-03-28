@@ -64,7 +64,7 @@ export default function EvidenceEntry({
           placeholder="Describe what this shows, when it was taken, and its relevance..."
           required={entry.files.length > 0}
           rows={2}
-          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-y"
+          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition resize-y"
         />
       </div>
 
@@ -76,28 +76,28 @@ export default function EvidenceEntry({
             placeholder="Approx. age"
             value={entry.metadata?.age || ''}
             onChange={(e) => updateMetadata('age', e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500"
           />
           <input
             type="text"
             placeholder="Clothing description"
             value={entry.metadata?.clothing || ''}
             onChange={(e) => updateMetadata('clothing', e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500"
           />
           <input
             type="text"
             placeholder="Direction of travel"
             value={entry.metadata?.direction || ''}
             onChange={(e) => updateMetadata('direction', e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500"
           />
           <input
             type="text"
             placeholder="Time observed (e.g., 02:15 AM)"
             value={entry.metadata?.timeObserved || ''}
             onChange={(e) => updateMetadata('timeObserved', e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500"
           />
         </div>
       )}
@@ -109,21 +109,21 @@ export default function EvidenceEntry({
             placeholder="License plate"
             value={entry.metadata?.licensePlate || ''}
             onChange={(e) => updateMetadata('licensePlate', e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500"
           />
           <input
             type="text"
             placeholder="Make / Model / Color"
             value={entry.metadata?.vehicleDetails || ''}
             onChange={(e) => updateMetadata('vehicleDetails', e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500"
           />
           <input
             type="text"
             placeholder="Direction of travel"
             value={entry.metadata?.direction || ''}
             onChange={(e) => updateMetadata('direction', e.target.value)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 col-span-2"
+            className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 col-span-2"
           />
         </div>
       )}
@@ -135,7 +135,7 @@ export default function EvidenceEntry({
               type="checkbox"
               checked={entry.metadata?.potentiallyRelated || false}
               onChange={(e) => updateMetadata('potentiallyRelated', e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+              className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-teal-600 focus:ring-teal-500"
             />
             <span>Potentially related to this incident (uncertain connection)</span>
           </label>
@@ -146,14 +146,14 @@ export default function EvidenceEntry({
               placeholder="Location observed (if different from incident)"
               value={entry.metadata?.location || ''}
               onChange={(e) => updateMetadata('location', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 pl-10 pr-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 pl-10 pr-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500"
             />
           </div>
         </div>
       )}
 
       {/* File Upload Zone */}
-      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 hover:border-indigo-500 dark:hover:border-indigo-400 transition">
+      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 hover:border-teal-500 dark:hover:border-teal-400 transition">
         <input
           type="file"
           accept="image/*"

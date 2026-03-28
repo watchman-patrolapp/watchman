@@ -93,7 +93,7 @@ export default function About() {
               <div className="flex flex-col gap-2">
                 <a
                   href="mailto:africuzprojects@gmail.com"
-                  className="inline-flex items-center gap-2 text-indigo-600 dark:text-indigo-400 hover:underline text-sm"
+                  className="inline-flex items-center gap-2 text-teal-600 dark:text-teal-400 hover:underline text-sm"
                 >
                   <FaEnvelope className="w-4 h-4 flex-shrink-0" />
                   africuzprojects@gmail.com
@@ -126,7 +126,7 @@ export default function About() {
                   onChange={handleChange}
                   required
                   autoComplete="name"
-                  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
                 />
                 <input
                   type="email"
@@ -136,7 +136,7 @@ export default function About() {
                   onChange={handleChange}
                   required
                   autoComplete="email"
-                  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
                 />
                 <div>
                   <textarea
@@ -147,7 +147,7 @@ export default function About() {
                     required
                     rows={4}
                     autoComplete="off"
-                    className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none"
+                    className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition resize-none"
                   />
                   {/* Character counter — only visible when approaching limit */}
                   {charsNearLimit && (
@@ -160,7 +160,7 @@ export default function About() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2 px-6 rounded-xl transition shadow-sm"
+                  className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-medium py-2 px-6 rounded-xl transition shadow-sm"
                 >
                   {loading ? 'Sending...' : 'Send Feedback'}
                 </button>

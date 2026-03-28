@@ -93,11 +93,11 @@ export const CATEGORY_COLORS = Object.freeze({
   }),
   
   report: Object.freeze({
-    bg: 'bg-indigo-100',
-    text: 'text-indigo-800',
-    border: 'border-indigo-200',
-    darkBg: 'dark:bg-indigo-900/30',
-    darkText: 'dark:text-indigo-200',
+    bg: 'bg-teal-100',
+    text: 'text-teal-800',
+    border: 'border-teal-200',
+    darkBg: 'dark:bg-teal-900/30',
+    darkText: 'dark:text-teal-200',
   }),
 });
 

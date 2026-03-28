@@ -78,7 +78,7 @@ function SectionCard({ title, children, action }) {
 function GuideSection({ number, title, children }) {
   return (
     <div className="flex gap-4 pb-6 mb-6 border-b border-gray-100 dark:border-gray-700 last:border-0 last:pb-0 last:mb-0">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-sm">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-sm">
         {number}
       </div>
       <div className="flex-1">
@@ -150,14 +150,14 @@ export default function Guide() {
           </button>
           
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <FaBookOpen className="w-6 h-6 text-indigo-500" />
+            <FaBookOpen className="w-6 h-6 text-teal-500" />
             Quick Start Guide
           </h1>
           
           <button
             onClick={handlePrint}
             disabled={printing}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition text-sm font-medium shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl transition text-sm font-medium shadow-sm"
           >
             <FaPrint className="w-4 h-4" />
             {printing ? 'Printing...' : 'Print'}

@@ -92,7 +92,7 @@ function FormInput({ label, name, type = "text", required, ...props }) {
         type={type}
         name={name}
         required={required}
-        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
         {...props}
       />
     </div>
@@ -109,7 +109,7 @@ function FormTextarea({ label, name, required, rows = 4, ...props }) {
         name={name}
         required={required}
         rows={rows}
-        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-y"
+        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition resize-y"
         {...props}
       />
     </div>
@@ -125,7 +125,7 @@ function FormSelect({ label, name, required, options, ...props }) {
       <select
         name={name}
         required={required}
-        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
         {...props}
       >
         <option value="" className="dark:bg-gray-700">Select {label.toLowerCase()}</option>
@@ -148,17 +148,17 @@ function AlertBox({ message }) {
 
 function UploadProgress({ current, total, progress }) {
   return (
-    <div className="mt-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3">
-      <div className="flex justify-between text-sm mb-2 text-indigo-700 dark:text-indigo-300">
+    <div className="mt-3 bg-teal-50 dark:bg-teal-900/20 rounded-xl p-3">
+      <div className="flex justify-between text-sm mb-2 text-teal-700 dark:text-teal-300">
         <span className="flex items-center gap-2">
           <FaCamera className="w-4 h-4" />
           Uploading {current} of {total}
         </span>
         <span className="font-semibold">{progress}%</span>
       </div>
-      <div className="w-full bg-indigo-200 dark:bg-indigo-800 rounded-full h-2">
+      <div className="w-full bg-teal-200 dark:bg-teal-800 rounded-full h-2">
         <div
-          className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+          className="bg-teal-600 h-2 rounded-full transition-all duration-300"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -205,6 +205,7 @@ export default function IncidentForm() {
           });
         }
         toast.success("Restored your in-progress incident report (re-attach photos if needed).", {
+          id: "incident-draft-restored",
           duration: 5000,
         });
       }
@@ -447,7 +448,7 @@ export default function IncidentForm() {
                     // Navigate to create new profile
                     navigate(`/intelligence/profiles/new?incident=${incident.id}&evidence=${suspect.id}`);
                   }}
-                  className="mt-2 px-3 py-1 bg-indigo-600 text-white rounded text-sm"
+                  className="mt-2 px-3 py-1 bg-teal-600 text-white rounded text-sm"
                 >
                   Create New Profile
                 </button>
@@ -581,7 +582,7 @@ export default function IncidentForm() {
                   name="witnessPresent"
                   checked={form.witnessPresent}
                   onChange={handleChange}
-                  className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                  className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-teal-600 focus:ring-teal-500"
                 />
                 <span>Witness present</span>
               </label>
@@ -619,10 +620,10 @@ export default function IncidentForm() {
                   
                   {/* Profile Linking for Suspects */}
                   {cat.id === 'suspects' && evidence.suspects.length > 0 && (
-                    <div className="mt-4 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
+                    <div className="mt-4 p-4 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg">
                       <div className="flex items-center gap-2 mb-3">
-                        <FaSearch className="w-4 h-4 text-indigo-600" />
-                        <h4 className="font-semibold text-indigo-700 dark:text-indigo-300">Search Existing Profiles</h4>
+                        <FaSearch className="w-4 h-4 text-teal-600" />
+                        <h4 className="font-semibold text-teal-700 dark:text-teal-300">Search Existing Profiles</h4>
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -644,7 +645,7 @@ export default function IncidentForm() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition shadow-sm flex items-center justify-center gap-2"
+                className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition shadow-sm flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>

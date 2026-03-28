@@ -11,7 +11,7 @@ import {
   FaChevronRight,
 } from 'react-icons/fa';
 
-const PATROLLER_ROUTES = ['admin', 'committee', 'patroller'];
+const PATROLLER_ROUTES = ['admin', 'committee', 'patroller', 'investigator'];
 const COMMITTEE_ROUTES = ['admin', 'committee'];
 
 export default function IntelligenceHome() {
@@ -31,7 +31,7 @@ export default function IntelligenceHome() {
         <button
           type="button"
           onClick={() => navigate('/dashboard')}
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+          className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700"
         >
           Back to dashboard
         </button>
@@ -46,7 +46,7 @@ export default function IntelligenceHome() {
       description: 'Search profiles, filter by risk and status, and open the field guide for terms like MO and watchlist flags.',
       to: '/intelligence/search',
       icon: FaSearch,
-      color: 'bg-indigo-600',
+      color: 'bg-teal-600',
       show: true,
     },
     {
@@ -115,7 +115,7 @@ export default function IntelligenceHome() {
                 <button
                   type="button"
                   onClick={() => navigate(card.to)}
-                  className="w-full text-left flex items-stretch gap-0 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700 transition overflow-hidden group"
+                  className="w-full text-left flex items-stretch gap-0 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md hover:border-teal-300 dark:hover:border-teal-700 transition overflow-hidden group"
                 >
                   <div className={`w-1.5 shrink-0 ${card.color}`} aria-hidden />
                   <div className="flex flex-1 items-center gap-4 p-4 min-w-0">
@@ -125,12 +125,12 @@ export default function IntelligenceHome() {
                       <Icon className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h2 className="font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
+                      <h2 className="font-semibold text-gray-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition">
                         {card.title}
                       </h2>
                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">{card.description}</p>
                     </div>
-                    <FaChevronRight className="w-4 h-4 shrink-0 text-gray-300 dark:text-gray-600 group-hover:text-indigo-500 transition" />
+                    <FaChevronRight className="w-4 h-4 shrink-0 text-gray-300 dark:text-gray-600 group-hover:text-teal-500 transition" />
                   </div>
                 </button>
               </li>

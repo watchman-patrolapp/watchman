@@ -205,7 +205,7 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
         {showResults && isLoading && (
           <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 p-3">
             <div className="flex items-center justify-center space-x-2">
-              <div className="w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-teal-200 border-t-teal-600 rounded-full animate-spin" />
               <span className="text-sm text-gray-600 dark:text-gray-400">Searching...</span>
             </div>
           </div>
@@ -225,7 +225,7 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
           <button
             type="button"
             onClick={() => setQuickCreateOpen(true)}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 transition"
           >
             <FaUserSecret className="w-4 h-4 shrink-0" />
             New profile

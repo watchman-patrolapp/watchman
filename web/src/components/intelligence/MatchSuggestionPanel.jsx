@@ -8,11 +8,11 @@ export default function MatchSuggestionPanel({ matches, onConfirm, onReject }) {
   if (!matches || matches.length === 0) return null;
 
   return (
-    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-6 mb-6">
+    <div className="bg-gradient-to-r from-teal-50 to-purple-50 dark:from-teal-900/20 dark:to-purple-900/20 border border-teal-200 dark:border-teal-800 rounded-xl p-6 mb-6">
       <div className="flex items-center gap-2 mb-4">
-        <FaRobot className="w-5 h-5 text-indigo-600" />
+        <FaRobot className="w-5 h-5 text-teal-600" />
         <h3 className="font-bold text-gray-900 dark:text-white">AI Match Suggestions</h3>
-        <span className="px-2 py-1 bg-indigo-100 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs rounded-full">
+        <span className="px-2 py-1 bg-teal-100 dark:bg-teal-800 text-teal-700 dark:text-teal-300 text-xs rounded-full">
           {matches.length} potential matches
         </span>
       </div>
@@ -69,7 +69,7 @@ export default function MatchSuggestionPanel({ matches, onConfirm, onReject }) {
               </button>
               <button
                 onClick={() => navigate(`/intelligence/profiles/${match.suggested_profile_id}`)}
-                className="px-4 py-2 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/50 dark:hover:bg-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-lg text-sm font-medium transition"
+                className="px-4 py-2 bg-teal-100 hover:bg-teal-200 dark:bg-teal-900/50 dark:hover:bg-teal-800 text-teal-700 dark:text-teal-300 rounded-lg text-sm font-medium transition"
               >
                 View Profile
               </button>

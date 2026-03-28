@@ -25,14 +25,14 @@ export default function EvidenceSection({
     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 mb-4 border border-gray-200 dark:border-gray-600">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <Icon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+          <Icon className="w-5 h-5 text-teal-600 dark:text-teal-400" />
           <h3 className="font-semibold text-gray-900 dark:text-white">{category.label}</h3>
         </div>
         {category.allowMultipleEntries && (
           <button
             type="button"
             onClick={onAddEntry}
-            className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium flex items-center gap-1"
+            className="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium flex items-center gap-1"
           >
             <FaPlus className="w-3 h-3" />
             Add Another
@@ -60,7 +60,7 @@ export default function EvidenceSection({
         <button
           type="button"
           onClick={onAddEntry}
-          className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-indigo-500 hover:text-indigo-600 dark:hover:border-indigo-400 dark:hover:text-indigo-400 transition flex items-center justify-center gap-2"
+          className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:border-teal-500 hover:text-teal-600 dark:hover:border-teal-400 dark:hover:text-teal-400 transition flex items-center justify-center gap-2"
         >
           <Icon className="w-4 h-4" />
           Add {category.label}

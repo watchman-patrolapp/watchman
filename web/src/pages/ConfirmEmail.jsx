@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabase/client';
 import toast from 'react-hot-toast';
+import AuthShell from '../components/layout/AuthShell';
 
 export default function ConfirmEmail() {
   const navigate = useNavigate();
   const location = useLocation();
-  // Email passed via router state from the signup page: navigate('/confirm-email', { state: { email } })
   const email = location.state?.email || null;
 
   const [resending, setResending] = useState(false);
@@ -35,12 +35,10 @@ export default function ConfirmEmail() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 px-4">
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 max-w-md w-full text-center">
-
-        {/* Icon */}
-        <div className="w-20 h-20 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center mx-auto mb-6">
-          <svg className="w-10 h-10 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <AuthShell title="Confirm email">
+      <div className="card w-full max-w-md p-8 text-center">
+        <div className="w-20 h-20 rounded-full bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center mx-auto mb-6">
+          <svg className="w-10 h-10 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"
               d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
@@ -51,12 +49,11 @@ export default function ConfirmEmail() {
         </h1>
 
         <p className="text-gray-600 dark:text-gray-300 mb-2">
-          We've sent a confirmation link to:
+          We&apos;ve sent a confirmation link to:
         </p>
 
-        {/* Show email if available */}
         {email ? (
-          <p className="font-semibold text-indigo-600 dark:text-indigo-400 mb-4 truncate">
+          <p className="font-semibold text-teal-600 dark:text-teal-400 mb-4 truncate">
             {email}
           </p>
         ) : (
@@ -69,31 +66,31 @@ export default function ConfirmEmail() {
           Click the link in the email to verify your account, then sign in.
         </p>
 
-        {/* Actions */}
         <div className="space-y-3">
           <button
+            type="button"
             onClick={() => navigate('/login')}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-3 rounded-xl transition"
+            className="btn-primary w-full"
           >
-            Go to Login
+            Go to login
           </button>
 
-          {/* Resend — only shown if we have an email to resend to */}
           {email && (
             <button
+              type="button"
               onClick={handleResend}
               disabled={resending || resent}
-              className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-700 dark:text-gray-200 font-medium px-6 py-3 rounded-xl transition text-sm"
+              className="w-full btn-secondary py-3 text-sm disabled:opacity-50"
             >
-              {resending ? 'Sending...' : resent ? 'Email resent!' : "Didn't receive it? Resend"}
+              {resending ? 'Sending…' : resent ? 'Email resent!' : "Didn't receive it? Resend"}
             </button>
           )}
         </div>
 
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-6">
-          Check your spam folder if you don't see it within a few minutes.
+          Check your spam folder if you don&apos;t see it within a few minutes.
         </p>
       </div>
-    </div>
+    </AuthShell>
   );
 }

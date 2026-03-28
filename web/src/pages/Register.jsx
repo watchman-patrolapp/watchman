@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import AuthShell from "../components/layout/AuthShell";
 
 const VEHICLE_COLORS = [
   "gray", "red", "blue", "green", "black", "white", "silver", "yellow", "orange"
@@ -55,7 +56,7 @@ function Register() {
       if (error) throw error;
 
       if (data?.user && !data.user.email_confirmed_at) {
-        navigate("/confirm-email");
+        navigate("/confirm-email", { state: { email: form.email } });
       } else {
         navigate("/sop");
       }
@@ -67,13 +68,13 @@ function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 px-4">
+    <AuthShell title="Create account">
       <form
         onSubmit={handleSubmit}
-        className="bg-white dark:bg-gray-800 w-full max-w-md p-6 rounded-xl shadow-lg space-y-4"
+        className="card w-full max-w-md p-6 sm:p-8 space-y-4"
       >
-        <h2 className="text-2xl font-bold text-center dark:text-white">
-          Neighbourhood Watch Registration
+        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
+          Register
         </h2>
 
         <input
@@ -81,7 +82,7 @@ function Register() {
           placeholder="Full Name"
           value={form.name}
           onChange={handleChange}
-          className="w-full border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+          className="input border"
           required
         />
 
@@ -90,7 +91,7 @@ function Register() {
           placeholder="Address"
           value={form.address}
           onChange={handleChange}
-          className="w-full border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+          className="input border"
           required
         />
 
@@ -101,7 +102,7 @@ function Register() {
             name="vehicleType"
             value={form.vehicleType}
             onChange={handleChange}
-            className="w-full border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+            className="input border"
           >
             {VEHICLE_TYPES.map(type => (
               <option key={type.value} value={type.value}>{type.label}</option>
@@ -116,7 +117,7 @@ function Register() {
             placeholder="Car Type (e.g. Toyota Corolla)"
             value={form.carType}
             onChange={handleChange}
-            className="w-full border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+            className="input border"
           />
         )}
 
@@ -127,7 +128,7 @@ function Register() {
             placeholder={form.vehicleType === 'car' ? "Registration Number" : "Bicycle Identifier (optional)"}
             value={form.regNumber}
             onChange={handleChange}
-            className="w-full border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+            className="input border"
           />
         )}
 
@@ -139,7 +140,7 @@ function Register() {
               name="vehicleColor"
               value={form.vehicleColor}
               onChange={handleChange}
-              className="w-full border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+              className="input border"
             >
               {VEHICLE_COLORS.map(color => (
                 <option key={color} value={color}>
@@ -156,7 +157,7 @@ function Register() {
           placeholder="Email"
           value={form.email}
           onChange={handleChange}
-          className="w-full border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+          className="input border"
           required
         />
 
@@ -166,7 +167,7 @@ function Register() {
           placeholder="Password (min 6 characters)"
           value={form.password}
           onChange={handleChange}
-          className="w-full border dark:border-gray-600 rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+          className="input border"
           required
         />
 
@@ -177,9 +178,9 @@ function Register() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 transition disabled:opacity-50"
+          className="btn-primary w-full disabled:opacity-50"
         >
-          {loading ? "Registering..." : "Register"}
+          {loading ? "Registering…" : "Register"}
         </button>
 
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
@@ -187,13 +188,13 @@ function Register() {
           <button
             type="button"
             onClick={() => navigate("/login")}
-            className="text-green-600 hover:underline focus:outline-none"
+            className="text-teal-600 dark:text-teal-400 font-semibold hover:underline focus:outline-none"
           >
             Sign in
           </button>
         </p>
       </form>
-    </div>
+    </AuthShell>
   );
 }
 
