@@ -47,3 +47,4 @@ android-watchman-prod/hs_err_pid*.log
 dev-dist/
 dist/
 *.log
+node_modules

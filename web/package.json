@@ -4,11 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": ">=18.0.0"
+    "node": "20.x"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:mobile": "vite build --mode capacitor",
+    "android:sync": "npm run build:mobile && npx cap sync android",
+    "android:apk:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:apk:debug:unix": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "lint": "eslint .",
     "preview": "vite preview"
   },
