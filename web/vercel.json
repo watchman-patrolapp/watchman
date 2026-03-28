@@ -2,6 +2,5 @@
   "buildCommand": "npm install && npx vite build",
   "installCommand": "npm install",
   "framework": "vite",
-  "outputDirectory": "dist",
-  "nodeVersion": "18.20.8"
+  "outputDirectory": "dist"
 }
