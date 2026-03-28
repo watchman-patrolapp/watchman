@@ -2,7 +2,7 @@ import React from 'react';
 import { FaRobot, FaCheck, FaTimes, FaUserPlus, FaPercentage } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
-export default function MatchSuggestionPanel({ matches, incidentId, onConfirm, onReject }) {
+export default function MatchSuggestionPanel({ matches, onConfirm, onReject }) {
   const navigate = useNavigate();
   
   if (!matches || matches.length === 0) return null;

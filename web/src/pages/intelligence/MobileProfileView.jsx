@@ -1,7 +1,29 @@
-import React, { useState, useEffect } from 'react';
+// Component definitions moved to top level
+const ActionButton = ({ icon: Icon, label, color, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`p-3 rounded-xl text-white font-medium text-sm flex flex-col items-center gap-2 ${color} hover:opacity-90 transition`}
+  >
+    <Icon className="w-5 h-5" />
+    <span>{label}</span>
+  </button>
+);
+
+const InfoCard = ({ title, icon: Icon, children, className = "" }) => (
+  <div className={`flex-shrink-0 w-64 snap-start bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 ${className}`}>
+    <div className="flex items-center gap-2 mb-3">
+      <Icon className="w-5 h-5 text-indigo-600" />
+      <h3 className="font-semibold text-gray-900 dark:text-white">{title}</h3>
+    </div>
+    <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+      {children}
+    </div>
+  </div>
+);
+
+import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCriminalProfile, useProfileIncidents } from '../../hooks/useCriminalIntelligence';
-import { supabase } from '../../supabase/client';
 import { 
   FaArrowLeft, FaUser, FaExclamationTriangle, FaMapMarkerAlt, FaPhone, FaEye, FaHistory,
   FaFingerprint, FaClock, FaCalendarAlt, FaCar, FaWalking, FaBicycle, FaExclamation
@@ -11,7 +33,6 @@ import QuickSightingButton from '../../components/patrol/QuickSightingButton';
 const MobileProfileView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [showSightingModal, setShowSightingModal] = useState(false);
   
   const { data: profile, isLoading: profileLoading } = useCriminalProfile(id);
   const { data: incidents } = useProfileIncidents(id);
@@ -36,15 +57,6 @@ const MobileProfileView = () => {
     }
   };
 
-  const getVehicleIcon = (vehicleType) => {
-    switch (vehicleType) {
-      case 'car': return <FaCar className="w-4 h-4" />;
-      case 'bicycle': return <FaBicycle className="w-4 h-4" />;
-      case 'on_foot': return <FaWalking className="w-4 h-4" />;
-      default: return <FaCar className="w-4 h-4" />;
-    }
-  };
-
   const formatLastSeen = (dateString) => {
     if (!dateString) return 'Unknown';
     const date = new Date(dateString);
@@ -60,28 +72,6 @@ const MobileProfileView = () => {
     if (diffDays < 7) return `${diffDays} days ago`;
     return date.toLocaleDateString();
   };
-
-  const ActionButton = ({ icon: Icon, label, color, onClick }) => (
-    <button
-      onClick={onClick}
-      className={`p-3 rounded-xl text-white font-medium text-sm flex flex-col items-center gap-2 ${color} hover:opacity-90 transition`}
-    >
-      <Icon className="w-5 h-5" />
-      <span>{label}</span>
-    </button>
-  );
-
-  const InfoCard = ({ title, icon: Icon, children, className = "" }) => (
-    <div className={`flex-shrink-0 w-64 snap-start bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 ${className}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <Icon className="w-5 h-5 text-indigo-600" />
-        <h3 className="font-semibold text-gray-900 dark:text-white">{title}</h3>
-      </div>
-      <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-        {children}
-      </div>
-    </div>
-  );
 
   if (profileLoading) {
     return (
@@ -170,7 +160,10 @@ const MobileProfileView = () => {
           icon={FaEye} 
           label="Report Sighting" 
           color="bg-red-600"
-          onClick={() => setShowSightingModal(true)}
+          onClick={() => {
+            // Report sighting functionality
+            console.log('Report sighting clicked');
+          }}
         />
       </div>
 
@@ -189,10 +182,10 @@ const MobileProfileView = () => {
         </InfoCard>
         
         <InfoCard title="Modus Operandi" icon={FaFingerprint}>
-          <strong>Time:</strong> {profile.mo_signature?.time_patterns?.join(', ') || 'Unknown'}<br />
-          <strong>Targets:</strong> {profile.mo_signature?.target_types?.join(', ') || 'Unknown'}<br />
-          <strong>Entry:</strong> {profile.mo_signature?.entry_methods?.join(', ') || 'Unknown'}<br />
-          <strong>Weapons:</strong> {profile.mo_signature?.weapons_preferred?.join(', ') || 'Unknown'}
+          <strong>Time:</strong> <span className="break-words whitespace-normal leading-relaxed">{profile.mo_signature?.time_patterns?.join(', ') || 'Unknown'}</span><br />
+          <strong>Targets:</strong> <span className="break-words whitespace-normal leading-relaxed">{profile.mo_signature?.target_types?.join(', ') || 'Unknown'}</span><br />
+          <strong>Entry:</strong> <span className="break-words whitespace-normal leading-relaxed">{profile.mo_signature?.entry_methods?.join(', ') || 'Unknown'}</span><br />
+          <strong>Weapons:</strong> <span className="break-words whitespace-normal leading-relaxed">{profile.mo_signature?.weapons_preferred?.join(', ') || 'Unknown'}</span>
         </InfoCard>
         
         <InfoCard title="Recent Activity" icon={FaHistory}>
@@ -233,9 +226,15 @@ const MobileProfileView = () => {
                     </p>
                   </div>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    link.confidence_score > 80 ? 'bg-green-900/50 text-green-300' : 'bg-yellow-900/50 text-yellow-300'
+                    link.confidence_score == null || !Number.isFinite(Number(link.confidence_score))
+                      ? 'bg-gray-700 text-gray-300'
+                      : link.confidence_score > 80
+                        ? 'bg-green-900/50 text-green-300'
+                        : 'bg-yellow-900/50 text-yellow-300'
                   }`}>
-                    {link.confidence_score}% Confidence
+                    {link.confidence_score != null && Number.isFinite(Number(link.confidence_score))
+                      ? `${link.confidence_score}% confidence`
+                      : 'Not assessed'}
                   </span>
                 </div>
                 <div className="mt-2 text-xs text-gray-500">

@@ -1,6 +1,7 @@
 // src/hooks/useGPSTracking.js - FIXED VERSION
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabase/client';
+import { devLog, devWarn } from '../utils/devLog';
 
 // ==========================================
 // GLOBAL GPS SINGLETON - Persists across navigation
@@ -63,19 +64,19 @@ const globalGPS = {
     const effectivePatrolId = this.currentPatrolId || this.userId;
     
     if (!effectivePatrolId || !this.userId) {
-      console.warn('⚠️ Cannot track location: missing patrol_id or user_id');
-      console.warn('Current patrol_id:', this.currentPatrolId);
-      console.warn('Current user_id:', this.userId);
-      console.warn('Effective patrol_id (used for DB):', effectivePatrolId);
+      devWarn('Cannot track location: missing patrol_id or user_id', {
+        currentPatrolId: this.currentPatrolId,
+        userId: this.userId,
+        effectivePatrolId
+      });
       return;
     }
 
-    console.log('📍 Tracking location:', {
+    devLog('Tracking location', {
       patrol_id: effectivePatrolId,
       user_id: this.userId,
       latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracy: position.coords.accuracy
+      longitude: position.coords.longitude
     });
 
     const { error } = await supabase
@@ -94,7 +95,7 @@ const globalGPS = {
     if (error) {
       console.error('❌ Location insert error:', error);
     } else {
-      console.log('✅ Location successfully saved to database');
+      devLog('Location saved to database');
     }
   },
   
@@ -111,13 +112,10 @@ const globalGPS = {
       return;
     }
 
-    console.log('🔑 GPS starting with:', { 
-      patrolId: this.currentPatrolId, 
-      userId: this.userId 
-    });
+    devLog('GPS starting', { patrolId: this.currentPatrolId, userId: this.userId });
 
     if (this.watchId !== null) {
-      console.log('🌍 GPS already active, ID:', this.watchId);
+      devLog('GPS already active', this.watchId);
       this.notify({ isActive: true, isLoading: false });
       return;
     }
@@ -144,7 +142,7 @@ const globalGPS = {
       const { latitude, longitude, accuracy, heading, speed } = position.coords;
       
       if (!this.validateCoords(position.coords)) {
-        console.warn('⚠️ Invalid coordinates:', position.coords);
+        devWarn('Invalid coordinates', position.coords);
         return;
       }
 
@@ -174,7 +172,11 @@ const globalGPS = {
     };
 
     const handleError = (error) => {
-      console.error('❌ Geolocation error:', error.code, error.message);
+      if (error.code === 1) {
+        devWarn('Geolocation permission denied');
+      } else {
+        devLog('Geolocation error', error.code, error.message);
+      }
       let errorMessage = 'Location error';
       switch (error.code) {
         case 1: errorMessage = 'Permission denied. Enable GPS.'; this.hasPermission = false; break;
@@ -188,13 +190,13 @@ const globalGPS = {
     navigator.geolocation.getCurrentPosition(handleSuccess, handleError, { enableHighAccuracy, timeout, maximumAge });
     this.watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, { enableHighAccuracy, maximumAge, timeout, distanceFilter: 10 });
     this.isActive = true;
-    console.log('✅ GPS started:', this.watchId);
+    devLog('GPS started', this.watchId);
   },
   
   stop() {
     if (this.watchId !== null) {
       navigator.geolocation.clearWatch(this.watchId);
-      console.log('🛑 GPS stopped:', this.watchId);
+      devLog('GPS stopped', this.watchId);
       this.watchId = null;
       this.isActive = false;
       this.currentPatrolId = null;
@@ -206,16 +208,16 @@ const globalGPS = {
   setupAutoStopTimer(durationMinutes = 480) {
     const durationMs = durationMinutes * 60 * 1000;
     
-    console.log(`⏱️ Auto-stop timer set for ${durationMinutes} minutes`);
+    devLog(`Auto-stop timer set for ${durationMinutes} minutes`);
     
     const timer = setTimeout(() => {
-      console.log('🛑 Auto-stop timer triggered - ending patrol');
+      devLog('Auto-stop timer triggered — ending patrol');
       this.stop();
     }, durationMs);
 
     return () => {
       clearTimeout(timer);
-      console.log('⏱️ Auto-stop timer cleared');
+      devLog('Auto-stop timer cleared');
     };
   }
 };
@@ -224,7 +226,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => globalGPS.stop());
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && globalGPS.hasPermission && !globalGPS.isActive) {
-      console.log('👁️ Tab visible, restarting GPS...');
+      devLog('Tab visible, restarting GPS');
       globalGPS.start();
     }
   });
@@ -273,10 +275,7 @@ export function useGPSTracking(options = {}) {
       globalGPS.currentPatrolId = newPatrolId;
       globalGPS.userId = newUserId;
       
-      console.log('🔑 GPS IDs updated:', { 
-        patrolId: newPatrolId, 
-        userId: newUserId 
-      });
+      devLog('GPS IDs updated', { patrolId: newPatrolId, userId: newUserId });
     }
   }, [options.patrolId, options.userId]);
 

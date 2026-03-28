@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth/useAuth';
 import { supabase } from '../supabase/client';
 import { format } from 'date-fns';
 import { 
@@ -13,18 +12,13 @@ import toast from 'react-hot-toast';
 export default function IncidentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [incident, setIncident] = useState(null);
   const [evidence, setEvidence] = useState([]);
   const [linkedProfiles, setLinkedProfiles] = useState([]);
   const [activeTab, setActiveTab] = useState('details');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchIncidentDetails();
-  }, [id]);
-
-  const fetchIncidentDetails = async () => {
+  const fetchIncidentDetails = useCallback(async () => {
     try {
       // Fetch incident
       const { data: incidentData, error: incidentError } = await supabase
@@ -63,7 +57,11 @@ export default function IncidentDetail() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchIncidentDetails();
+  }, [fetchIncidentDetails]);
 
   if (loading) {
     return (
@@ -287,19 +285,25 @@ export default function IncidentDetail() {
                         }`}>
                           {link.connection_type.replace(/_/g, ' ').toUpperCase()}
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm text-gray-500">Confidence:</span>
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
-                            <div 
-                              className={`h-2 rounded-full ${
-                                link.confidence_score > 80 ? 'bg-green-500' :
-                                link.confidence_score > 50 ? 'bg-yellow-500' :
-                                'bg-red-500'
-                              }`}
-                              style={{ width: `${link.confidence_score}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-medium">{link.confidence_score}%</span>
+                          {link.confidence_score != null && Number.isFinite(Number(link.confidence_score)) ? (
+                            <>
+                              <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                <div 
+                                  className={`h-2 rounded-full ${
+                                    link.confidence_score > 80 ? 'bg-green-500' :
+                                    link.confidence_score > 50 ? 'bg-yellow-500' :
+                                    'bg-red-500'
+                                  }`}
+                                  style={{ width: `${Math.min(100, Math.max(0, Number(link.confidence_score)))}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">{link.confidence_score}%</span>
+                            </>
+                          ) : (
+                            <span className="text-sm text-gray-500 dark:text-gray-400">Not set — review link to add score</span>
+                          )}
                         </div>
                       </div>
                       <button 

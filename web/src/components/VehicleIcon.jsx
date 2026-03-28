@@ -42,7 +42,7 @@ export const normalizeVehicleType = (vehicleType, carType) => {
   return 'car';
 };
 
-export const getVehicleDisplayInfo = (type, color = 'gray', makeModel, reg) => {
+export const getVehicleDisplayInfo = (type, makeModel, reg) => {
   const vehicleType = normalizeVehicleType(type);
   const displayText = vehicleType === 'on_foot' 
     ? 'On foot' 

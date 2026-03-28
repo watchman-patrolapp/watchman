@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
-import { FaSearch, FaLink, FaUserSecret, FaExclamationTriangle, FaEye, FaTimes } from 'react-icons/fa';
+import QuickCreateProfileDrawer from './QuickCreateProfileDrawer';
+import { FaSearch, FaUserSecret, FaEye, FaTimes, FaExternalLinkAlt } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
+  const navigate = useNavigate();
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +54,7 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
     setLinkedProfile({
       id: profile.id,
       name: profile.primary_name,
-      riskLevel: profile.risk_level
+      riskLevel: profile.risk_level,
     });
     onUpdateEntry('linked_profile_id', profile.id);
     onUpdateEntry('linked_profile_name', profile.primary_name);
@@ -58,6 +62,14 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
     setShowResults(false);
     setSearchQuery('');
     toast.success(`Linked to ${profile.primary_name}`);
+  };
+
+  const handleQuickCreated = (row) => {
+    handleSelectProfile({
+      id: row.id,
+      primary_name: row.primary_name,
+      risk_level: row.risk_level,
+    });
   };
 
   const handleRemoveLink = () => {
@@ -113,6 +125,7 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
               </div>
             </div>
             <button
+              type="button"
               onClick={handleRemoveLink}
               className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400"
               title="Remove link"
@@ -149,6 +162,7 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
           <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 max-h-60 overflow-y-auto">
             {searchResults.map((profile) => (
               <button
+                type="button"
                 key={profile.id}
                 onClick={() => handleSelectProfile(profile)}
                 className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition border-b border-gray-50 dark:border-gray-700/50 last:border-b-0"
@@ -206,28 +220,48 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
       </div>
 
       {/* Actions */}
-      <div className="mt-3 flex gap-2">
-        <button
-          onClick={() => {
-            // Navigate to create new profile
-            window.open(`/intelligence/profiles/new?description=${encodeURIComponent(entry.description)}`, '_blank');
-          }}
-          className="flex-1 flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition"
-        >
-          <FaUserSecret className="w-4 h-4" />
-          Create New Profile
-        </button>
-        
-        {linkedProfile && (
+      <div className="mt-3 flex flex-col gap-2">
+        <div className="flex gap-2">
           <button
-            onClick={() => window.open(`/intelligence/profiles/${linkedProfile.id}`, '_blank')}
-            className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+            type="button"
+            onClick={() => setQuickCreateOpen(true)}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition"
           >
-            <FaEye className="w-4 h-4" />
-            View Profile
+            <FaUserSecret className="w-4 h-4 shrink-0" />
+            New profile
           </button>
-        )}
+          {linkedProfile && (
+            <button
+              type="button"
+              onClick={() => navigate(`/intelligence/profiles/${linkedProfile.id}`)}
+              className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition flex items-center gap-2 shrink-0"
+            >
+              <FaEye className="w-4 h-4" />
+              View
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const params = new URLSearchParams();
+            params.set('returnTo', '/incident/new');
+            if (entry.description) params.set('description', entry.description);
+            navigate(`/intelligence/profiles/new?${params.toString()}`);
+          }}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-xs rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600/50 transition"
+        >
+          <FaExternalLinkAlt className="w-3 h-3" />
+          Open full profile editor
+        </button>
       </div>
+
+      <QuickCreateProfileDrawer
+        open={quickCreateOpen}
+        onClose={() => setQuickCreateOpen(false)}
+        suspectDescription={entry.description || ''}
+        onCreated={handleQuickCreated}
+      />
     </div>
   );
 };

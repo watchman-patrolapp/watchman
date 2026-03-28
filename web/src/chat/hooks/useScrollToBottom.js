@@ -27,8 +27,7 @@ export const useScrollToBottom = (dependencies) => {
 
   useEffect(() => {
     scrollToBottom();
-     
-  }, [scrollToBottom, ...dependencies]);
+  }, [scrollToBottom, dependencies]);
 
   return { containerRef, endRef, scrollToBottom };
 };

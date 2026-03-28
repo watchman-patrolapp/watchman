@@ -125,11 +125,11 @@ export default function Vehicles() {
       setVehicles(data || []);
     }
     setLoading(false);
-  }, [user.id]);
+  }, [user]);
 
   useEffect(() => {
     loadVehicles();
-  }, [loadVehicles]);
+  }, [loadVehicles, user]);
 
   // ---------------------------------------------------------------------------
   // Add vehicle

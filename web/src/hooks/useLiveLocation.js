@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { devLog, devWarn } from '../utils/devLog';
 
 // ==========================================
 // GLOBAL GPS SINGLETON - Persists across navigation
@@ -57,7 +58,7 @@ const globalGPS = {
   start(options = {}) {
     // If already running, just notify current state
     if (this.watchId !== null) {
-      console.log('🌍 GPS already active, ID:', this.watchId);
+      devLog('GPS already active', this.watchId);
       this.notify({ isActive: true, isLoading: false });
       return;
     }
@@ -85,7 +86,7 @@ const globalGPS = {
       
       // Validate coordinates
       if (!this.validateCoords(position.coords)) {
-        console.warn('⚠️ Invalid coordinates received:', position.coords);
+        devWarn('Invalid coordinates received', position.coords);
         return;
       }
 
@@ -113,7 +114,8 @@ const globalGPS = {
     };
 
     const handleError = (error) => {
-      console.error('❌ Geolocation error:', error.code, error.message);
+      if (error.code === 1) devWarn('Geolocation permission denied');
+      else devLog('Geolocation error', error.code, error.message);
 
       let errorMessage = 'Unknown location error';
       switch (error.code) {
@@ -158,13 +160,13 @@ const globalGPS = {
     );
 
     this.isActive = true;
-    console.log('✅ GPS tracking started, watch ID:', this.watchId);
+    devLog('GPS tracking started', this.watchId);
   },
   
   stop() {
     if (this.watchId !== null) {
       navigator.geolocation.clearWatch(this.watchId);
-      console.log('🛑 GPS tracking stopped, watch ID:', this.watchId);
+      devLog('GPS tracking stopped', this.watchId);
       this.watchId = null;
       this.isActive = false;
       this.notify({ isActive: false });
@@ -187,7 +189,7 @@ if (typeof window !== 'undefined') {
   // Handle visibility change - restart if needed when tab becomes visible
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && globalGPS.hasPermission && !globalGPS.isActive) {
-      console.log('👁️ Tab visible, restarting GPS...');
+      devLog('Tab visible, restarting GPS');
       globalGPS.restart();
     }
   });

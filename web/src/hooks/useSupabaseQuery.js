@@ -80,11 +80,9 @@ export function useSupabaseQuery(queryFn, deps = [], options = {}) {
     fetchData()
   }, [fetchData])
 
-  // Re-run when caller-provided deps change — separate effect so the deps
-  // array is a static literal that satisfies rules-of-hooks
+  // Re-run when caller-provided deps change — spread deps so they're individual dependencies
   useEffect(() => {
     fetchData()
-     
   }, [fetchData, ...deps])
 
   const refetch = useCallback(() => {

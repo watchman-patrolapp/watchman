@@ -29,7 +29,7 @@ export const VEHICLE_COLORS = {
 // Assign color to user (persistent per session)
 const userColorMap = new Map();
 
-export const getUserColor = (userId, userName) => {
+export const getUserColor = (userId) => {
   if (!userColorMap.has(userId)) {
     const index = userColorMap.size % PATROL_COLORS.length;
     userColorMap.set(userId, PATROL_COLORS[index]);

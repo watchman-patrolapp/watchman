@@ -89,7 +89,7 @@ export default function Dashboard() {
             lng: position.coords.longitude
           });
         },
-        (error) => console.error('Location error:', error),
+        () => { /* expected in dev / blocked network location */ },
         { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 }
       );
     }
@@ -245,7 +245,6 @@ export default function Dashboard() {
   useEffect(() => {
     // ✅ FIXED: Check user_id instead of id
     if (activePatrol?.user_id && user?.id && !isTracking) {
-      console.log('🔄 GPS restart with patrol:', activePatrol.user_id);
       startTracking();
     }
   }, [activePatrol?.user_id, user?.id, isTracking, startTracking]);
@@ -326,12 +325,6 @@ export default function Dashboard() {
     if (!user) return;
     if (user.vehicles && user.vehicles.length > 1) {
       setVehiclesList(user.vehicles);
-      console.log('🚗 Vehicle Selector Debug:', {
-        allVehicles: user.vehicles,
-        vehicleCount: user.vehicles?.length,
-        vehicleTypes: user.vehicles?.map(v => v.vehicle_type),
-        onFootExists: user.vehicles?.some(v => v.vehicle_type === 'on_foot')
-      });
       setShowVehiclePicker(true);
       return;
     }
@@ -766,7 +759,7 @@ export default function Dashboard() {
           
           {/* Intelligence Dashboard Button */}
           <button 
-            onClick={() => navigate("/intelligence/search")} 
+            onClick={() => navigate("/intelligence")} 
             className="px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition text-sm font-medium flex items-center justify-center gap-1"
           >
             <FaExclamationTriangle />

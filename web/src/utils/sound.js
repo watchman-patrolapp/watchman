@@ -1,4 +1,6 @@
 // src/utils/sound.js
+import { devLog, devWarn } from './devLog';
+
 let audioUnlocked = false;
 
 const sounds = {
@@ -34,14 +36,14 @@ function preloadSounds() {
     }
   });
 
-  console.log('Sounds preloaded');
+  devLog('Sounds preloaded');
 }
 
 preloadSounds();
 
 function playSound(audio, name) {
   if (!audio) {
-    console.warn(`${name} sound not available (audio object missing)`);
+    devWarn(`${name} sound not available (audio object missing)`);
     return;
   }
 
@@ -52,11 +54,11 @@ function playSound(audio, name) {
     .then(() => {
       if (!audioUnlocked) {
         audioUnlocked = true;
-        console.log('✅ Audio context unlocked via user interaction');
+        devLog('Audio context unlocked via user interaction');
       }
     })
     .catch((err) => {
-      console.warn(`${name} sound playback failed:`, err.message);
+      devWarn(`${name} sound playback failed:`, err.message);
     });
 }
 
@@ -106,7 +108,7 @@ export function playTestSound() {
   if (sounds.chat) {
     playSound(sounds.chat, 'Test');
   } else {
-    console.warn('Test sound not available – chat audio missing');
+    devWarn('Test sound not available – chat audio missing');
   }
 }
 
@@ -115,7 +117,7 @@ export function playEmergencyAlarm() {
   const audio = new Audio('/sounds/notification.mp3');
   audio.loop = true;
   audio.volume = 0.7;
-  audio.play().catch((err) => console.warn('Emergency alarm error:', err));
+  audio.play().catch((err) => devWarn('Emergency alarm error:', err));
   return {
     stop: () => {
       audio.pause();
@@ -127,13 +129,13 @@ export function playEmergencyAlarm() {
 export function playAlertChime() {
   const audio = new Audio('/sounds/notification.mp3');
   audio.volume = 0.6;
-  audio.play().catch((err) => console.warn('Alert chime error:', err));
+  audio.play().catch((err) => devWarn('Alert chime error:', err));
 }
 
 export function playPanicSiren() {
   const audio = new Audio('/sounds/patrol-warning.mp3');
   audio.volume = 0.8;
-  audio.play().catch((err) => console.warn('Panic siren error:', err));
+  audio.play().catch((err) => devWarn('Panic siren error:', err));
   return {
     stop: () => {
       audio.pause();

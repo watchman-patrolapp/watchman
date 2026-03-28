@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useContext } from 'react'
 import { supabase } from '../supabase/client'
 import { AuthContext } from './AuthContext'
+import { devLog } from '../utils/devLog'
 
 export function useAuth() {
   const context = useContext(AuthContext);
@@ -40,18 +41,18 @@ export const AuthProvider = ({ children }) => {
 
     // Skip if we already have this user's profile loaded and it's not forced
     if (!force && lastFetchedUid.current === authUser.id && fetchInProgress.current === false) {
-      console.log('Auth: Profile already loaded for', authUser.id, '-- skipping refetch')
+      devLog('Auth: Profile already loaded for', authUser.id, '-- skipping refetch')
       return
     }
 
     // Skip if a fetch is already in progress for this user
     if (fetchInProgress.current) {
-      console.log('Auth: Fetch already in progress -- skipping duplicate')
+      devLog('Auth: Fetch already in progress -- skipping duplicate')
       return
     }
 
     fetchInProgress.current = true
-    console.log('Auth: Fetching profile for', authUser.id)
+    devLog('Auth: Fetching profile for', authUser.id)
 
     try {
       // Fresh 8s timeout per query (not shared)
@@ -86,7 +87,7 @@ export const AuthProvider = ({ children }) => {
       if (mounted.current) {
         lastFetchedUid.current = authUser.id
         setUser({ ...authUser, ...profile, uid: authUser.id })
-        console.log('Auth: Profile loaded successfully for', authUser.id)
+        devLog('Auth: Profile loaded successfully for', authUser.id)
       }
     } catch (err) {
       console.error('Auth: Error fetching profile:', err)
@@ -133,10 +134,10 @@ export const AuthProvider = ({ children }) => {
         if (!mounted.current) return
 
         if (session?.user) {
-          console.log('Auth: Session found, fetching profile for', session.user.id)
+          devLog('Auth: Session found, fetching profile for', session.user.id)
           await fetchUserProfile(session.user)
         } else {
-          console.log('Auth: No session found')
+          devLog('Auth: No session found')
           if (mounted.current) setUser(null)
         }
       } catch (error) {
@@ -150,14 +151,14 @@ export const AuthProvider = ({ children }) => {
     initAuth()
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('Auth: onAuthStateChange triggered', _event, session?.user?.id)
+      devLog('Auth: onAuthStateChange triggered', _event, session?.user?.id)
       if (!mounted.current) return
 
       if (_event === 'TOKEN_REFRESHED') {
         // Token refreshed -- DO NOT refetch profile (causes wipe + subscription death).
         // Supabase realtime handles JWT rotation internally from v2.x onwards,
         // so we no longer need to manually disconnect/reconnect.
-        console.log('Auth: Token refreshed -- no action needed.')
+        devLog('Auth: Token refreshed -- no action needed.')
         if (mounted.current) setLoading(false)
         return
       }

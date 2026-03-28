@@ -4,6 +4,7 @@ import {
   FaMapMarkerAlt, FaFingerprint, FaHistory, FaChartLine,
   FaCalendarAlt, FaIdCard, FaFlag
 } from 'react-icons/fa';
+import { formatMoMatchConfidence, moMatchCardTitle } from '../../utils/moMatchDisplay';
 
 const RiskBadge = ({ level }) => {
   const styles = {
@@ -20,15 +21,17 @@ const RiskBadge = ({ level }) => {
   );
 };
 
-const StatBox = ({ icon: Icon, label, value, color }) => (
-  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+const StatBox = ({ icon: Icon, label, value, color, title, valueClassName = '' }) => (
+  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center" title={title}>
     <Icon className={`w-6 h-6 mx-auto mb-1 text-${color}-500`} />
-    <div className="text-2xl font-bold text-gray-900 dark:text-white">{value}</div>
+    <div className={`text-2xl font-bold text-gray-900 dark:text-white ${valueClassName}`}>{value}</div>
     <div className="text-xs text-gray-500 dark:text-gray-400">{label}</div>
   </div>
 );
 
 export default function CriminalProfileCard({ profile, stats = {} }) {
+  const mo = formatMoMatchConfidence(stats.moConfidence);
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Header */}
@@ -93,7 +96,14 @@ export default function CriminalProfileCard({ profile, stats = {} }) {
           <StatBox icon={FaHistory} label="Incidents" value={stats.incidentCount || 0} color="blue" />
           <StatBox icon={FaNetworkWired} label="Associates" value={stats.associateCount || 0} color="purple" />
           <StatBox icon={FaMapMarkerAlt} label="Locations" value={stats.locationCount || 0} color="green" />
-          <StatBox icon={FaFingerprint} label="MO Match" value={`${stats.moConfidence || 0}%`} color="orange" />
+          <StatBox
+            icon={FaFingerprint}
+            label="MO Match"
+            value={mo.display}
+            color="orange"
+            title={moMatchCardTitle(mo.assessed)}
+            valueClassName={mo.assessed ? '' : 'font-normal text-gray-400 dark:text-gray-500'}
+          />
         </div>
 
         {/* Watchlist Flags */}
@@ -157,17 +167,54 @@ export default function CriminalProfileCard({ profile, stats = {} }) {
               <FaChartLine className="text-indigo-600" />
               Modus Operandi Signature
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="space-y-3">
               {profile.mo_signature.target_types?.length > 0 && (
-                <MOTag label="Targets" values={profile.mo_signature.target_types} color="blue" />
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wide w-24 shrink-0">
+                      Targets
+                    </span>
+                    <span className="text-sm text-gray-900 dark:text-white break-words">
+                      {profile.mo_signature.target_types.join(', ')}
+                    </span>
+                  </div>
+                </div>
               )}
               {profile.mo_signature.time_patterns?.length > 0 && (
-                <MOTag label="Time Pattern" values={profile.mo_signature.time_patterns} color="purple" />
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold uppercase tracking-wide w-24 shrink-0">
+                      Time Pattern
+                    </span>
+                    <span className="text-sm text-gray-900 dark:text-white break-words">
+                      {profile.mo_signature.time_patterns.join(', ')}
+                    </span>
+                  </div>
+                </div>
               )}
               {profile.mo_signature.entry_methods?.length > 0 && (
-                <MOTag label="Entry" values={profile.mo_signature.entry_methods} color="orange" />
+                <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <span className="text-xs text-orange-600 dark:text-orange-400 font-semibold uppercase tracking-wide w-24 shrink-0">
+                      Entry
+                    </span>
+                    <span className="text-sm text-gray-900 dark:text-white break-words">
+                      {profile.mo_signature.entry_methods.join(', ')}
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
+            
+            {/* Weapons (if present) */}
+            {profile.mo_signature?.weapons_preferred?.length > 0 && (
+              <div className="mt-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                <span className="text-xs font-medium text-red-600 dark:text-red-400 uppercase">Preferred Weapons</span>
+                <div className="text-sm text-gray-900 dark:text-white mt-1">
+                  {profile.mo_signature.weapons_preferred.join(', ')}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -178,7 +225,7 @@ export default function CriminalProfileCard({ profile, stats = {} }) {
 const MOTag = ({ label, values, color }) => (
   <div className={`bg-${color}-50 dark:bg-${color}-900/20 rounded-lg p-3`}>
     <span className={`text-xs font-medium text-${color}-600 dark:text-${color}-400 uppercase`}>{label}</span>
-    <div className="text-sm text-gray-900 dark:text-white font-medium mt-1">
+    <div className="text-sm text-gray-900 dark:text-white font-medium mt-1 break-words whitespace-normal leading-relaxed">
       {values.join(', ')}
     </div>
   </div>

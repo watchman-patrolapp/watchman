@@ -47,7 +47,7 @@ export const VoicePlayer = React.memo(function VoicePlayer({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [src, blob]);
+  }, [src, blob, objectUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;

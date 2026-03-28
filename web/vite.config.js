@@ -2,39 +2,80 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Check if running in Vercel
 const isVercel = process.env.VERCEL === '1';
 
 export default defineConfig({
   plugins: [
     react(),
-    !isVercel && VitePWA({
-      registerType: 'autoUpdate',
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        // Skip waiting so updates apply immediately
-        skipWaiting: true,
-        clientsClaim: true,
-      },
-      // Simplified manifest to avoid potential issues
-      manifest: {
-        name: 'Watchman Patrol',
-        short_name: 'Watchman',
-        theme_color: '#ffffff',
-      },
-      // Critical: Don't fail build on workbox errors
-      selfDestroying: false,
-      devOptions: {
-        enabled: true,
-        type: 'module',
-      },
-    })
+    !isVercel &&
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+        manifest: {
+          name: 'Neighbourhood Watch',
+          short_name: 'PatrolWatch',
+          description: 'Emergency Patrol Management',
+          theme_color: '#0d9488',
+          background_color: '#0f766e',
+          display: 'standalone',
+          scope: '/',
+          start_url: '/',
+          icons: [
+            {
+              src: '/icon-192.png',
+              sizes: '192x192',
+              type: 'image/png',
+            },
+            {
+              src: '/icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+            },
+            {
+              src: '/icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any maskable',
+            },
+          ],
+        },
+        workbox: {
+          navigateFallback: '/offline.html',
+          navigateFallbackAllowlist: [/^\/.*$/],
+          navigateFallbackDenylist: [
+            /^\/api/,
+            /^\/supabase/,
+            /\.(?:js|css|png|svg|ico|woff2?|map|json|webmanifest)$/i,
+          ],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/.*\.tile\.openstreetmap\.org\/.*/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'map-tiles',
+                expiration: {
+                  maxEntries: 500,
+                  maxAgeSeconds: 30 * 24 * 60 * 60,
+                },
+              },
+            },
+          ],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          skipWaiting: true,
+          clientsClaim: true,
+        },
+        selfDestroying: false,
+        devOptions: {
+          enabled: true,
+          type: 'module',
+        },
+      }),
   ].filter(Boolean),
   optimizeDeps: {
     include: ['leaflet', 'react-leaflet'],
   },
   build: {
-    chunkSizeWarningLimit: 1000, // Increase limit to suppress warning
+    chunkSizeWarningLimit: 1000,
     commonjsOptions: {
       transformMixedEsModules: true,
     },

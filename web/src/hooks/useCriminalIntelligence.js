@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase/client';
+import { matchQueueConfidenceToScore } from '../utils/intelligenceConfidence';
 
 export const useCriminalProfile = (profileId) => {
   return useQuery({
@@ -83,18 +84,23 @@ export const useCreateProfileFromEvidence = () => {
   
   return useMutation({
     mutationFn: async ({ evidenceData, incidentId }) => {
+      const { data: authData } = await supabase.auth.getUser();
+      const uid = authData?.user?.id;
+      const inc = typeof incidentId === 'object' && incidentId !== null ? incidentId : null;
+      const incidentUuid = inc?.id ?? incidentId;
+
       // 1. Create profile from suspect evidence metadata
       const profileData = {
         primary_name: evidenceData.description?.substring(0, 50) || 'Unknown Subject',
         mo_signature: {
-          target_types: [incidentId.type],
+          target_types: inc?.type ? [inc.type] : [],
           time_patterns: evidenceData.metadata?.timeObserved ? [evidenceData.metadata.timeObserved] : [],
           entry_methods: []
         },
         first_identified_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
-        last_seen_location: incidentId.location,
-        created_by: (await supabase.auth.getUser()).data.user.id
+        last_seen_location: inc?.location ?? null,
+        created_by: uid
       };
       
       const { data: profile, error: profileError } = await supabase
@@ -105,24 +111,27 @@ export const useCreateProfileFromEvidence = () => {
       
       if (profileError) throw profileError;
       
-      // 2. Link to incident
-      await supabase.from('profile_incidents').insert({
+      // 2. Link to incident — no invented MO %; analyst can set score when reviewing
+      const linkRow = {
         profile_id: profile.id,
-        incident_id: incidentId,
+        incident_id: incidentUuid,
         connection_type: 'probable_suspect',
-        confidence_score: 75,
-        linked_by: (await supabase.auth.getUser()).data.user.id
-      });
+        linked_by: uid
+      };
+      const { error: linkError } = await supabase.from('profile_incidents').insert(linkRow);
+      if (linkError) throw linkError;
       
       // 3. Add geographic data
-      await supabase.from('profile_geography').insert({
-        profile_id: profile.id,
-        location_name: incidentId.location,
-        location_type: 'crime_scene',
-        incident_ids: [incidentId],
-        first_seen_at: new Date().toISOString(),
-        last_seen_at: new Date().toISOString()
-      });
+      if (inc?.location) {
+        await supabase.from('profile_geography').insert({
+          profile_id: profile.id,
+          location_name: inc.location,
+          location_type: 'crime_scene',
+          incident_ids: [incidentUuid],
+          first_seen_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString()
+        });
+      }
       
       return profile;
     },
@@ -136,31 +145,52 @@ export const useConfirmMatch = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ matchId, profileId, incidentId }) => {
-      // Update match queue
-      await supabase
+    mutationFn: async ({ matchId, profileId, incidentId, evidenceStrength = 'moderate' }) => {
+      const { data: authData } = await supabase.auth.getUser();
+      const reviewerId = authData?.user?.id ?? null;
+
+      const { data: queueRow, error: queueFetchError } = await supabase
         .from('profile_match_queue')
-        .update({ status: 'confirmed', reviewed_at: new Date().toISOString() })
+        .select('match_confidence, match_reason')
+        .eq('id', matchId)
+        .single();
+
+      if (queueFetchError) throw queueFetchError;
+
+      const confidenceScore = matchQueueConfidenceToScore(queueRow?.match_confidence);
+
+      const { error: queueUpdateError } = await supabase
+        .from('profile_match_queue')
+        .update({
+          status: 'confirmed',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: reviewerId
+        })
         .eq('id', matchId);
-      
-      // Create profile-incident link
+
+      if (queueUpdateError) throw queueUpdateError;
+
+      const insertPayload = {
+        profile_id: profileId,
+        incident_id: incidentId,
+        connection_type: 'probable_suspect',
+        linked_by: reviewerId,
+        evidence_strength: evidenceStrength
+      };
+      if (confidenceScore != null) insertPayload.confidence_score = confidenceScore;
+
       const { data, error } = await supabase
         .from('profile_incidents')
-        .insert({
-          profile_id: profileId,
-          incident_id: incidentId,
-          connection_type: 'probable_suspect',
-          confidence_score: 85,
-          evidence_strength: 'moderate'
-        })
+        .insert(insertPayload)
         .select();
-      
+
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['match-suggestions']);
       queryClient.invalidateQueries(['profile-incidents']);
+      queryClient.invalidateQueries(['criminal-profiles']);
     }
   });
 };

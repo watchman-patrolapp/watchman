@@ -1,3 +1,5 @@
+import { supabase } from '../supabase/client';
+
 export const generateEntryId = () => {
   return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };

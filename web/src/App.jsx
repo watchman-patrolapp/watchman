@@ -1,5 +1,5 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import { AuthProvider } from "./auth/AuthProvider";
 import { useAuth } from "./auth/useAuth";
@@ -24,8 +24,10 @@ const IncidentDetail = lazy(() => import("./pages/IncidentDetail"));
 
 // Intelligence pages
 const MobileProfileView = lazy(() => import("./pages/intelligence/MobileProfileView"));
+const IntelligenceHome = lazy(() => import("./pages/intelligence/IntelligenceHome"));
 const ProfileSearch = lazy(() => import("./pages/intelligence/ProfileSearch"));
 const MatchQueue = lazy(() => import("./pages/intelligence/MatchQueue"));
+const CreateProfile = lazy(() => import("./pages/intelligence/CreateProfile"));
 
 // ✅ CHAT: New chat moved to pages folder
 const EmergencyChat = lazy(() => import("./pages/EmergencyChat"));
@@ -259,10 +261,21 @@ function AppRoutes() {
         
         {/* Intelligence Routes */}
         <Route
+          path="/intelligence"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={["admin", "committee", "patroller"]}>
+                <IntelligenceHome />
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
           path="/intelligence/profiles/:id"
           element={
             <PrivateRoute>
-              <RequireRole allowedRoles={["admin", "committee"]}>
+              <RequireRole allowedRoles={["admin", "investigator", "patrol"]}>
                 <CriminalProfileDetail />
               </RequireRole>
             </PrivateRoute>
@@ -285,10 +298,18 @@ function AppRoutes() {
           element={
             <PrivateRoute>
               <RequireRole allowedRoles={["admin", "committee"]}>
-                <div className="min-h-screen bg-gray-100 p-6">
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-6">
                   <div className="max-w-4xl mx-auto">
-                    <h1 className="text-2xl font-bold text-gray-900 mb-6">Nearby Threats</h1>
-                    <p className="text-gray-600">This page will display high-risk profiles within your patrol area.</p>
+                    <Link
+                      to="/intelligence"
+                      className="inline-flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-6"
+                    >
+                      ← Intelligence home
+                    </Link>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Nearby Threats</h1>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      This page will display high-risk profiles within your patrol area.
+                    </p>
                   </div>
                 </div>
               </RequireRole>
@@ -313,6 +334,17 @@ function AppRoutes() {
             <PrivateRoute>
               <RequireRole allowedRoles={["admin", "committee"]}>
                 <MatchQueue />
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/intelligence/profiles/new"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={["admin", "committee", "patroller"]}>
+                <CreateProfile />
               </RequireRole>
             </PrivateRoute>
           }

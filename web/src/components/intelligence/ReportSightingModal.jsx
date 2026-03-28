@@ -40,8 +40,7 @@ const ReportSightingModal = ({ isOpen, onClose, profileId, profileName }) => {
         }));
         setLocationError('');
       },
-      (error) => {
-        console.error('Location error:', error);
+      () => {
         setLocationError('Unable to get current location');
       },
       {
@@ -75,7 +74,7 @@ const ReportSightingModal = ({ isOpen, onClose, profileId, profileName }) => {
       let locationData;
       try {
         locationData = JSON.parse(formData.location);
-      } catch (err) {
+      } catch {
         throw new Error('Invalid location data');
       }
 

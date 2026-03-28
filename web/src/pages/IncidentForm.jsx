@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
 import { FaArrowLeft, FaCamera, FaExclamationTriangle, FaCheckCircle, FaTimes, FaCar, FaTools, FaFileAlt, FaEye, FaUserSecret, FaSearch, FaLink } from "react-icons/fa";
@@ -23,6 +23,29 @@ const INCIDENT_TYPES = [
 ];
 
 const MAX_FILES = 10;
+
+const INCIDENT_DRAFT_STORAGE_KEY = "nwp_incident_report_draft_v1";
+
+const EMPTY_EVIDENCE = () => ({
+  scene_photos: [],
+  suspects: [],
+  vehicles: [],
+  physical_evidence: [],
+  documentation: [],
+  contextual_intel: [],
+});
+
+/** Serializable evidence (File objects cannot be stored). */
+function evidenceForStorage(evidence) {
+  const out = {};
+  for (const key of Object.keys(evidence)) {
+    out[key] = (evidence[key] || []).map((entry) => ({
+      ...entry,
+      files: [],
+    }));
+  }
+  return out;
+}
 
 const EVIDENCE_CATEGORIES = [
   {id: 'scene_photos', label: 'Scene Evidence', description: 'General photos of incident location, damage, or environment', icon: FaCamera, allowMultipleEntries: false},
@@ -149,18 +172,79 @@ function UploadProgress({ current, total, progress }) {
 
 export default function IncidentForm() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [form, setForm] = useState(INITIAL_FORM);
-  const [evidence, setEvidence] = useState({
-    scene_photos: [],
-    suspects: [],
-    vehicles: [],
-    physical_evidence: [],
-    documentation: [],
-    contextual_intel: []
-  });
+  const [evidence, setEvidence] = useState(EMPTY_EVIDENCE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const lastCreatedProfileToastId = useRef(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(INCIDENT_DRAFT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.form && typeof parsed.form === "object") {
+          setForm((prev) => ({ ...prev, ...parsed.form }));
+        }
+        if (parsed.evidence && typeof parsed.evidence === "object") {
+          setEvidence((prev) => {
+            const next = { ...prev };
+            for (const k of Object.keys(prev)) {
+              if (Array.isArray(parsed.evidence[k])) {
+                next[k] = parsed.evidence[k].map((entry) => ({
+                  ...entry,
+                  files: [],
+                  media_urls: entry.media_urls || [],
+                }));
+              }
+            }
+            return next;
+          });
+        }
+        toast.success("Restored your in-progress incident report (re-attach photos if needed).", {
+          duration: 5000,
+        });
+      }
+    } catch (e) {
+      console.warn("Incident draft restore failed:", e);
+    }
+    setDraftHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated) return;
+    const t = setTimeout(() => {
+      try {
+        sessionStorage.setItem(
+          INCIDENT_DRAFT_STORAGE_KEY,
+          JSON.stringify({
+            form,
+            evidence: evidenceForStorage(evidence),
+            savedAt: Date.now(),
+          })
+        );
+      } catch (e) {
+        console.warn("Incident draft save failed:", e);
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [form, evidence, draftHydrated]);
+
+  useEffect(() => {
+    const st = location.state;
+    const id = st?.createdProfileId;
+    if (!id || lastCreatedProfileToastId.current === id) return;
+    lastCreatedProfileToastId.current = id;
+    const name = st.createdProfileName || "New profile";
+    toast.success(
+      `“${name}” is saved. In Suspect Profiles, search that name and link it to this report.`,
+      { duration: 7000 }
+    );
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -373,6 +457,11 @@ export default function IncidentForm() {
         }
       }
 
+      try {
+        sessionStorage.removeItem(INCIDENT_DRAFT_STORAGE_KEY);
+      } catch (_) {
+        /* ignore */
+      }
       toast.success("Incident reported successfully with structured evidence!");
       navigate("/dashboard");
       
@@ -537,7 +626,7 @@ export default function IncidentForm() {
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {evidence.suspects.map((entry, index) => (
+                        {evidence.suspects.map((entry) => (
                           <ProfileLinkingSection
                             key={entry.id}
                             entry={entry}

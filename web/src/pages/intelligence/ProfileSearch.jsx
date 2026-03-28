@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
 import { FaSearch, FaFilter, FaUserSecret, FaMapMarkerAlt, FaExclamationTriangle, FaArrowLeft } from 'react-icons/fa';
 import CriminalProfileCard from '../../components/intelligence/CriminalProfileCard';
+import IntelligenceFieldGuide from '../../components/intelligence/IntelligenceFieldGuide';
 
 export default function ProfileSearch() {
   const navigate = useNavigate();
@@ -15,11 +16,7 @@ export default function ProfileSearch() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    searchProfiles();
-  }, [filters]);
-
-  const searchProfiles = async () => {
+  const searchProfiles = useCallback(async () => {
     setLoading(true);
     try {
       let query = supabase
@@ -52,7 +49,11 @@ export default function ProfileSearch() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, filters]);
+
+  useEffect(() => {
+    searchProfiles();
+  }, [searchProfiles]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -67,10 +68,11 @@ export default function ProfileSearch() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <button 
-                onClick={() => navigate('/dashboard')}
+                type="button"
+                onClick={() => navigate('/intelligence')}
                 className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
               >
-                <FaArrowLeft /> Back
+                <FaArrowLeft /> Intelligence home
               </button>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <FaUserSecret className="text-indigo-600" />
@@ -81,12 +83,22 @@ export default function ProfileSearch() {
               <FaExclamationTriangle className="text-red-500" />
               <span>{results.filter(r => r.risk_level === 'critical').length} critical threats</span>
             </div>
+            <button 
+              onClick={() => navigate('/intelligence/profiles/new')}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+            >
+              + Create New Profile
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Search and Filters */}
+        <div className="mb-6">
+          <IntelligenceFieldGuide />
+        </div>
+
+      {/* Search and Filters */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
           <form onSubmit={handleSearch} className="flex gap-4 mb-4">
             <div className="flex-1 relative">
@@ -161,20 +173,19 @@ export default function ProfileSearch() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {results.map(profile => (
-              <div 
-                key={profile.id} 
-                onClick={() => navigate(`/intelligence/profiles/${profile.id}`)}
-                className="cursor-pointer hover:shadow-lg transition"
-              >
-                <CriminalProfileCard 
-                  profile={profile}
-                  stats={{
-                    incidentCount: profile.incident_count || 0,
-                    associateCount: profile.associate_count || 0,
-                    moConfidence: 75
-                  }}
-                />
-              </div>
+                <div 
+                  key={profile.id} 
+                  onClick={() => navigate(`/intelligence/profiles/${profile.id}`)}
+                  className="cursor-pointer hover:shadow-lg transition"
+                >
+                  <CriminalProfileCard 
+                    profile={profile}
+                    stats={{
+                      incidentCount: profile.incident_count || 0,
+                      associateCount: profile.associate_count || 0
+                    }}
+                  />
+                </div>
             ))}
           </div>
         )}

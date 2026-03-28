@@ -30,14 +30,13 @@ export default function QuickSightingButton({ profileId, profileName }) {
 
           if (error) throw error;
           toast.success(`Sighting of ${profileName} reported successfully!`);
-        } catch (err) {
-          console.error('Error reporting sighting:', err);
+        } catch {
           toast.error('Failed to report sighting');
         } finally {
           setLoading(false);
         }
       },
-      (error) => {
+      () => {
         toast.error('Could not get location');
         setLoading(false);
       }

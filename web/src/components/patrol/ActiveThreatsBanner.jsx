@@ -8,7 +8,7 @@ export default function ActiveThreatsBanner({ userLocation, maxDistanceKm = 2 })
   const [nearbyProfiles, setNearbyProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const [error, setError] = useState(null);
+  const [_error, setError] = useState(null);
   
   // Refs to prevent memory leaks and concurrent fetches
   const isMounted = useRef(true);
@@ -51,7 +51,7 @@ export default function ActiveThreatsBanner({ userLocation, maxDistanceKm = 2 })
       if (isMounted.current) setLoading(false);
       isFetching.current = false;
     }
-  }, [userLocation?.lat, userLocation?.lng, maxDistanceKm]);
+  }, [userLocation?.lat, userLocation?.lng]);
 
   // Single effect with cleanup
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function ActiveThreatsBanner({ userLocation, maxDistanceKm = 2 })
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => navigate('/intelligence/search')}
+            onClick={() => navigate('/intelligence')}
             className="px-4 py-2 bg-white text-red-600 rounded-lg font-bold text-sm hover:bg-gray-100 transition"
           >
             View All
