@@ -48,7 +48,7 @@ export default function AdminFeedbackReviews() {
   }, [load]);
 
   useEffect(() => {
-    if (!user?.id || !canAccessAdminPanel(user?.role)) return undefined;
+    if (!user?.id || !canReviewFeedback(user?.role)) return undefined;
     const ch = supabase
       .channel('admin-feedback-live')
       .on(
@@ -113,7 +113,7 @@ export default function AdminFeedbackReviews() {
   const unreviewed = rows.filter((r) => !r.reviewed_at);
   const reviewed = rows.filter((r) => r.reviewed_at);
 
-  if (!user || !hasHydratedAppRole(user.role) || !canAccessAdminPanel(user.role)) {
+  if (!user || !hasHydratedAppRole(user.role) || !canReviewFeedback(user.role)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
         <BrandedLoader message="Checking access…" size="lg" />

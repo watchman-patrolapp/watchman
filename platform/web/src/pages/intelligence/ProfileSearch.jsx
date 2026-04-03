@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
 import { FaSearch, FaFilter, FaUserSecret, FaMapMarkerAlt, FaExclamationTriangle, FaArrowLeft } from 'react-icons/fa';
@@ -8,6 +8,7 @@ import ThemeToggle from '../../components/ThemeToggle';
 import BrandedLoader from '../../components/layout/BrandedLoader';
 import { totalProfileLocationCardCount } from '../../utils/profileLocationCount';
 import { buildAssociatesPreviewList } from '../../utils/profileAssociates';
+import { collectUserIdsFromProfiles, fetchUserLabelMap } from '../../utils/profileUserLabels';
 
 /** PostgREST returns `{ count: n }[]` for `table(count)` embeds — flatten for cards. */
 function normalizeProfileSearchRow(row) {
@@ -50,11 +51,31 @@ export default function ProfileSearch() {
   });
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [userLabelById, setUserLabelById] = useState({});
+  /** Avoid text filter firing on every keystroke (heavy embed query + label RPC). */
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchGenerationRef = useRef(0);
 
-  const searchProfiles = useCallback(async () => {
-    setLoading(true);
-    try {
-      let query = supabase.from('criminal_profiles').select(`
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length <= 2) {
+      setDebouncedSearch(q);
+      return undefined;
+    }
+    const t = setTimeout(() => setDebouncedSearch(q), 380);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  const runSearch = useCallback(
+    async (nameFilterOverride) => {
+      const q =
+        nameFilterOverride !== undefined && nameFilterOverride !== null
+          ? String(nameFilterOverride).trim()
+          : debouncedSearch.trim();
+      const gen = ++searchGenerationRef.current;
+      setLoading(true);
+      try {
+        let query = supabase.from('criminal_profiles').select(`
           *,
           profile_incidents(count),
           associate_out:profile_associates!profile_id(count),
@@ -72,41 +93,54 @@ export default function ProfileSearch() {
           profile_geography!profile_id(count)
         `);
 
-      if (searchQuery.length > 2) {
-        query = query.or(`primary_name.ilike.%${searchQuery}%,known_aliases.cs.{${searchQuery}}`);
+        if (q.length > 2) {
+          query = query.or(`primary_name.ilike.%${q}%,known_aliases.cs.{${q}}`);
+        }
+
+        if (filters.risk_level) {
+          query = query.eq('risk_level', filters.risk_level);
+        }
+
+        if (filters.status) {
+          query = query.eq('status', filters.status);
+        }
+
+        if (filters.watchlist_only) {
+          query = query.not('watchlist_flags', 'is', null);
+        }
+
+        query = query.order('risk_level', { ascending: false }).limit(20);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        if (gen !== searchGenerationRef.current) return;
+        const rows = (data || []).map(normalizeProfileSearchRow);
+        setResults(rows);
+        const auditIds = collectUserIdsFromProfiles(rows);
+        const labels = await fetchUserLabelMap(supabase, auditIds);
+        if (gen !== searchGenerationRef.current) return;
+        setUserLabelById(labels);
+      } catch (error) {
+        console.error('Search error:', error);
+        if (gen === searchGenerationRef.current) {
+          setUserLabelById({});
+        }
+      } finally {
+        if (gen === searchGenerationRef.current) {
+          setLoading(false);
+        }
       }
-
-      if (filters.risk_level) {
-        query = query.eq('risk_level', filters.risk_level);
-      }
-
-      if (filters.status) {
-        query = query.eq('status', filters.status);
-      }
-
-      if (filters.watchlist_only) {
-        query = query.not('watchlist_flags', 'is', null);
-      }
-
-      query = query.order('risk_level', { ascending: false }).limit(20);
-
-      const { data, error } = await query;
-      if (error) throw error;
-      setResults((data || []).map(normalizeProfileSearchRow));
-    } catch (error) {
-      console.error('Search error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery, filters]);
+    },
+    [debouncedSearch, filters]
+  );
 
   useEffect(() => {
-    searchProfiles();
-  }, [searchProfiles]);
+    void runSearch();
+  }, [runSearch]);
 
   const handleSearch = (e) => {
     e.preventDefault();
-    searchProfiles();
+    void runSearch(searchQuery);
   };
 
   return (
@@ -233,6 +267,7 @@ export default function ProfileSearch() {
                 >
                   <CriminalProfileCard 
                     profile={profile}
+                    userLabelById={userLabelById}
                     associatesPreview={profile.associates_preview}
                     stats={{
                       incidentCount: profile.incident_count || 0,

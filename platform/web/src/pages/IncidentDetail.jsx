@@ -9,6 +9,7 @@ import {
 import CriminalProfileCard from '../components/intelligence/CriminalProfileCard';
 import { SeenByChip } from '../components/intelligence/SightingsLogEditor';
 import { totalProfileLocationCardCount } from '../utils/profileLocationCount';
+import { collectUserIdsFromProfiles, fetchUserLabelMap } from '../utils/profileUserLabels';
 import StructuredEvidenceList, {
   EVIDENCE_CATEGORY_ORDER,
   normalizeMediaUrls,
@@ -97,7 +98,7 @@ function mergeIncidentSuspectsIntoEvidence(evidenceRows, suspectRows) {
   return list;
 }
 
-function LinkedProfileLinkCard({ link, navigate }) {
+function LinkedProfileLinkCard({ link, navigate, userLabelById = {} }) {
   const fromProfileRow = parseStoredLinkConfidence(link.confidence_score);
   const displayConfidence =
     fromProfileRow != null
@@ -173,6 +174,7 @@ function LinkedProfileLinkCard({ link, navigate }) {
       {link.profile && (
         <CriminalProfileCard
           profile={link.profile}
+          userLabelById={userLabelById}
           stats={{
             incidentCount:
               link.profile.profile_incidents?.[0]?.count ??
@@ -209,6 +211,7 @@ export default function IncidentDetail() {
   const [evidence, setEvidence] = useState([]);
   const [incidentSuspects, setIncidentSuspects] = useState([]);
   const [linkedProfiles, setLinkedProfiles] = useState([]);
+  const [profileUserLabelById, setProfileUserLabelById] = useState({});
   const [activeTab, setActiveTab] = useState('details');
   const [loading, setLoading] = useState(true);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -238,6 +241,23 @@ export default function IncidentDetail() {
       })),
     [linkedProfiles, displayEvidence]
   );
+
+  useEffect(() => {
+    if (!linkedProfiles.length) {
+      setProfileUserLabelById({});
+      return undefined;
+    }
+    const profiles = linkedProfiles.map((l) => l.profile).filter(Boolean);
+    let cancelled = false;
+    (async () => {
+      const ids = collectUserIdsFromProfiles(profiles);
+      const map = await fetchUserLabelMap(supabase, ids);
+      if (!cancelled) setProfileUserLabelById(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedProfiles]);
 
   const legacyUrlsForScene =
     incident && !evidence.some((row) => row.category === 'scene_photos')
@@ -657,7 +677,12 @@ export default function IncidentDetail() {
                 </div>
                 <div className="space-y-6">
                   {linkedProfilesForDisplay.map((link) => (
-                    <LinkedProfileLinkCard key={link.id} link={link} navigate={navigate} />
+                    <LinkedProfileLinkCard
+                      key={link.id}
+                      link={link}
+                      navigate={navigate}
+                      userLabelById={profileUserLabelById}
+                    />
                   ))}
                 </div>
               </div>
@@ -929,7 +954,12 @@ export default function IncidentDetail() {
                 </div>
 
                 {linkedProfilesForDisplay.map((link) => (
-                  <LinkedProfileLinkCard key={link.id} link={link} navigate={navigate} />
+                  <LinkedProfileLinkCard
+                    key={link.id}
+                    link={link}
+                    navigate={navigate}
+                    userLabelById={profileUserLabelById}
+                  />
                 ))}
               </>
             )}

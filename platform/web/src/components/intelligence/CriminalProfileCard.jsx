@@ -21,6 +21,7 @@ import { formatMoMatchConfidence, moMatchCardTitle } from '../../utils/moMatchDi
 import { mergedSightingsForDisplay } from '../../utils/criminalProfileSightings';
 import PatrollerPhotoPreview from '../patrol/PatrollerPhotoPreview';
 import BrandedLoader from '../layout/BrandedLoader';
+import ProfileRecordAudit from './ProfileRecordAudit';
 
 const RiskBadge = ({ level }) => {
   const styles = {
@@ -147,7 +148,7 @@ function AssociateMiniRow({ a, onNavigate }) {
   );
 }
 
-export default function CriminalProfileCard({ profile, stats = {}, associatesPreview = null }) {
+export default function CriminalProfileCard({ profile, stats = {}, associatesPreview = null, userLabelById = null }) {
   const mo = formatMoMatchConfidence(stats.moConfidence);
   const [associatesPeekOpen, setAssociatesPeekOpen] = useState(false);
   const [associatesPeekLoading, setAssociatesPeekLoading] = useState(false);
@@ -492,6 +493,10 @@ export default function CriminalProfileCard({ profile, stats = {}, associatesPre
             )}
           </div>
         )}
+
+        <div className="mt-6 border-t border-gray-200 pt-4 dark:border-gray-700">
+          <ProfileRecordAudit profile={profile} userLabelById={userLabelById || {}} />
+        </div>
       </div>
 
       {associatesPeekOpen && (

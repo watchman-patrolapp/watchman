@@ -41,6 +41,8 @@ import {
   mergedSightingsForDisplay,
 } from '../utils/criminalProfileSightings';
 import PatrollerPhotoPreview from '../components/patrol/PatrollerPhotoPreview';
+import ProfileRecordAudit from '../components/intelligence/ProfileRecordAudit';
+import { collectUserIdsFromProfiles, fetchUserLabelMap } from '../utils/profileUserLabels';
 
 const DETAIL_SECTION =
   'rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:shadow-lg';
@@ -136,6 +138,7 @@ export default function CriminalProfileDetail() {
   const [associateSearchResults, setAssociateSearchResults] = useState([]);
   const [associateSearchLoading, setAssociateSearchLoading] = useState(false);
   const [photoLightbox, setPhotoLightbox] = useState(null);
+  const [auditUserLabels, setAuditUserLabels] = useState({});
 
   // Check if we're in edit mode from URL query param
   useEffect(() => {
@@ -224,6 +227,10 @@ export default function CriminalProfileDetail() {
       setProfile(data);
       setEditForm({ ...data, sightings_log: initialSightingsLogForForm(data) });
 
+      const auditIds = collectUserIdsFromProfiles([data]);
+      const labelMap = await fetchUserLabelMap(supabase, auditIds);
+      setAuditUserLabels(labelMap);
+
       let associatesData = [];
       try {
         associatesData = await fetchAssociatesBidirectional(supabase, id);
@@ -283,7 +290,8 @@ export default function CriminalProfileDetail() {
         .from('criminal_profiles')
         .update({
           ...updateData,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          updated_by: user?.id ? String(user.id) : null,
         })
         .eq('id', id);
 
@@ -656,6 +664,12 @@ export default function CriminalProfileDetail() {
           )}
         </div>
       </div>
+
+      {profile && (
+        <div className="mb-6 max-w-3xl">
+          <ProfileRecordAudit profile={profile} userLabelById={auditUserLabels} />
+        </div>
+      )}
 
       {/* Risk/Priority/Status Banner */}
       <div className="mb-6 space-y-2">

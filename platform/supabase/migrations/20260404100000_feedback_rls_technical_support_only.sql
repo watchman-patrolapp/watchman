@@ -1,5 +1,7 @@
 -- Feedback read/update: technical_support only (admin/committee use other tools; UI route matches).
+-- Idempotent: safe to re-run (drops new policy names if present).
 
+DROP POLICY IF EXISTS "feedback_select_technical_support" ON public.feedback;
 DROP POLICY IF EXISTS "feedback_select_staff" ON public.feedback;
 CREATE POLICY "feedback_select_technical_support" ON public.feedback
   FOR SELECT TO authenticated
@@ -11,6 +13,7 @@ CREATE POLICY "feedback_select_technical_support" ON public.feedback
     )
   );
 
+DROP POLICY IF EXISTS "feedback_update_technical_support" ON public.feedback;
 DROP POLICY IF EXISTS "feedback_update_staff" ON public.feedback;
 CREATE POLICY "feedback_update_technical_support" ON public.feedback
   FOR UPDATE TO authenticated
