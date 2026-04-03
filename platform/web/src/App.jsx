@@ -321,7 +321,7 @@ function AppRoutes() {
           path="/admin/feedback"
           element={
             <PrivateRoute>
-              <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
+              <RequireRole allowedRoles={["technical_support"]}>
                 <AdminFeedbackReviews />
               </RequireRole>
             </PrivateRoute>

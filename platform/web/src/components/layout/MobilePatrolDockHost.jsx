@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/useAuth';
 import { useUnreadCount } from '../../chat';
 import { usePendingIncidentsCount } from '../../hooks/usePendingIncidentsCount';
 import { usePendingFeedbackCount } from '../../hooks/usePendingFeedbackCount';
-import { isStaffForModerationAlerts } from '../../auth/staffRoles';
+import { canReviewFeedback, isStaffForModerationAlerts } from '../../auth/staffRoles';
 import DashboardMobileDock from './DashboardMobileDock';
 
 const HIDE_EXACT = new Set(['/login', '/register', '/confirm-email', '/sop']);
@@ -26,7 +26,7 @@ export default function MobilePatrolDockHost() {
   const { count: unreadCount } = useUnreadCount(user?.id);
   const staffAlerts = isStaffForModerationAlerts(user?.role);
   const pendingIncidentsCount = usePendingIncidentsCount(!!user?.id && staffAlerts);
-  const pendingFeedbackCount = usePendingFeedbackCount(!!user?.id && staffAlerts);
+  const pendingFeedbackCount = usePendingFeedbackCount(!!user?.id && canReviewFeedback(user?.role));
 
   const show = useMemo(
     () => shouldShowDock(location.pathname, !!user),

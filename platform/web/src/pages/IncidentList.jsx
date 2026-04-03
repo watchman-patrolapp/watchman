@@ -24,10 +24,7 @@ import toast from "react-hot-toast";
 import StructuredEvidenceList, { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceList";
 import IncidentUpdateCard from "../components/incident/IncidentUpdateCard";
 import { INCIDENT_SECTION_LABELS } from "../constants/incidentSectionUpdates";
-
-function isAdminRole(role) {
-  return String(role ?? "").trim().toLowerCase() === "admin";
-}
+import { canStaffManageIncidents } from "../auth/staffRoles";
 
 /** Newest / latest-first timestamps for date-style sorts */
 const SORT_OPTIONS = [
@@ -324,7 +321,7 @@ export default function IncidentList() {
   const [deleteBusyId, setDeleteBusyId] = useState(null);
   const [sortBy, setSortBy] = useState("incident_date");
 
-  const showAdminDelete = isAdminRole(user?.role);
+  const showAdminDelete = canStaffManageIncidents(user?.role);
 
   const sortedIncidents = useMemo(() => {
     const list = [...incidents];

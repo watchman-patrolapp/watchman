@@ -16,6 +16,7 @@ import WitnessMemberPicker from "../components/intelligence/WitnessMemberPicker"
 import { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceList";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
+import { canStaffManageIncidents } from "../auth/staffRoles";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -351,9 +352,8 @@ export default function IncidentForm() {
 
   useEffect(() => {
     if (!isEditMode || !editIncidentId || !user?.id) return undefined;
-    const admin = String(user.role ?? "").trim().toLowerCase() === "admin";
-    if (!admin) {
-      toast.error("Only admins can edit incidents.");
+    if (!canStaffManageIncidents(user.role)) {
+      toast.error("You don't have permission to edit incidents.");
       navigate("/incidents", { replace: true });
       return undefined;
     }
@@ -878,7 +878,7 @@ export default function IncidentForm() {
             <ThemeToggle variant="toolbar" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white text-center">
-            {isEditMode ? "Edit incident (admin)" : "Report an Incident"}
+            {isEditMode ? "Edit incident" : "Report an Incident"}
           </h1>
         </div>
 

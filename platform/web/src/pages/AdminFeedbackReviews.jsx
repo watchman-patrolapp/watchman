@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { hasHydratedAppRole } from '../auth/appRole';
-import { canAccessAdminPanel } from '../auth/staffRoles';
+import { canReviewFeedback } from '../auth/staffRoles';
 import { supabase } from '../supabase/client';
 import toast from 'react-hot-toast';
 import { FaArrowLeft, FaCheck, FaUndo, FaSync, FaEnvelope, FaUser, FaClock } from 'react-icons/fa';
@@ -19,7 +19,7 @@ export default function AdminFeedbackReviews() {
   useEffect(() => {
     if (!user) return;
     if (!hasHydratedAppRole(user.role)) return;
-    if (!canAccessAdminPanel(user.role)) {
+    if (!canReviewFeedback(user.role)) {
       toast.error('Access denied.');
       navigate('/dashboard', { replace: true });
     }

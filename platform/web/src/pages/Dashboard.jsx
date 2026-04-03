@@ -32,7 +32,7 @@ import { adaptivePollIntervalMs, subscribeDataBudgetHints } from '../utils/dataS
 import startPatrolIcon from '../assets/start-patrol-icon.png';
 import appMark from '../assets/app-mark.png';
 import BrandedLoader from '../components/layout/BrandedLoader';
-import { canAccessAdminPanel, isStaffForModerationAlerts } from '../auth/staffRoles';
+import { canAccessAdminPanel, canReviewFeedback, isStaffForModerationAlerts } from '../auth/staffRoles';
 
 // --- Constants ---
 /** Warn after this many seconds on patrol (2h). */
@@ -153,7 +153,7 @@ export default function Dashboard() {
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
 
   const fetchPendingFeedbackCount = useCallback(async () => {
-    if (!isStaffForModerationAlerts(user?.role)) return;
+    if (!canReviewFeedback(user?.role)) return;
     try {
       const { count, error } = await supabase
         .from("feedback")
@@ -169,7 +169,6 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isStaffForModerationAlerts(user?.role)) {
       setPendingIncidentCount(0);
-      setPendingFeedbackCount(0);
       return undefined;
     }
     void fetchPendingIncidentCount();
@@ -194,7 +193,7 @@ export default function Dashboard() {
   }, [user?.role, fetchPendingIncidentCount]);
 
   useEffect(() => {
-    if (!isStaffForModerationAlerts(user?.role)) {
+    if (!canReviewFeedback(user?.role)) {
       setPendingFeedbackCount(0);
       return undefined;
     }

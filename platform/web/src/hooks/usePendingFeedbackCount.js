@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '../supabase/client';
 
 /**
- * Count of feedback rows not yet marked reviewed. Only for staff roles (caller enables).
+ * Count of feedback rows not yet marked reviewed. Enable only for technical_support (see canReviewFeedback).
  */
 export function usePendingFeedbackCount(enabled) {
   const { pathname } = useLocation();

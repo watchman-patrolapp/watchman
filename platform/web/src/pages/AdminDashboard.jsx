@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
-import { canAccessAdminPanel } from "../auth/staffRoles";
+import { canAccessAdminPanel, canReviewFeedback } from "../auth/staffRoles";
 import { supabase } from "../supabase/client";
 import { useSupabaseQuery } from "../hooks/useSupabaseQuery";
 import ExcelJS from 'exceljs';
@@ -127,6 +127,8 @@ export default function AdminDashboard() {
     return `${yyyy}-${mm}-${dd}`;
   }, []);
 
+  const isFeedbackReviewer = canReviewFeedback(user?.role);
+
   // ---------------------------------------------------------------------------
   // useSupabaseQuery hooks
   // ---------------------------------------------------------------------------
@@ -175,7 +177,7 @@ export default function AdminDashboard() {
     loading: pendingFeedbackLoading,
     error: pendingFeedbackError,
     refetch: refetchPendingFeedback,
-  } = useSupabaseQuery(fetchPendingFeedbackCount);
+  } = useSupabaseQuery(fetchPendingFeedbackCount, [user?.role], { enabled: isFeedbackReviewer });
 
   // Patrol signups table is static after initial load unless we refetch — volunteers delete from Schedule without this page mounted.
   useEffect(() => {
@@ -196,7 +198,7 @@ export default function AdminDashboard() {
   }, [user, refetchSlots]);
 
   useEffect(() => {
-    if (!user) return undefined;
+    if (!user || !isFeedbackReviewer) return undefined;
     const ch = supabase
       .channel("admin-feedback-count-live")
       .on(
@@ -210,7 +212,7 @@ export default function AdminDashboard() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [user, refetchPendingFeedback]);
+  }, [user, isFeedbackReviewer, refetchPendingFeedback]);
 
   // ---------------------------------------------------------------------------
   // Active patrols with realtime
@@ -499,7 +501,11 @@ export default function AdminDashboard() {
   };
 
   const isLoading =
-    activePatrolsLoading || logsLoading || slotsLoading || pendingLoading || pendingFeedbackLoading;
+    activePatrolsLoading ||
+    logsLoading ||
+    slotsLoading ||
+    pendingLoading ||
+    (isFeedbackReviewer && pendingFeedbackLoading);
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -581,25 +587,27 @@ export default function AdminDashboard() {
           <button onClick={() => navigate("/admin/chat")} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition text-sm font-medium shadow-sm">
             Chat Logs
           </button>
-          <button
-            type="button"
-            onClick={() => navigate("/admin/feedback")}
-            className="relative inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
-          >
-            <FaComments className="w-4 h-4" aria-hidden />
-            Feedback reviews
-            {pendingFeedbackCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
-                {pendingFeedbackCount > 99 ? "99+" : pendingFeedbackCount}
-              </span>
-            )}
-          </button>
-          {(pendingError || pendingFeedbackError) && (
+          {isFeedbackReviewer && (
+            <button
+              type="button"
+              onClick={() => navigate("/admin/feedback")}
+              className="relative inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
+            >
+              <FaComments className="w-4 h-4" aria-hidden />
+              Feedback reviews
+              {pendingFeedbackCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+                  {pendingFeedbackCount > 99 ? "99+" : pendingFeedbackCount}
+                </span>
+              )}
+            </button>
+          )}
+          {(pendingError || (isFeedbackReviewer && pendingFeedbackError)) && (
             <button
               type="button"
               onClick={() => {
                 if (pendingError) void refetchPending();
-                if (pendingFeedbackError) void refetchPendingFeedback();
+                if (isFeedbackReviewer && pendingFeedbackError) void refetchPendingFeedback();
               }}
               className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm"
             >

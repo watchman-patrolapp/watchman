@@ -32,12 +32,7 @@ import {
   connectionTypeLabel,
   PROFILE_INCIDENT_CONFIDENCE_NOT_SET_HINT,
 } from '../data/profileIncidentLinkTaxonomy';
-
-/** Matches admin_delete_incident RPC (admin, committee, technical_support). */
-function canStaffHardDeleteIncident(role) {
-  const r = String(role ?? '').trim().toLowerCase();
-  return r === 'admin' || r === 'committee' || r === 'technical_support';
-}
+import { canStaffManageIncidents } from '../auth/staffRoles';
 
 /**
  * `incident_suspects` is populated for every structured suspect submit; `incident_evidence` rows can be
@@ -222,7 +217,7 @@ export default function IncidentDetail() {
   const [sectionUpdateBusy, setSectionUpdateBusy] = useState(false);
   const [migrateLegacyBusy, setMigrateLegacyBusy] = useState(false);
 
-  const showAdminDelete = canStaffHardDeleteIncident(user?.role);
+  const showAdminDelete = canStaffManageIncidents(user?.role);
   const canAddUpdates = canAddIncidentSectionUpdates(user?.role);
   const updatesBySection = groupIncidentSectionUpdatesByKey(sectionUpdates);
   const hasAnySectionUpdates = sectionUpdates.length > 0;

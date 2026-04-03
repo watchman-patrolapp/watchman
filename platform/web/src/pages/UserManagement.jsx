@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { normalizeAppRole } from "../auth/staffRoles";
 import { supabase } from "../supabase/client"; // ✅ Supabase client
+import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import toast from "react-hot-toast";
 import { FaTrash } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
@@ -40,8 +42,7 @@ export default function UserManagement() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [sortBy, setSortBy] = useState("name");
 
-  const currentRole = String(currentUser?.role || "").toLowerCase();
-  const isAdmin = currentRole === "admin";
+  const currentRole = normalizeAppRole(currentUser?.role);
   const canDeleteUsers = currentRole === "admin" || currentRole === "technical_support";
 
   const sortedUsers = useMemo(() => {
@@ -75,32 +76,43 @@ export default function UserManagement() {
   }, [users, sortBy]);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchUsers() {
       try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .order('created_at', { ascending: false });
+        const { data: rpcRows, error: rpcErr } = await supabase.rpc("list_users_for_staff");
+        let raw = [];
+        if (!rpcErr && Array.isArray(rpcRows)) {
+          raw = rpcRows;
+        } else {
+          if (rpcErr && !isRpcNotFoundError(rpcErr)) {
+            console.warn("UserManagement: list_users_for_staff", rpcErr.message);
+          }
+          const { data, error } = await supabase
+            .from("users")
+            .select("*")
+            .order("created_at", { ascending: false });
+          if (error) throw error;
+          raw = data || [];
+        }
 
-        if (error) throw error;
-
-        // Map Supabase fields to the expected format (uid, fullName, email, role)
-        const usersData = (data || []).map(u => ({
+        const usersData = raw.map((u) => ({
           uid: u.id,
           fullName: u.full_name,
           email: u.email,
-          role: u.role || 'volunteer',
+          role: u.role || "volunteer",
           createdAt: u.created_at || null,
-          // Include other fields if needed (e.g., address, carType, etc.) but not used here
         }));
-        setUsers(usersData);
+        if (!cancelled) setUsers(usersData);
       } catch (err) {
         console.error("Error fetching users:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     fetchUsers();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleRoleChange = async (uid, newRole) => {

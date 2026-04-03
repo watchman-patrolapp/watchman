@@ -20,7 +20,18 @@ export function canAccessAdminPanel(role) {
   return ADMIN_PANEL_ROLES.includes(r);
 }
 
-/** Incidents / feedback alert hooks (dashboard + mobile dock). */
+/** Incidents moderation alerts (dashboard + mobile dock). */
 export function isStaffForModerationAlerts(role) {
   return canAccessAdminPanel(role);
+}
+
+/** Feedback list/review UI and unreviewed counts (RLS + routes). */
+export function canReviewFeedback(role) {
+  return normalizeAppRole(role) === 'technical_support';
+}
+
+/** Approved-incident edit UI + hard delete RPC (`admin_delete_incident`) — keep in sync with App `/incident/:id/edit` route. */
+export function canStaffManageIncidents(role) {
+  const r = normalizeAppRole(role);
+  return r === 'admin' || r === 'committee' || r === 'technical_support';
 }
