@@ -1,0 +1,31 @@
+{
+  "name": "Neighbourhood Watch",
+  "short_name": "PatrolWatch",
+  "description": "Emergency patrol and neighbourhood watch coordination",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f766e",
+  "theme_color": "#0d9488",
+  "icons": [
+    {
+      "src": "/assets/icons/icon-192.webp",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/icon-512.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/icon-512.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "maskable"
+    }
+  ]
+}

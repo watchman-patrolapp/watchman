@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Vite dev (default port 5173) only: drop stale Workbox so HMR is not fighting an old SW. Preview (e.g. :4173) keeps the PWA. -->
+    <script>
+      (function () {
+        var h = location.hostname;
+        var loopback =
+          h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
+        if (!loopback || location.port !== '5173') return;
+        if (!('serviceWorker' in navigator)) return;
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          regs.forEach(function (r) {
+            r.unregister();
+          });
+        });
+        if (typeof caches !== 'undefined') {
+          caches.keys().then(function (keys) {
+            keys.forEach(function (k) {
+              if (k.indexOf('workbox') !== -1 || k.indexOf('precache') !== -1) {
+                caches.delete(k);
+              }
+            });
+          });
+        }
+      })();
+    </script>
+    <link rel="icon" type="image/png" href="/favicon-96x96.png?v=20260403" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20260403" />
+    <link rel="shortcut icon" href="/favicon.ico?v=20260403" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/assets/icons/icon-192.webp?v=20260403" />
+    <meta name="apple-mobile-web-app-title" content="Watchman" />
+    <link rel="manifest" href="/site.webmanifest?v=20260403" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d9488" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Emergency Patrol Management for Neighbourhood Watch" />
+    <!-- Preconnect to Supabase -->
+    <link rel="preconnect" href="https://pfjcxewlsqmfajrogvdo.supabase.co" />
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <title>Neighbourhood Watch</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

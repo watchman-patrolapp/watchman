@@ -1,0 +1,8 @@
+{
+  "appId": "com.watchman.app",
+  "appName": "Watchman",
+  "webDir": "dist",
+  "android": {
+    "path": "../android"
+  }
+}

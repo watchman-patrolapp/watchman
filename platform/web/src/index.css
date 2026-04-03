@@ -1,0 +1,503 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================
+   DESIGN SYSTEM - CSS Custom Properties
+   ========================================== */
+:root {
+  /* Primary — safety teal (single brand anchor) */
+  --color-primary-50: #f0fdfa;
+  --color-primary-100: #ccfbf1;
+  --color-primary-500: #14b8a6;
+  --color-primary-600: #0d9488;
+  --color-primary-700: #0f766e;
+  --color-primary-900: #134e4a;
+  
+  /* Semantic Colors */
+  --color-success: #10b981;
+  --color-success-light: #d1fae5;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  --color-danger: #ef4444;
+  --color-danger-light: #fee2e2;
+  --color-info: #3b82f6;
+  --color-info-light: #dbeafe;
+  
+  /* Vehicle Colors - High Contrast */
+  --vehicle-red: #dc2626;
+  --vehicle-red-bg: #fee2e2;
+  --vehicle-blue: #2563eb;
+  --vehicle-blue-bg: #dbeafe;
+  --vehicle-green: #059669;
+  --vehicle-green-bg: #d1fae5;
+  --vehicle-yellow: #d97706;
+  --vehicle-yellow-bg: #fef3c7;
+  --vehicle-orange: #ea580c;
+  --vehicle-orange-bg: #ffedd5;
+  --vehicle-purple: #7c3aed;
+  --vehicle-purple-bg: #ede9fe;
+  --vehicle-pink: #db2777;
+  --vehicle-pink-bg: #fce7f3;
+  --vehicle-teal: #0d9488;
+  --vehicle-teal-bg: #ccfbf1;
+  --vehicle-gray: #4b5563;
+  --vehicle-gray-bg: #f3f4f6;
+  --vehicle-black: #1f2937;
+  --vehicle-black-bg: #e5e7eb;
+  --vehicle-white: #9ca3af;
+  --vehicle-white-bg: #f9fafb;
+
+  /* Warm Stone — light mode surfaces & type (brand teal / patrol greens unchanged) */
+  --color-bg-page: #f5f3ef;
+  --color-bg-secondary: #edebe6;
+  --color-bg-card: #ffffff;
+  --color-bg-card-hover: #fdfcfa;
+  --color-bg-inset: #f0ede8;
+  --color-bg-input: #fafaf8;
+  --color-border-subtle: rgba(60, 50, 35, 0.08);
+  --color-border-default: rgba(60, 50, 35, 0.13);
+  --color-border-strong: rgba(60, 50, 35, 0.22);
+  --color-text-primary: #2c2a27;
+  --color-text-secondary: #5a5855;
+  --color-text-tertiary: #8c8985;
+  --color-text-link: #3b6fbf;
+
+  /* Shadows — warm neutrals (light) */
+  --shadow-soft: 0 1px 3px rgba(60, 50, 35, 0.08), 0 1px 2px rgba(60, 50, 35, 0.05);
+  --shadow-card: 0 0 0 0.5px rgba(60, 50, 35, 0.08), 0 2px 8px rgba(60, 50, 35, 0.06);
+  --shadow-float: 0 10px 15px -3px rgba(60, 50, 35, 0.12), 0 4px 6px -2px rgba(60, 50, 35, 0.07);
+  --shadow-raised: 0 2px 8px rgba(60, 50, 35, 0.08), 0 0 1px rgba(60, 50, 35, 0.12);
+  --shadow-glow: 0 0 20px rgba(13, 148, 136, 0.35);
+  
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  
+  /* Border Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+  
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark mode — green-teal tint (not flat gray/black) */
+.dark {
+  --color-bg-page: #0f1f1c;
+  --color-bg-secondary: #152a26;
+  --color-bg-card: #1a322d;
+  --color-bg-card-hover: #234038;
+  --color-bg-inset: #0c1a17;
+  --color-bg-input: #132822;
+  --color-border-subtle: rgba(45, 212, 191, 0.1);
+  --color-border-default: rgba(45, 212, 191, 0.18);
+  --color-border-strong: rgba(94, 234, 212, 0.28);
+  --color-text-primary: #ecfdf5;
+  --color-text-secondary: #a7d4c8;
+  --color-text-tertiary: #6b9a8c;
+  --color-text-link: #7dd3fc;
+
+  --shadow-soft: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px 0 rgba(0, 24, 20, 0.4);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -1px rgba(0, 32, 28, 0.35);
+  --shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 40, 35, 0.4);
+  --shadow-raised: var(--shadow-float);
+}
+
+/* ==========================================
+   BASE STYLES
+   ========================================== */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+  }
+
+  body {
+    @apply antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-color: var(--color-bg-page);
+    color: var(--color-text-primary);
+  }
+
+  #root {
+    min-height: 100%;
+    min-height: 100dvh;
+    background-color: var(--color-bg-page);
+  }
+}
+
+/* ==========================================
+   COMPONENT CLASSES
+   ========================================== */
+@layer components {
+  /* Card Styles */
+  .card {
+    @apply rounded-2xl border border-solid;
+    background-color: var(--color-bg-card);
+    border-width: 0.5px;
+    border-color: var(--color-border-subtle);
+    box-shadow: var(--shadow-card);
+  }
+
+  .dark .card {
+    background-color: var(--color-bg-card);
+    border-color: var(--color-border-default);
+    border-width: 1px;
+  }
+  
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+  
+  .card-hover:hover {
+    box-shadow: var(--shadow-float);
+    @apply transform -translate-y-0.5;
+  }
+  
+  /* Button Styles */
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2.5 rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply btn bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500 shadow-lg shadow-teal-500/30;
+  }
+  
+  .btn-success {
+    @apply btn bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500 shadow-lg shadow-emerald-500/30;
+  }
+  
+  .btn-danger {
+    @apply btn bg-red-500 text-white hover:bg-red-600 focus:ring-red-500 shadow-lg shadow-red-500/30;
+  }
+  
+  .btn-secondary {
+    @apply btn focus:ring-gray-500;
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+  }
+
+  .btn-secondary:hover {
+    background-color: #e3e0da;
+  }
+
+  .dark .btn-secondary {
+    @apply bg-gray-700 text-gray-100;
+  }
+
+  .dark .btn-secondary:hover {
+    @apply bg-gray-600;
+  }
+  
+  .btn-ghost {
+    @apply btn text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100;
+  }
+  
+  /* Status Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-success {
+    @apply badge bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300;
+  }
+  
+  .badge-warning {
+    @apply badge bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300;
+  }
+  
+  .badge-danger {
+    @apply badge bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300;
+  }
+  
+  .badge-info {
+    @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300;
+  }
+  
+  /* Form Inputs */
+  .input {
+    @apply block w-full px-4 py-3 rounded-xl border border-solid focus:border-teal-500 focus:ring-teal-500 transition-colors;
+    border-width: 0.5px;
+    border-color: var(--color-border-default);
+    background-color: var(--color-bg-input);
+    color: var(--color-text-primary);
+  }
+
+  .dark .input {
+    border-width: 1px;
+    border-color: var(--color-border-default);
+    background-color: var(--color-bg-input);
+    color: var(--color-text-primary);
+  }
+
+  /* Gradient Backgrounds */
+  .gradient-primary {
+    @apply bg-gradient-to-br from-teal-600 to-teal-800;
+  }
+  
+  .gradient-success {
+    @apply bg-gradient-to-br from-emerald-500 to-teal-600;
+  }
+  
+  .gradient-warning {
+    @apply bg-gradient-to-br from-amber-400 to-orange-500;
+  }
+  
+  /* Map Marker Animations */
+  @keyframes marker-pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 0.8;
+    }
+  }
+  
+  .marker-active {
+    animation: marker-pulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes route-pulse {
+    0% {
+      stroke-dashoffset: 0;
+    }
+    100% {
+      stroke-dashoffset: -20;
+    }
+  }
+  
+  .route-animated {
+    stroke-dasharray: 5, 5;
+    animation: route-pulse 1s linear infinite;
+  }
+  
+  /* Glass Effect */
+  .glass {
+    @apply backdrop-blur-lg;
+    background-color: color-mix(in srgb, var(--color-bg-card) 85%, transparent);
+  }
+
+  .dark .glass {
+    background-color: color-mix(in srgb, var(--color-bg-card) 82%, transparent);
+  }
+  
+  /* Skeleton Loading */
+  .skeleton {
+    @apply animate-pulse rounded;
+    background-color: var(--color-bg-inset);
+  }
+
+  .dark .skeleton {
+    background-color: rgb(55 65 81); /* gray-700 */
+  }
+}
+
+/* ==========================================
+   LEAFLET MAP CUSTOMIZATIONS
+   ========================================== */
+.leaflet-popup-content-wrapper {
+  @apply rounded-2xl shadow-xl border-0;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  @apply m-0;
+  width: 280px !important;
+}
+
+.leaflet-container {
+  @apply rounded-2xl;
+  font-family: inherit;
+}
+
+.patrol-route-end-flag {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 dark:bg-gray-800 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-500;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* ==========================================
+   ACCESSIBLE MOTION + BENTO SURFACES
+   ========================================== */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .marker-active,
+  .route-animated {
+    animation: none !important;
+  }
+}
+
+/* Space for fixed mobile bottom nav (see MobilePatrolDockHost) */
+@media (max-width: 767px) {
+  body.mobile-patrol-dock-pad {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* iOS / notched devices: requires viewport-fit=cover on <meta name="viewport"> */
+@layer utilities {
+  .safe-area-bottom {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Warm stone: neutral text + borders in light mode (does not affect dark:) */
+  html:not(.dark) .text-gray-900,
+  html:not(.dark) .text-gray-800 {
+    color: var(--color-text-primary);
+  }
+
+  html:not(.dark) .text-gray-700,
+  html:not(.dark) .text-gray-600 {
+    color: var(--color-text-secondary);
+  }
+
+  html:not(.dark) .text-gray-500,
+  html:not(.dark) .text-gray-400 {
+    color: var(--color-text-tertiary);
+  }
+
+  html:not(.dark) .border-gray-200 {
+    border-color: var(--color-border-subtle);
+  }
+}
+
+/*
+ * Chat column height: on mobile, ChatContainer sets the outer height + flex-1/min-h-0 chain
+ * (body padding for the dock is skipped on /chat — see MobilePatrolDockHost).
+ * From md up there is no bottom nav; fixed height matches dashboard shell padding.
+ */
+@media (min-width: 768px) {
+  .h-chat-shell {
+    height: calc(100vh - 3rem - env(safe-area-inset-top, 0px));
+    height: calc(100dvh - 3rem - env(safe-area-inset-top, 0px));
+  }
+}
+
+@layer components {
+  .bento-tile {
+    @apply rounded-2xl border border-solid dark:border-gray-700/80 dark:bg-gray-800;
+    background-color: var(--color-bg-card);
+    border-width: 0.5px;
+    border-color: var(--color-border-subtle);
+    box-shadow: var(--shadow-card);
+  }
+
+  .dark .bento-tile {
+    border-width: 1px;
+  }
+
+  .bento-tile-interactive {
+    @apply rounded-2xl border border-solid dark:border-gray-700/80 dark:bg-gray-800 text-left motion-safe:transition-all motion-safe:duration-200;
+    background-color: var(--color-bg-card);
+    border-width: 0.5px;
+    border-color: var(--color-border-subtle);
+    box-shadow: var(--shadow-card);
+  }
+
+  .dark .bento-tile-interactive {
+    border-width: 1px;
+  }
+
+  .bento-tile-interactive:hover {
+    @apply border-teal-300/60 dark:border-teal-600/50;
+    box-shadow: var(--shadow-float);
+  }
+
+  html:not(.dark) .bento-tile-interactive:hover {
+    background-color: var(--color-bg-card-hover);
+  }
+
+  .bento-tile-interactive:active {
+    @apply motion-safe:scale-[0.99];
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bento-tile-interactive:active {
+      transform: none;
+    }
+  }
+}
+
+/* Branded loading mark — soft pulse + teal glow (static when prefers-reduced-motion) */
+@keyframes branded-loader-glow {
+  0%,
+  100% {
+    box-shadow: 0 4px 18px rgba(13, 148, 136, 0.22);
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow: 0 10px 36px rgba(13, 148, 136, 0.48), 0 0 0 1px rgba(13, 148, 136, 0.18);
+    transform: scale(1.04);
+    filter: brightness(1.06);
+  }
+}
+
+.branded-loader-glow {
+  animation: branded-loader-glow 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .branded-loader-glow {
+    animation: none;
+    box-shadow: 0 4px 20px rgba(13, 148, 136, 0.28);
+    filter: none;
+  }
+}

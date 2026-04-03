@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Neighbourhood Watch</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    .container {
+      max-width: 400px;
+    }
+    .icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    p { color: #6b7280; line-height: 1.5; }
+    .retry-btn {
+      margin-top: 24px;
+      padding: 12px 24px;
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #111827; color: #f9fafb; }
+      p { color: #9ca3af; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">📡</div>
+    <h1>You're Offline</h1>
+    <p>Your messages are queued and will be sent when connection returns. Emergency calls still work.</p>
+    <button class="retry-btn" onclick="window.location.reload()">Try Again</button>
+  </div>
+</body>
+</html>
