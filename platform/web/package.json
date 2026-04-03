@@ -7,11 +7,11 @@
     "node": "20.x"
   },
   "scripts": {
-    "predev": "node scripts/generate-firebase-messaging-sw.mjs",
+    "predev": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/generate-firebase-messaging-sw.mjs",
+    "prebuild": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs",
     "build": "vite build",
-    "prebuild:mobile": "node scripts/generate-firebase-messaging-sw.mjs",
+    "prebuild:mobile": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs",
     "build:mobile": "vite build --mode capacitor",
     "android:clean-web-assets": "node -e \"const fs=require('fs');['dist','../android/app/src/main/assets/public'].forEach((d)=>{try{fs.rmSync(d,{recursive:true,force:true})}catch{}})\"",
     "android:icons": "node scripts/prepare-capacitor-assets.mjs && npx @capacitor/assets generate --android --iconBackgroundColor \"#0f766e\" --iconBackgroundColorDark \"#083344\" --splashBackgroundColor \"#0f766e\" --splashBackgroundColorDark \"#083344\"",
@@ -22,6 +22,7 @@
     "android:apk:debug": "npm run android:sync && cd ../android && gradlew.bat assembleDebug",
     "android:apk:debug:clean": "npm run android:sync:clean && cd ../android && gradlew.bat assembleDebug",
     "android:apk:debug:unix": "npm run android:sync && cd ../android && ./gradlew assembleDebug",
+    "sounds:placeholders": "node scripts/generate-placeholder-sounds.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

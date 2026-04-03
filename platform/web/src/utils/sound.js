@@ -17,16 +17,16 @@ const sounds = {
 };
 
 function preloadSounds() {
-  sounds.chat = new Audio('/sounds/notification.mp3');
-  sounds.messageSent = new Audio('/sounds/message-sent.mp3');
-  sounds.messageFailed = new Audio('/sounds/notification.mp3');
-  sounds.patrolStart = new Audio('/sounds/patrol-start.mp3');
-  sounds.patrolEnd = new Audio('/sounds/patrol-end.mp3');
-  sounds.patrolWarning = new Audio('/sounds/patrol-warning.mp3');
-  sounds.patrolAutoEnd = new Audio('/sounds/patrol-autoend.mp3');
-  sounds.incidentNew = new Audio('/sounds/incident-new.mp3');
-  sounds.patrolSigninNotification = new Audio('/sounds/patrolsigninNotification.mp3');
-  sounds.voiceNote = new Audio('/sounds/voice-note.mp3');
+  sounds.chat = new Audio('/sounds/notification.wav');
+  sounds.messageSent = new Audio('/sounds/message-sent.wav');
+  sounds.messageFailed = new Audio('/sounds/notification.wav');
+  sounds.patrolStart = new Audio('/sounds/patrol-start.wav');
+  sounds.patrolEnd = new Audio('/sounds/patrol-end.wav');
+  sounds.patrolWarning = new Audio('/sounds/patrol-warning.wav');
+  sounds.patrolAutoEnd = new Audio('/sounds/patrol-autoend.wav');
+  sounds.incidentNew = new Audio('/sounds/incident-new.wav');
+  sounds.patrolSigninNotification = new Audio('/sounds/patrolsigninNotification.wav');
+  sounds.voiceNote = new Audio('/sounds/voice-note.wav');
 
   Object.values(sounds).forEach((audio) => {
     if (audio) {
@@ -114,7 +114,7 @@ export function playTestSound() {
 
 // ─── Emergency sounds (non-looping or controllable) ─────────────
 export function playEmergencyAlarm() {
-  const audio = new Audio('/sounds/notification.mp3');
+  const audio = new Audio('/sounds/notification.wav');
   audio.loop = true;
   audio.volume = 0.7;
   audio.play().catch((err) => devWarn('Emergency alarm error:', err));
@@ -127,13 +127,13 @@ export function playEmergencyAlarm() {
 }
 
 export function playAlertChime() {
-  const audio = new Audio('/sounds/notification.mp3');
+  const audio = new Audio('/sounds/notification.wav');
   audio.volume = 0.6;
   audio.play().catch((err) => devWarn('Alert chime error:', err));
 }
 
 export function playPanicSiren() {
-  const audio = new Audio('/sounds/patrol-warning.mp3');
+  const audio = new Audio('/sounds/patrol-warning.wav');
   audio.volume = 0.8;
   audio.play().catch((err) => devWarn('Panic siren error:', err));
   return {

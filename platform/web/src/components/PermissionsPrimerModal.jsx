@@ -35,8 +35,44 @@ export default function PermissionsPrimerModal({ userId }) {
   const [step, setStep] = useState('intro');
   const [busy, setBusy] = useState(false);
   const allowInFlight = useRef(false);
+  /** Native: avoid double system prompt if step re-renders while notifications step is open. */
+  const notificationStepAutoRequestedRef = useRef(false);
 
   const isNative = Capacitor.isNativePlatform();
+
+  useEffect(() => {
+    if (!open) notificationStepAutoRequestedRef.current = false;
+  }, [open]);
+
+  // Native: show the OS notification permission dialog when the user reaches this step (not only after tapping "Allow alerts").
+  useEffect(() => {
+    if (!open || !userId || step !== 'notifications' || !isNative || notificationStepAutoRequestedRef.current) {
+      return undefined;
+    }
+    notificationStepAutoRequestedRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      const r = await primePushNotifications();
+      if (cancelled) return;
+      if (r === 'granted') {
+        toast.success('Alerts enabled for emergency chat and updates.', { id: TOAST_PUSH_GRANTED });
+        await registerEmergencyChatPush(userId, { requestPermission: false });
+      } else if (r === 'denied') {
+        toast.error('Notifications stay off. You can enable them in app settings later.', {
+          id: TOAST_PUSH_DENIED,
+          duration: 6000,
+        });
+      } else if (r === 'unavailable') {
+        toast.error('Notifications are not available on this build.', {
+          id: TOAST_PUSH_DENIED,
+          duration: 6000,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, step, isNative, userId]);
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -55,7 +91,7 @@ export default function PermissionsPrimerModal({ userId }) {
 
   const finishAndClose = async () => {
     await dismissPermissionsPrimer();
-    await registerEmergencyChatPush(userId, { requestPermission: false });
+    await registerEmergencyChatPush(userId, { requestPermission: true });
     setOpen(false);
   };
 
@@ -104,6 +140,11 @@ export default function PermissionsPrimerModal({ userId }) {
         if (r === 'granted') {
           toast.success('Alerts enabled for emergency chat and updates.', { id: TOAST_PUSH_GRANTED });
           await registerEmergencyChatPush(userId, { requestPermission: false });
+        } else if (r === 'unavailable') {
+          toast.error('Notifications are not available on this build.', {
+            id: TOAST_PUSH_DENIED,
+            duration: 6000,
+          });
         } else if (r === 'denied') {
           toast.error('Notifications stay off. You can enable them in app settings later.', {
             id: TOAST_PUSH_DENIED,

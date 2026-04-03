@@ -749,15 +749,18 @@ export default function ChatContainer() {
 
   const handleIncomingOverlayOpen = useCallback(() => {
     removeCurrentIncomingItem();
-    scrollToBottom('smooth');
+    // User explicitly chose "Open" — scroll even if they had scrolled up (shouldScrollRef would block otherwise).
+    scrollToBottom('smooth', true);
   }, [removeCurrentIncomingItem, scrollToBottom]);
 
   const handleIncomingOverlayQuickReply = useCallback(
     async (text) => {
       await handleSendText(text);
-      if (isMountedRef.current) removeCurrentIncomingItem();
+      if (!isMountedRef.current) return;
+      removeCurrentIncomingItem();
+      scrollToBottom('smooth', true);
     },
-    [handleSendText, removeCurrentIncomingItem]
+    [handleSendText, removeCurrentIncomingItem, scrollToBottom]
   );
 
   const dismissAllIncoming = useCallback(() => {

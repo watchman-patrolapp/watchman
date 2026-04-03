@@ -506,7 +506,8 @@ export const AuthProvider = ({ children }) => {
     void (async () => {
       const flowDone = await permissionsPrimerWasDismissed()
       if (cancelled || !flowDone) return
-      await registerEmergencyChatPush(user.id, { requestPermission: false })
+      // Prompt for POST_NOTIFICATIONS (Android 13+) / iOS when not yet granted; no-op if already granted.
+      await registerEmergencyChatPush(user.id, { requestPermission: true })
     })()
     return () => {
       cancelled = true

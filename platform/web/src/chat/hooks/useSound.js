@@ -3,12 +3,12 @@ import { useCallback, useRef } from 'react';
 
 // Sound file paths - adjust to your actual files
 const SOUNDS = {
-  emergency: '/sounds/emergency-alarm.mp3',
-  alert: '/sounds/alert-chime.mp3',
-  standard: '/sounds/message-pop.mp3',
-  sent: '/sounds/message-sent.mp3',
-  failed: '/sounds/error-beep.mp3',
-  panic: '/sounds/panic-siren.mp3',
+  emergency: '/sounds/emergency-alarm.wav',
+  alert: '/sounds/alert-chime.wav',
+  standard: '/sounds/message-pop.wav',
+  sent: '/sounds/message-sent.wav',
+  failed: '/sounds/error-beep.wav',
+  panic: '/sounds/panic-siren.wav',
 };
 
 export const useSound = () => {

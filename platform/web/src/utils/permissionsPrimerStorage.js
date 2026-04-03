@@ -5,7 +5,7 @@ import { Capacitor } from '@capacitor/core';
  * permissions primer again (new copy, new Android permission flow, etc.).
  * Each version uses a fresh storage key; older keys are left unused (harmless).
  */
-export const PERMISSIONS_PRIMER_STORAGE_VERSION = 3;
+export const PERMISSIONS_PRIMER_STORAGE_VERSION = 4;
 
 const STORAGE_KEY = `nw_permissions_primer_dismissed_v${PERMISSIONS_PRIMER_STORAGE_VERSION}`;
 
