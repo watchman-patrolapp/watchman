@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import { FaArrowLeft, FaFileExcel, FaFilter, FaTimes } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
+import { useScopedOrganization } from "../utils/organizationScope";
 
 const PAGE_SIZE = 50;
 
@@ -95,6 +96,7 @@ function LogMessageCell({ m }) {
 export default function AdminChatLogs() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { scope } = useScopedOrganization();
 
   // Role guard — wait for app role, not Supabase JWT role
   useEffect(() => {
@@ -132,9 +134,9 @@ export default function AdminChatLogs() {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      let query = supabase
-        .from('chat_messages')
-        .select('*', { count: 'exact' })
+      let query = scope(
+        supabase.from('chat_messages').select('*', { count: 'exact' })
+      )
         .order('created_at', { ascending: false })
         .range(from, to);
 
@@ -161,7 +163,7 @@ export default function AdminChatLogs() {
     } finally {
       setLoading(false);
     }
-  }, [filter, startDate, endDate]);
+  }, [filter, startDate, endDate, scope]);
 
   useEffect(() => {
     fetchMessages(0);
@@ -208,10 +210,9 @@ export default function AdminChatLogs() {
     setExporting(true);
     try {
       // Fetch all rows matching current filters for export
-      let query = supabase
-        .from('chat_messages')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let query = scope(
+        supabase.from('chat_messages').select('*')
+      ).order('created_at', { ascending: false });
 
       if (filter.trim()) query = query.ilike('sender_name', `%${filter.trim()}%`);
       if (startDate) query = query.gte('created_at', startDate);

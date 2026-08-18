@@ -4,6 +4,7 @@ import { FaCalendarAlt, FaClock, FaUsers } from "react-icons/fa";
 import { supabase } from "../../supabase/client";
 import { displayPatrolZone } from "../../config/neighborhoodRegions";
 import BrandedLoader from "../layout/BrandedLoader";
+import { useScopedOrganization } from "../../utils/organizationScope";
 
 const WINDOW_MS = 6 * 60 * 60 * 1000;
 
@@ -103,6 +104,7 @@ function useAutoVerticalScroll(scrollRef, active) {
  */
 export default function UpcomingScheduledPatrollers({ className = "", refreshNonce = 0 }) {
   const navigate = useNavigate();
+  const { scope } = useScopedOrganization();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -122,9 +124,11 @@ export default function UpcomingScheduledPatrollers({ className = "", refreshNon
     setLoading(true);
     setFetchError(null);
     try {
-      const { data, error } = await supabase
-        .from("patrol_slots")
-        .select("id, date, start_time, end_time, volunteer_name, volunteer_uid, zone")
+      const { data, error } = await scope(
+        supabase
+          .from("patrol_slots")
+          .select("id, date, start_time, end_time, volunteer_name, volunteer_uid, zone")
+      )
         .gte("date", fetchRange.start)
         .lte("date", fetchRange.end)
         .order("date", { ascending: true })
@@ -137,7 +141,7 @@ export default function UpcomingScheduledPatrollers({ className = "", refreshNon
     } finally {
       setLoading(false);
     }
-  }, [fetchRange.start, fetchRange.end]);
+  }, [fetchRange.start, fetchRange.end, scope]);
 
   useEffect(() => {
     void load();

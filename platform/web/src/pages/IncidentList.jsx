@@ -25,6 +25,7 @@ import StructuredEvidenceList, { normalizeMediaUrls } from "../components/eviden
 import IncidentUpdateCard from "../components/incident/IncidentUpdateCard";
 import { INCIDENT_SECTION_LABELS } from "../constants/incidentSectionUpdates";
 import { canStaffManageIncidents } from "../auth/staffRoles";
+import { useScopedOrganization } from "../utils/organizationScope";
 
 /** Newest / latest-first timestamps for date-style sorts */
 const SORT_OPTIONS = [
@@ -315,6 +316,7 @@ function IncidentCard({ incident, showAdminDelete, onAdminDelete, deleteBusyId, 
 export default function IncidentList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { scope } = useScopedOrganization();
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -357,10 +359,9 @@ export default function IncidentList() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
-        .from("incidents")
-        .select("*")
-        .eq("status", "approved");
+      const { data, error: fetchError } = await scope(
+        supabase.from("incidents").select("*")
+      ).eq("status", "approved");
         
       if (fetchError) throw fetchError;
       const rows = data || [];
@@ -407,7 +408,7 @@ export default function IncidentList() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     fetchIncidents();

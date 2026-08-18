@@ -9,6 +9,8 @@ import BrandedLoader from '../../components/layout/BrandedLoader';
 import { totalProfileLocationCardCount } from '../../utils/profileLocationCount';
 import { buildAssociatesPreviewList } from '../../utils/profileAssociates';
 import { collectUserIdsFromProfiles, fetchUserLabelMap } from '../../utils/profileUserLabels';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
+import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 
 /** PostgREST returns `{ count: n }[]` for `table(count)` embeds — flatten for cards. */
 function normalizeProfileSearchRow(row) {
@@ -43,6 +45,8 @@ function normalizeProfileSearchRow(row) {
 
 export default function ProfileSearch() {
   const navigate = useNavigate();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const includeUnscoped = shouldIncludeUnscopedProfiles(activeOrganization);
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
     risk_level: '',
@@ -75,7 +79,8 @@ export default function ProfileSearch() {
       const gen = ++searchGenerationRef.current;
       setLoading(true);
       try {
-        let query = supabase.from('criminal_profiles').select(`
+        let query = scopeToOrganization(
+          supabase.from('criminal_profiles').select(`
           *,
           profile_incidents(count),
           associate_out:profile_associates!profile_id(count),
@@ -91,7 +96,10 @@ export default function ProfileSearch() {
             subject_profile:profile_id(id, primary_name, risk_level, status, photo_urls)
           ),
           profile_geography!profile_id(count)
-        `);
+        `),
+          activeOrganizationId,
+          includeUnscoped
+        );
 
         if (q.length > 2) {
           query = query.or(`primary_name.ilike.%${q}%,known_aliases.cs.{${q}}`);
@@ -131,7 +139,7 @@ export default function ProfileSearch() {
         }
       }
     },
-    [debouncedSearch, filters]
+    [debouncedSearch, filters, activeOrganizationId, includeUnscoped]
   );
 
   useEffect(() => {
@@ -146,41 +154,40 @@ export default function ProfileSearch() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <button 
-                type="button"
-                onClick={() => navigate('/intelligence')}
-                className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
-              >
-                <FaArrowLeft /> Intelligence hub
-              </button>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <FaUserSecret className="text-teal-600" />
-                Criminal Intelligence Database
-              </h1>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-              <FaExclamationTriangle className="text-red-500" />
-              <span>{results.filter(r => r.risk_level === 'critical').length} critical threats</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 justify-end w-full md:w-auto">
-              <ThemeToggle variant="toolbar" />
-              <button
-                type="button"
-                onClick={() => navigate('/intelligence/profiles/new')}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-              >
-                + Create New Profile
-              </button>
-            </div>
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 shadow-sm backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/90">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:px-6 lg:px-8">
+          <button
+            type="button"
+            onClick={() => navigate('/intelligence')}
+            className="flex items-center gap-2 text-sm text-gray-600 transition dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          >
+            <FaArrowLeft className="h-3 w-3" />
+            Intelligence hub
+          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ThemeToggle variant="toolbar" />
+            <button
+              type="button"
+              onClick={() => navigate('/intelligence/profiles/new')}
+              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              + New profile
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <FaUserSecret className="text-teal-600" />
+            Criminal Intelligence Database
+          </h1>
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <FaExclamationTriangle className="text-red-500" />
+            <span>{results.filter(r => r.risk_level === 'critical').length} critical threats</span>
+          </div>
+        </div>
         <div className="mb-6">
           <IntelligenceFieldGuide />
         </div>

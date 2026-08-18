@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
 import { FaExclamationTriangle, FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
 import { mergedSightingsForDisplay } from '../../utils/criminalProfileSightings';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
+import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 
 /** Haversine distance in km */
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -97,6 +99,8 @@ export default function ActiveThreatsBanner({
   recentSightingHours = 3,
 }) {
   const navigate = useNavigate();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const includeUnscoped = shouldIncludeUnscopedProfiles(activeOrganization);
   const [nearbyProfiles, setNearbyProfiles] = useState([]);
   const [dismissed, setDismissed] = useState(false);
   const [_error, setError] = useState(null);
@@ -119,11 +123,15 @@ export default function ActiveThreatsBanner({
     try {
       const recentWindowMs = Math.max(1, recentSightingHours) * 60 * 60 * 1000;
 
-      const { data, error } = await supabase
-        .from('criminal_profiles')
-        .select(
-          'id, primary_name, photo_urls, risk_level, status, last_seen_location, last_seen_coordinates, last_seen_at, sightings_log'
-        )
+      const { data, error } = await scopeToOrganization(
+        supabase
+          .from('criminal_profiles')
+          .select(
+            'id, primary_name, photo_urls, risk_level, status, last_seen_location, last_seen_coordinates, last_seen_at, sightings_log'
+          ),
+        activeOrganizationId,
+        includeUnscoped
+      )
         .in('risk_level', ['critical', 'high'])
         .neq('status', 'incarcerated')
         .limit(80);
@@ -150,7 +158,7 @@ export default function ActiveThreatsBanner({
     } finally {
       isFetching.current = false;
     }
-  }, [userLocation?.lat, userLocation?.lng, maxDistanceKm, recentSightingHours]);
+  }, [userLocation?.lat, userLocation?.lng, maxDistanceKm, recentSightingHours, activeOrganizationId, includeUnscoped]);
 
   // Single effect with cleanup
   useEffect(() => {

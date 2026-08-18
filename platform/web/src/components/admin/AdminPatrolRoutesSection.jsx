@@ -7,10 +7,12 @@ import {
   matchRouteRowToLog,
   latLngsFromRouteGeoJson,
   distanceKmFromLatLngPoints,
+  routeRowDistanceKm,
 } from '../../utils/patrolHistoryRoute';
 import { reverseGeocodeStartEnd } from '../../utils/reverseGeocodeNominatim';
 import PatrolRouteMapPanel from '../leaderboard/PatrolRouteMapPanel';
 import BrandedLoader from '../layout/BrandedLoader';
+import { useScopedOrganization } from '../../utils/organizationScope';
 
 const MAX_ROWS = 50;
 
@@ -40,6 +42,7 @@ function matchesVolunteerFilter(log, filterId) {
 }
 
 export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOptions = [] }) {
+  const { scope } = useScopedOrganization();
   const [volunteerFilter, setVolunteerFilter] = useState('');
   const [expandedKey, setExpandedKey] = useState(null);
   const [loadingKey, setLoadingKey] = useState(null);
@@ -54,11 +57,13 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from('patrol_routes')
-          .select(
-            'user_id, total_distance_km, total_duration_seconds, route_geojson, created_at, start_location, end_location'
-          )
+        const { data, error } = await scope(
+          supabase
+            .from('patrol_routes')
+            .select(
+              'user_id, total_distance_km, total_duration_seconds, route_geojson, created_at, start_location, end_location'
+            )
+        )
           .order('created_at', { ascending: false })
           .limit(500);
         if (cancelled) return;
@@ -71,7 +76,7 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     setExpandedKey(null);
@@ -291,12 +296,12 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
               cached && cached.length >= 2
                 ? distanceKmFromLatLngPoints(cached.map(([lat, lng]) => ({ lat, lng })))
                 : null;
-            const distKm =
-              matched?.total_distance_km != null && matched.total_distance_km > 0
-                ? matched.total_distance_km
-                : fromPoints != null && fromPoints > 0
-                  ? fromPoints
-                  : null;
+            const distKm = (() => {
+              const fromRow = routeRowDistanceKm(matched);
+              if (fromRow > 0) return fromRow;
+              if (fromPoints != null && fromPoints > 0) return fromPoints;
+              return null;
+            })();
             const { title, sub } = formatPatrolPeriod(log);
             const dur = log.duration_minutes ?? 0;
             const canMap = !!log.user_id;

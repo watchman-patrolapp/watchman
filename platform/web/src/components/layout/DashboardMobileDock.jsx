@@ -1,8 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaHome, FaListUl, FaPlusCircle, FaComment, FaClipboardCheck, FaShieldAlt, FaCalendarAlt } from 'react-icons/fa';
+import { FaHome, FaListUl, FaPlusCircle, FaComment, FaClipboardCheck, FaShieldAlt, FaCalendarAlt, FaBell, FaPhone, FaUserFriends } from 'react-icons/fa';
 import { markChatVisited } from '../../chat/utils/markChatVisited';
 import { useAuth } from '../../auth/useAuth';
 import { canAccessAdminPanel } from '../../auth/staffRoles';
+import { canAccessPatrolSchedule, homePathForRole, isHouseholdModeRole, isResidentAppRole } from '../../auth/roleMatrix';
 
 /**
  * Mobile-first quick nav (bento / shell pattern). Hidden on md+ where dashboard tiles suffice.
@@ -18,35 +19,74 @@ export default function DashboardMobileDock({
   const { pathname } = useLocation();
   const { user } = useAuth();
   const isStaffAdminNav = canAccessAdminPanel(user?.role);
+  const canUsePatrolSchedule = canAccessPatrolSchedule(user?.role);
+  const homePath = homePathForRole(user?.role, user?.platformRole);
   const adminDockBadge = pendingIncidentsCount + pendingFeedbackCount;
+  const residentNav = isResidentAppRole(user?.role);
+  const householdMode = isHouseholdModeRole(user?.role);
+  const onHouseholdPath = pathname.startsWith('/resident');
 
   const goChat = () => {
     void markChatVisited(null);
     navigate('/chat');
   };
 
-  const items = isStaffAdminNav
-    ? [
-        { path: '/dashboard', label: 'Home', icon: FaHome, onClick: () => navigate('/dashboard'), active: pathname === '/dashboard' },
-        {
-          path: '/admin',
-          label: 'Admin',
-          icon: FaShieldAlt,
-          onClick: () => navigate('/admin'),
-          active: pathname.startsWith('/admin'),
-          badge: adminDockBadge,
-        },
-        { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
-        { path: '/incident/new', label: 'Report', icon: FaPlusCircle, onClick: () => navigate('/incident/new'), active: pathname === '/incident/new' },
-        { path: '/incidents', label: 'Incident', icon: FaClipboardCheck, onClick: () => navigate('/incidents'), active: pathname.startsWith('/incidents') && !pathname.includes('/new') },
-      ]
-    : [
-        { path: '/dashboard', label: 'Home', icon: FaHome, onClick: () => navigate('/dashboard'), active: pathname === '/dashboard' },
-        { path: '/schedule', label: 'Schedule', icon: FaCalendarAlt, onClick: () => navigate('/schedule'), active: pathname === '/schedule' },
-        { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
-        { path: '/incident/new', label: 'Report', icon: FaPlusCircle, onClick: () => navigate('/incident/new'), active: pathname === '/incident/new' },
-        { path: '/incidents', label: 'Incident', icon: FaListUl, onClick: () => navigate('/incidents'), active: pathname.startsWith('/incidents') && !pathname.includes('/new') },
-      ];
+  const householdDockItem = {
+    path: '/resident',
+    label: 'Resident',
+    icon: FaUserFriends,
+    onClick: () => navigate('/resident'),
+    active: onHouseholdPath,
+  };
+
+  const residentItems = [
+    { path: homePath, label: 'Home', icon: FaHome, onClick: () => navigate(homePath), active: pathname === homePath },
+    { path: '/resident/activity', label: 'Reports', icon: FaListUl, onClick: () => navigate('/resident/activity'), active: pathname.startsWith('/resident/activity') },
+    { path: '/resident/neighbours', label: 'Neighbours', icon: FaUserFriends, onClick: () => navigate('/resident/neighbours'), active: pathname.startsWith('/resident/neighbours') || pathname.startsWith('/resident/sector') },
+    { path: '/resident/sos', label: 'SOS', icon: FaBell, onClick: () => navigate('/resident/sos'), active: pathname === '/resident/sos', danger: true },
+    { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
+    { path: '/resident/contacts', label: 'Contacts', icon: FaPhone, onClick: () => navigate('/resident/contacts'), active: pathname.startsWith('/resident/contacts') },
+  ];
+
+  let items;
+  if (residentNav) {
+    items = residentItems;
+  } else if (householdMode && onHouseholdPath) {
+    items = [
+      { path: homePath, label: 'Patrol', icon: FaShieldAlt, onClick: () => navigate(homePath), active: false },
+      { path: '/resident', label: 'Home', icon: FaHome, onClick: () => navigate('/resident'), active: pathname === '/resident' },
+      { path: '/resident/neighbours', label: 'Neighbours', icon: FaUserFriends, onClick: () => navigate('/resident/neighbours'), active: pathname.startsWith('/resident/neighbours') || pathname.startsWith('/resident/sector') },
+      { path: '/resident/sos', label: 'SOS', icon: FaBell, onClick: () => navigate('/resident/sos'), active: pathname === '/resident/sos', danger: true },
+      { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
+    ];
+  } else if (isStaffAdminNav) {
+    items = [
+      { path: homePath, label: 'Home', icon: FaHome, onClick: () => navigate(homePath), active: pathname === homePath || (homePath === '/dashboard' && pathname === '/dashboard') },
+      ...(householdMode ? [householdDockItem] : []),
+      {
+        path: '/admin',
+        label: 'Admin',
+        icon: FaShieldAlt,
+        onClick: () => navigate('/admin'),
+        active: pathname.startsWith('/admin'),
+        badge: adminDockBadge,
+      },
+      { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
+      { path: '/incident/new', label: 'Report', icon: FaPlusCircle, onClick: () => navigate('/incident/new'), active: pathname === '/incident/new' },
+      { path: '/incidents', label: 'Incident', icon: FaClipboardCheck, onClick: () => navigate('/incidents'), active: pathname.startsWith('/incidents') && !pathname.includes('/new') },
+    ];
+  } else {
+    items = [
+      { path: homePath, label: 'Home', icon: FaHome, onClick: () => navigate(homePath), active: pathname === homePath },
+      ...(householdMode ? [householdDockItem] : []),
+      ...(canUsePatrolSchedule
+        ? [{ path: '/schedule', label: 'Schedule', icon: FaCalendarAlt, onClick: () => navigate('/schedule'), active: pathname === '/schedule' }]
+        : []),
+      { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
+      { path: '/incident/new', label: 'Report', icon: FaPlusCircle, onClick: () => navigate('/incident/new'), active: pathname === '/incident/new' },
+      { path: '/incidents', label: 'Incident', icon: FaListUl, onClick: () => navigate('/incidents'), active: pathname.startsWith('/incidents') && !pathname.includes('/new') },
+    ];
+  }
 
   return (
     <nav
@@ -54,7 +94,7 @@ export default function DashboardMobileDock({
       aria-label="Primary navigation"
     >
       <ul className="flex justify-around items-stretch max-w-lg mx-auto px-1 pt-1">
-        {items.map(({ path, label, icon: Icon, onClick, active, badge }) => {
+        {items.map(({ path, label, icon: Icon, onClick, active, badge, danger }) => {
           const n = badge ?? 0;
           const hasAlert = n > 0;
           const alertInactive =
@@ -67,17 +107,21 @@ export default function DashboardMobileDock({
               : '';
           const baseActive =
             active && !hasAlert
-              ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
+              ? danger
+                ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50'
+                : 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
               : active && hasAlert
                 ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50'
                 : '';
           const baseInactive =
             !active && !hasAlert
-              ? 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+              ? danger
+                ? 'text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
               : '';
 
           return (
-            <li key={path} className="flex-1 min-w-0">
+            <li key={`${path}-${label}`} className="flex-1 min-w-0">
               <button
                 type="button"
                 onClick={onClick}

@@ -7,6 +7,7 @@ import {
   matchRouteRowToLog,
   latLngsFromRouteGeoJson,
   distanceKmFromLatLngPoints,
+  routeRowDistanceKm,
 } from '../../utils/patrolHistoryRoute';
 import { reverseGeocodeStartEnd } from '../../utils/reverseGeocodeNominatim';
 import PatrolRouteMapPanel from './PatrolRouteMapPanel';
@@ -170,12 +171,12 @@ export default function PatrolRouteHistorySection({ userPatrols, userId, routeRo
             cached && cached.length >= 2 ? distanceKmFromLatLngPoints(
               cached.map(([lat, lng]) => ({ lat, lng }))
             ) : null;
-          const distKm =
-            matched?.total_distance_km != null && matched.total_distance_km > 0
-              ? matched.total_distance_km
-              : fromPoints != null && fromPoints > 0
-                ? fromPoints
-                : null;
+          const distKm = (() => {
+            const fromRow = routeRowDistanceKm(matched);
+            if (fromRow > 0) return fromRow;
+            if (fromPoints != null && fromPoints > 0) return fromPoints;
+            return null;
+          })();
           const { title, sub } = formatPatrolPeriod(log);
           const dur = log.duration_minutes ?? 0;
           const streetInfo = streetsByKey[key];

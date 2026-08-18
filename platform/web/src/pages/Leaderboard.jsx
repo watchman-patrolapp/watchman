@@ -5,7 +5,6 @@ import { useAuth } from "../auth/useAuth";
 import { 
   FaArrowLeft, 
   FaTrophy, 
-  FaMedal, 
   FaFire,
   FaClock,
   FaCalendarAlt,
@@ -14,13 +13,20 @@ import {
   FaSync,
   FaExclamationTriangle,
   FaUser,
-  FaStar,
   FaRuler,
   FaRoute
 } from "react-icons/fa";
 import { DEFAULT_PATROL_ZONE, displayPatrolZone } from "../config/neighborhoodRegions";
+import { initialsFromName } from "../utils/residentVerification";
+import { buildLeaderboardFunFacts } from "../utils/leaderboardFunFacts";
+import { evaluateLeaderboardBadges } from "../utils/leaderboardBadges";
+import { TIME_RANGES, buildVolunteerStats } from "../utils/volunteerStats";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
+import FunFactsPanel from "../components/leaderboard/FunFactsPanel";
+import BadgesPanel from "../components/leaderboard/BadgesPanel";
+import VolunteerProfileSheet from "../components/leaderboard/VolunteerProfileSheet";
+import PatrolFuelCard from "../components/leaderboard/PatrolFuelCard";
 import { 
   BarChart, 
   Bar, 
@@ -40,6 +46,13 @@ import {
 import toast from "react-hot-toast";
 import PatrolRouteHistorySection from "../components/leaderboard/PatrolRouteHistorySection";
 import MyUpcomingPatrolSignups from "../components/leaderboard/MyUpcomingPatrolSignups";
+import { useScopedOrganization } from "../utils/organizationScope";
+import { useAreaWeather } from "../hooks/useAreaWeather";
+import { useAreaHourlyWeather } from "../hooks/useAreaHourlyWeather";
+import { describeCurrentPatrolWeather, summarizePatrolWeather } from "../utils/patrolWeather";
+import { mergeFuelVehicles } from "../utils/patrolFuelEstimate";
+import { fetchPatrolLocationPoints, fetchPatrolRouteRows } from "../utils/patrolHistoryRoute";
+import { usePetrolPrice } from "../hooks/usePetrolPrice";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -47,23 +60,69 @@ import MyUpcomingPatrolSignups from "../components/leaderboard/MyUpcomingPatrolS
 
 /** Recharts 3 defaults initial size to -1; flex/grid parents need a positive seed to avoid console warnings. */
 const CHART_INITIAL = { width: 800, height: 256 };
-const CHART_INITIAL_SHORT = { width: 800, height: 192 };
+const CHART_INITIAL_SHORT = { width: 800, height: 224 };
 
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const HOURS_OF_DAY = Array.from({ length: 12 }, (_, i) => `${i * 2}:00`);
 
-const TIME_RANGES = {
-  night: { label: 'Night Owl', hours: [0, 1, 2, 3, 4, 5], icon: '🌙' },
-  morning: { label: 'Early Bird', hours: [6, 7, 8, 9, 10, 11], icon: '🌅' },
-  afternoon: { label: 'Day Patrol', hours: [12, 13, 14, 15, 16, 17], icon: '☀️' },
-  evening: { label: 'Evening Watch', hours: [18, 19, 20, 21, 22, 23], icon: '🌆' }
-};
+const PERIODS = [
+  { id: 'week', label: 'This week' },
+  { id: 'month', label: 'This month' },
+  { id: 'all', label: 'All time' },
+];
+
+function periodStartDate(periodId) {
+  const now = new Date();
+  if (periodId === 'week') {
+    const d = new Date(now);
+    const day = d.getDay();
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (periodId === 'month') {
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  return null;
+}
+
+function aggregateLeaderboard(logs) {
+  const stats = {};
+  (logs || []).forEach((log) => {
+    const key = log.user_id || log.user_name;
+    if (!key) return;
+    if (!stats[key]) {
+      stats[key] = {
+        name: log.user_name,
+        totalMinutes: 0,
+        patrols: 0,
+        userId: log.user_id,
+      };
+    }
+    stats[key].totalMinutes += log.duration_minutes || 0;
+    stats[key].patrols += 1;
+    if (log.user_name) stats[key].name = log.user_name;
+  });
+
+  return Object.values(stats)
+    .sort((a, b) => b.totalMinutes - a.totalMinutes)
+    .map((item, index) => ({ ...item, rank: index + 1 }));
+}
+
+function formatHoursMinutes(totalMinutes) {
+  const mins = Math.max(0, Math.round(totalMinutes || 0));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h <= 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatCard({ label, value, sub, color = 'teal', trend }) {
+function StatCard({ label, value, sub, color = 'teal', trend, icon: Icon, emoji }) {
   const colors = {
     teal: 'bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400',
     emerald: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
@@ -76,7 +135,7 @@ function StatCard({ label, value, sub, color = 'teal', trend }) {
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 shadow-sm hover:shadow-md transition">
       <div className="flex items-start justify-between">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colors[color]}`}>
-          <span className="text-2xl">📊</span>
+          {emoji ? <span className="text-2xl">{emoji}</span> : Icon ? <Icon className="w-6 h-6" /> : <FaChartLine className="w-6 h-6" />}
         </div>
         {trend && (
           <span className={`text-xs font-medium px-2 py-1 rounded-full ${
@@ -97,29 +156,132 @@ function StatCard({ label, value, sub, color = 'teal', trend }) {
   );
 }
 
-function PodiumCard({ rank, entry, isCurrentUser }) {
-  const rankStyles = {
-    1: 'bg-gradient-to-b from-yellow-100 to-yellow-50 dark:from-yellow-900/30 dark:to-yellow-900/10 border-yellow-300 dark:border-yellow-700 scale-105',
-    2: 'bg-gradient-to-b from-gray-100 to-gray-50 dark:from-gray-700/30 dark:to-gray-700/10 border-gray-300 dark:border-gray-600',
-    3: 'bg-gradient-to-b from-orange-100 to-orange-50 dark:from-orange-900/30 dark:to-orange-900/10 border-orange-300 dark:border-orange-700',
-  };
+function PodiumAvatar({ name, avatarUrl, rank }) {
+  const ring =
+    rank === 1
+      ? "ring-2 ring-yellow-400"
+      : rank === 2
+        ? "ring-2 ring-gray-300 dark:ring-gray-500"
+        : "ring-2 ring-orange-300";
 
-  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt=""
+        className={`w-14 h-14 rounded-full object-cover mx-auto mb-2 ${ring}`}
+      />
+    );
+  }
 
   return (
-    <div className={`relative rounded-2xl border-2 p-4 text-center transition hover:shadow-lg ${
-      rankStyles[rank] || 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-    } ${isCurrentUser ? 'ring-2 ring-teal-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}>
-      <div className="text-4xl mb-2">{medals[rank] || rank}</div>
-      <p className="font-bold text-gray-900 dark:text-white truncate">{entry.name}</p>
-      <p className="text-2xl font-bold text-teal-600 dark:text-teal-400 mt-1">
-        {Math.floor(entry.totalMinutes / 60)}h
+    <div className={`w-14 h-14 rounded-full mx-auto mb-2 flex items-center justify-center font-bold text-white bg-gradient-to-br from-teal-500 to-teal-700 ${ring}`}>
+      {initialsFromName(name, "?")}
+    </div>
+  );
+}
+
+function PodiumCard({ rank, entry, isCurrentUser, avatarUrl, onSelect }) {
+  const rankStyles = {
+    1: "bg-gradient-to-b from-yellow-100 to-yellow-50 dark:from-yellow-900/40 dark:to-yellow-900/10 border-yellow-300 dark:border-yellow-700 shadow-md min-h-[16.5rem] pt-5",
+    2: "bg-gradient-to-b from-gray-100 to-gray-50 dark:from-gray-700/40 dark:to-gray-800/20 border-gray-300 dark:border-gray-600 min-h-[15rem]",
+    3: "bg-gradient-to-b from-orange-100 to-orange-50 dark:from-orange-900/30 dark:to-orange-900/10 border-orange-300 dark:border-orange-700 min-h-[15rem]",
+  };
+  const medals = { 1: "🥇", 2: "🥈", 3: "🥉" };
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect?.(entry)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect?.(entry);
+        }
+      }}
+      className={`relative flex flex-col items-center overflow-visible rounded-2xl border-2 px-2.5 py-4 sm:p-4 text-center transition hover:shadow-lg cursor-pointer ${
+      rankStyles[rank] || "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+    } ${isCurrentUser ? "ring-2 ring-teal-500 ring-offset-2 dark:ring-offset-gray-900" : ""}`}
+    >
+      <div className="text-3xl mb-1">{medals[rank] || rank}</div>
+      <PodiumAvatar name={entry.name} avatarUrl={avatarUrl} rank={rank} />
+      <p className="w-full px-0.5 font-bold text-sm sm:text-base text-gray-900 dark:text-white leading-tight break-words [overflow-wrap:anywhere] line-clamp-2 hover:underline">
+        {entry.name}
       </p>
-      <p className="text-xs text-gray-500 dark:text-gray-400">{entry.patrols} patrols</p>
+      <p className="text-xl sm:text-2xl font-bold text-teal-600 dark:text-teal-400 mt-1">
+        {formatHoursMinutes(entry.totalMinutes)}
+      </p>
+      <p className="mt-0.5 pb-0.5 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+        {entry.patrols} patrols
+      </p>
       {isCurrentUser && (
         <span className="absolute -top-2 -right-2 bg-teal-600 text-white text-xs px-2 py-1 rounded-full">
           You
         </span>
+      )}
+    </div>
+  );
+}
+
+function PeriodTabs({ period, onChange }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-2">
+      {PERIODS.map((p) => {
+        const active = period === p.id;
+        return (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onChange(p.id)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+              active
+                ? "bg-teal-600 text-white shadow-sm"
+                : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:border-teal-400"
+            }`}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function YourStanding({ entry, nextUp, periodId, periodLabel, hasPatrolsThisPeriod }) {
+  const when = periodId === "all" ? "the all-time board" : periodLabel.toLowerCase();
+
+  if (!hasPatrolsThisPeriod) {
+    return (
+      <div className="rounded-2xl border border-dashed border-teal-300 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-900/10 px-5 py-4 text-center">
+        <p className="text-sm font-medium text-teal-800 dark:text-teal-200">
+          No hours {periodId === "all" ? "on the all-time board" : when} yet — one patrol puts you on the board.
+        </p>
+      </div>
+    );
+  }
+
+  if (entry?.rank === 1) {
+    return (
+      <div className="rounded-2xl border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 px-5 py-4 text-center">
+        <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+          You are leading {when}. Hold the line.
+        </p>
+      </div>
+    );
+  }
+
+  const gap = nextUp ? Math.max(0, nextUp.totalMinutes - (entry?.totalMinutes || 0)) : 0;
+
+  return (
+    <div className="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-gray-800 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+        Your standing {periodId === "all" ? "(all time)" : periodLabel.toLowerCase()}: #{entry?.rank ?? "—"}
+      </p>
+      {nextUp && (
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          {formatHoursMinutes(gap)} behind {nextUp.name} for #{entry.rank - 1}
+        </p>
       )}
     </div>
   );
@@ -199,6 +361,23 @@ function ActivityHeatmap({ patrolData }) {
   );
 }
 
+function RadarPeriodTick({ x, y, payload, textAnchor }) {
+  const lines = String(payload?.value || "").split(/\s+/).filter(Boolean);
+  return (
+    <text x={x} y={y} textAnchor={textAnchor || "middle"} fill="#6b7280" fontSize={11}>
+      {lines.map((line, i) => (
+        <tspan
+          key={`${line}-${i}`}
+          x={x}
+          dy={i === 0 ? (lines.length > 1 ? "-0.45em" : "0.35em") : "1.15em"}
+        >
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+}
+
 function FavoriteTimeRadar({ timeDistribution }) {
   const data = Object.entries(timeDistribution).map(([period, count]) => ({
     period: TIME_RANGES[period].label,
@@ -212,7 +391,7 @@ function FavoriteTimeRadar({ timeDistribution }) {
         <FaClock className="text-violet-500" />
         Patrol Preferences
       </h3>
-      <div className="h-64 w-full min-w-0 min-h-[16rem]">
+      <div className="h-72 w-full min-w-0 min-h-[18rem] overflow-visible">
         <ResponsiveContainer
           width="100%"
           height="100%"
@@ -220,9 +399,15 @@ function FavoriteTimeRadar({ timeDistribution }) {
           minHeight={200}
           initialDimension={CHART_INITIAL}
         >
-          <RadarChart data={data}>
+          <RadarChart
+            data={data}
+            cx="50%"
+            cy="50%"
+            outerRadius="45%"
+            margin={{ top: 24, right: 36, bottom: 24, left: 36 }}
+          >
             <PolarGrid stroke="#e5e7eb" />
-            <PolarAngleAxis dataKey="period" tick={{ fontSize: 11, fill: '#6b7280' }} />
+            <PolarAngleAxis dataKey="period" tickLine={false} tick={(props) => <RadarPeriodTick {...props} />} />
             <PolarRadiusAxis angle={90} domain={[0, 'auto']} tick={false} />
             <Radar
               name="Your Patrols"
@@ -302,14 +487,21 @@ function RecentPatrols({ patrols }) {
 export default function Leaderboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { scope, activeOrganizationId } = useScopedOrganization();
+  const petrol = usePetrolPrice(activeOrganizationId || user?.organizationId);
   
-  const [leaderboard, setLeaderboard] = useState([]);
+  const [allLogs, setAllLogs] = useState([]);
   const [userStats, setUserStats] = useState(null);
   const [userPatrols, setUserPatrols] = useState([]);
   /** Rows from patrol_routes for the signed-in user (optional table). */
   const [patrolRouteRows, setPatrolRouteRows] = useState([]);
+  const [locationPoints, setLocationPoints] = useState([]);
+  const [avatarByUserId, setAvatarByUserId] = useState({});
+  const [vehicleByUserId, setVehicleByUserId] = useState({});
+  const [period, setPeriod] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedVolunteer, setSelectedVolunteer] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -317,154 +509,61 @@ export default function Leaderboard() {
     
     try {
       // Fetch all patrol logs
-      const { data: allLogs, error: logsError } = await supabase
-        .from('patrol_logs')
-        .select('user_name, duration_minutes, start_time, end_time, zone, user_id')
-        .order('start_time', { ascending: false });
+      const { data: logsData, error: logsError } = await scope(
+        supabase
+          .from('patrol_logs')
+          .select('user_name, duration_minutes, start_time, end_time, zone, user_id')
+      ).order('start_time', { ascending: false });
 
       if (logsError) throw logsError;
 
-      // Aggregate global leaderboard
-      const stats = {};
-      allLogs.forEach(log => {
-        const name = log.user_name;
-        if (!stats[name]) {
-          stats[name] = { 
-            name, 
-            totalMinutes: 0, 
-            patrols: 0,
-            userId: log.user_id 
-          };
+      const logs = Array.isArray(logsData) ? logsData : [];
+      setAllLogs(logs);
+
+      const sorted = aggregateLeaderboard(logs);
+
+      const userIds = [...new Set(logs.map((log) => log.user_id).filter(Boolean))];
+      if (userIds.length > 0) {
+        try {
+          const [{ data: avatars }, fuelVehicles] = await Promise.all([
+            supabase.from("users").select("id, avatar_url, car_type").in("id", userIds),
+            supabase.rpc("list_watch_fuel_vehicles").then(({ data, error }) => (error ? [] : data || [])),
+          ]);
+          const map = {};
+          (avatars || []).forEach((row) => {
+            if (row?.id) map[row.id] = row.avatar_url || null;
+          });
+          setAvatarByUserId(map);
+          setVehicleByUserId(mergeFuelVehicles({
+            userRows: avatars || [],
+            rpcRows: Array.isArray(fuelVehicles) ? fuelVehicles : [],
+            selfUser: user,
+          }));
+        } catch {
+          setAvatarByUserId({});
+          setVehicleByUserId(mergeFuelVehicles({ selfUser: user }));
         }
-        stats[name].totalMinutes += log.duration_minutes || 0;
-        stats[name].patrols += 1;
-      });
-
-      const sorted = Object.values(stats)
-        .sort((a, b) => b.totalMinutes - a.totalMinutes)
-        .map((item, index) => ({ ...item, rank: index + 1 }));
-
-      setLeaderboard(sorted);
+      } else {
+        setAvatarByUserId({});
+        setVehicleByUserId(mergeFuelVehicles({ selfUser: user }));
+      }
 
       // Calculate current user's detailed stats
-      const userLogs = allLogs.filter(log => log.user_id === user?.id);
-      
-      if (userLogs.length > 0) {
-        const totalMinutes = userLogs.reduce((sum, log) => sum + (log.duration_minutes || 0), 0);
-        const totalPatrols = userLogs.length;
-        
-        // Calculate streak (consecutive days with patrols)
-        const patrolDates = [...new Set(userLogs.map(log => 
-          new Date(log.start_time).toISOString().split('T')[0]
-        ))].sort();
-        
-        let currentStreak = 0;
-        const today = new Date().toISOString().split('T')[0];
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-        
-        if (patrolDates.includes(today) || patrolDates.includes(yesterday)) {
-          currentStreak = 1;
-          for (let i = patrolDates.length - 1; i > 0; i--) {
-            const curr = new Date(patrolDates[i]);
-            const prev = new Date(patrolDates[i - 1]);
-            const diff = (curr - prev) / (1000 * 60 * 60 * 24);
-            if (diff === 1) currentStreak++;
-            else break;
-          }
-        }
-
-        // Calculate favorite patrol times
-        const timeDistribution = { night: 0, morning: 0, afternoon: 0, evening: 0 };
-        userLogs.forEach(log => {
-          const hour = new Date(log.start_time).getHours();
-          Object.entries(TIME_RANGES).forEach(([period, range]) => {
-            if (range.hours.includes(hour)) {
-              timeDistribution[period]++;
-            }
-          });
-        });
-
-        const favoritePeriod = Object.entries(timeDistribution)
-          .sort((a, b) => b[1] - a[1])[0];
-
-        // Weekly trend (last 8 weeks)
-        const weeklyTrend = [];
-        const now = new Date();
-        for (let i = 7; i >= 0; i--) {
-          const weekStart = new Date(now);
-          weekStart.setDate(weekStart.getDate() - (i * 7));
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekEnd.getDate() + 7);
-          
-          const weekMinutes = userLogs
-            .filter(log => {
-              const logDate = new Date(log.start_time);
-              return logDate >= weekStart && logDate < weekEnd;
-            })
-            .reduce((sum, log) => sum + (log.duration_minutes || 0), 0);
-          
-          weeklyTrend.push({
-            week: `W${8-i}`,
-            hours: Math.round(weekMinutes / 60 * 10) / 10
-          });
-        }
-
-        // GPS route summaries (optional table — failures must not break the page)
-        let routeRows = [];
+      const userLogs = logs.filter(log => log.user_id === user?.id);
+      let routeRows = [];
+      if (user?.id) {
         try {
-          const { data: pr, error: prErr } = await supabase
-            .from('patrol_routes')
-            .select('total_distance_km, total_duration_seconds, start_location, end_location, route_geojson, created_at')
-            .eq('user_id', user?.id)
-            .order('created_at', { ascending: false })
-            .limit(100);
-          if (!prErr && Array.isArray(pr)) routeRows = pr;
+          routeRows = await fetchPatrolRouteRows(supabase, user.id);
         } catch {
           routeRows = [];
         }
-        setPatrolRouteRows(routeRows);
-
-        const routeAgg = routeRows.length
-          ? {
-              totalDistance: routeRows.reduce((s, r) => s + (Number(r.total_distance_km) || 0), 0),
-              totalDuration: routeRows.reduce((s, r) => s + (Number(r.total_duration_seconds) || 0), 0),
-              startLocation: routeRows[routeRows.length - 1]?.start_location ?? null,
-              endLocation: routeRows[0]?.end_location ?? null,
-              routeGeoJSON: routeRows[0]?.route_geojson ?? null,
-            }
-          : null;
-
-        setUserStats({
-          totalMinutes,
-          totalPatrols,
-          currentStreak,
-          averageDuration: Math.round(totalMinutes / totalPatrols),
-          favoriteTime: favoritePeriod ? {
-            period: favoritePeriod[0],
-            label: TIME_RANGES[favoritePeriod[0]].label,
-            icon: TIME_RANGES[favoritePeriod[0]].icon,
-            count: favoritePeriod[1]
-          } : null,
-          timeDistribution,
-          weeklyTrend,
-          globalRank: sorted.findIndex(s => s.userId === user?.id) + 1 || sorted.length + 1,
-          routeStats: routeAgg
-            ? {
-                totalDistance: routeAgg.totalDistance,
-                totalDuration: routeAgg.totalDuration,
-                startLocation: routeAgg.startLocation,
-                endLocation: routeAgg.endLocation,
-                routeGeoJSON: routeAgg.routeGeoJSON,
-              }
-            : null,
-        });
-        
-        setUserPatrols(userLogs);
-      } else {
-        setUserPatrols([]);
-        setUserStats(null);
-        setPatrolRouteRows([]);
       }
+      setPatrolRouteRows(routeRows);
+
+      const allTimeRank = sorted.findIndex((s) => s.userId === user?.id) + 1 || (userLogs.length ? sorted.length + 1 : null);
+      const stats = buildVolunteerStats(userLogs, routeRows, { globalRank: allTimeRank || null });
+      setUserStats(stats);
+      setUserPatrols(userLogs);
 
     } catch (err) {
       console.error("Error fetching data:", err);
@@ -473,14 +572,77 @@ export default function Leaderboard() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, scope]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  const periodLabel = PERIODS.find((p) => p.id === period)?.label || "All time";
+  const periodSince = useMemo(() => periodStartDate(period), [period]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLocationPoints([]);
+    (async () => {
+      if (!user?.id) return;
+      const points = await fetchPatrolLocationPoints(supabase, { userId: user.id, logs: userPatrols });
+      if (!cancelled) setLocationPoints(points);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, userPatrols]);
+
+  const leaderboard = useMemo(() => {
+    const start = periodStartDate(period);
+    const logs = start
+      ? allLogs.filter((log) => new Date(log.start_time) >= start)
+      : allLogs;
+    return aggregateLeaderboard(logs);
+  }, [allLogs, period]);
+
   const topThree = leaderboard.slice(0, 3);
-  const restOfLeaderboard = leaderboard.slice(3, 10);
+  const myPeriodEntry = leaderboard.find((entry) => entry.userId === user?.id) || null;
+  const nextUp = myPeriodEntry && myPeriodEntry.rank > 1
+    ? leaderboard.find((entry) => entry.rank === myPeriodEntry.rank - 1)
+    : null;
+  const allTimeBoard = useMemo(() => aggregateLeaderboard(allLogs), [allLogs]);
+  const selectedAllTimeRank = selectedVolunteer
+    ? allTimeBoard.find((entry) =>
+        (selectedVolunteer.userId && entry.userId === selectedVolunteer.userId)
+        || entry.name === selectedVolunteer.name
+      )?.rank ?? null
+    : null;
+
+  const currentWeather = useAreaWeather(activeOrganizationId);
+  const hourlyWeather = useAreaHourlyWeather(activeOrganizationId, allLogs);
+  const weatherNow = useMemo(
+    () => describeCurrentPatrolWeather(currentWeather),
+    [currentWeather]
+  );
+  const weatherSummary = useMemo(
+    () => summarizePatrolWeather(userPatrols, hourlyWeather),
+    [userPatrols, hourlyWeather]
+  );
+
+  const funFacts = useMemo(
+    () => buildLeaderboardFunFacts({
+      patrols: userPatrols,
+      routeRows: patrolRouteRows,
+      stats: userStats,
+      isSelf: true,
+      subjectId: user?.id,
+      weather: weatherSummary,
+      weatherNow,
+    }),
+    [userPatrols, patrolRouteRows, userStats, user?.id, weatherSummary, weatherNow]
+  );
+
+  const badgeState = useMemo(
+    () => evaluateLeaderboardBadges(userStats),
+    [userStats]
+  );
 
   if (loading) {
     return (
@@ -502,7 +664,7 @@ export default function Leaderboard() {
               Leaderboard
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1">
-              Top volunteers by patrol hours
+              Top volunteers by patrol hours — plus your badges and a few fun facts
             </p>
           </div>
           
@@ -539,53 +701,101 @@ export default function Leaderboard() {
 
         {/* 🏆 TOP SECTION: Global Leaderboard */}
         <div className="space-y-6">
-          
-          {/* Podium */}
+          <PeriodTabs period={period} onChange={setPeriod} />
+
+          {/* Podium: 2nd, 1st, 3rd with true height difference */}
           {topThree.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl mx-auto">
-              {/* Reorder for visual podium: 2nd, 1st, 3rd */}
-              {topThree[1] && (
-                <PodiumCard 
-                  rank={2} 
-                  entry={topThree[1]} 
-                  isCurrentUser={topThree[1].userId === user?.id}
-                />
-              )}
-              {topThree[0] && (
-                <PodiumCard 
-                  rank={1} 
-                  entry={topThree[0]} 
-                  isCurrentUser={topThree[0].userId === user?.id}
-                />
-              )}
-              {topThree[2] && (
-                <PodiumCard 
-                  rank={3} 
-                  entry={topThree[2]} 
-                  isCurrentUser={topThree[2].userId === user?.id}
-                />
-              )}
+            <div className="flex items-end justify-center gap-2 sm:gap-4 max-w-2xl mx-auto overflow-visible">
+              <div className="flex-1 min-w-0 max-w-[11rem]">
+                {topThree[1] ? (
+                  <PodiumCard
+                    rank={2}
+                    entry={topThree[1]}
+                    isCurrentUser={topThree[1].userId === user?.id}
+                    avatarUrl={avatarByUserId[topThree[1].userId]}
+                    onSelect={setSelectedVolunteer}
+                  />
+                ) : (
+                  <div className="min-h-[15rem]" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0 max-w-[12.5rem]">
+                {topThree[0] && (
+                  <PodiumCard
+                    rank={1}
+                    entry={topThree[0]}
+                    isCurrentUser={topThree[0].userId === user?.id}
+                    avatarUrl={avatarByUserId[topThree[0].userId]}
+                    onSelect={setSelectedVolunteer}
+                  />
+                )}
+              </div>
+              <div className="flex-1 min-w-0 max-w-[11rem]">
+                {topThree[2] ? (
+                  <PodiumCard
+                    rank={3}
+                    entry={topThree[2]}
+                    isCurrentUser={topThree[2].userId === user?.id}
+                    avatarUrl={avatarByUserId[topThree[2].userId]}
+                    onSelect={setSelectedVolunteer}
+                  />
+                ) : (
+                  <div className="min-h-[15rem]" />
+                )}
+              </div>
+            </div>
+          )}
+
+          {user?.id && leaderboard.length > 0 && (
+            <YourStanding
+              entry={myPeriodEntry}
+              nextUp={nextUp}
+              periodId={period}
+              periodLabel={periodLabel}
+              hasPatrolsThisPeriod={Boolean(myPeriodEntry)}
+            />
+          )}
+
+          {leaderboard.length === 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 p-8 text-center">
+              <FaTrophy className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-600 dark:text-gray-300 font-medium">
+                No patrols {periodLabel.toLowerCase()} yet
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {period === "all"
+                  ? "Complete a patrol to appear here."
+                  : "Be the first on the board — or switch to all time."}
+              </p>
             </div>
           )}
 
           {/* Rest of Top 10 */}
-          {restOfLeaderboard.length > 0 && (
+          {leaderboard.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Top 10 Volunteers</h2>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Top 10 Volunteers
+                  <span className="ml-2 text-sm font-medium text-gray-400 dark:text-gray-500">
+                    · {periodLabel}
+                  </span>
+                </h2>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Tap a name to see their badges and fun facts
+                </p>
               </div>
               
               {/* Mini bar chart */}
               <div className="p-6 border-b border-gray-100 dark:border-gray-700 min-w-0">
-                <div className="h-48 w-full min-w-0 min-h-[12rem]">
+                <div className="h-56 w-full min-w-0 min-h-[14rem]">
                   <ResponsiveContainer
                     width="100%"
                     height="100%"
                     minWidth={0}
-                    minHeight={160}
+                    minHeight={224}
                     initialDimension={CHART_INITIAL_SHORT}
                   >
-                    <BarChart data={leaderboard.slice(0, 10)}>
+                    <BarChart data={leaderboard.slice(0, 10)} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis 
                         dataKey="name" 
@@ -593,7 +803,7 @@ export default function Leaderboard() {
                         interval={0}
                         angle={-45}
                         textAnchor="end"
-                        height={60}
+                        height={72}
                       />
                       <YAxis tick={{ fontSize: 11 }} unit="h" />
                       <Tooltip 
@@ -625,7 +835,7 @@ export default function Leaderboard() {
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {leaderboard.slice(0, 10).map(entry => (
                       <tr 
-                        key={entry.name} 
+                        key={entry.userId || entry.name} 
                         className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition ${
                           entry.userId === user?.id ? 'bg-teal-50 dark:bg-teal-900/20' : ''
                         }`}
@@ -639,16 +849,44 @@ export default function Leaderboard() {
                             <span className="text-gray-500 dark:text-gray-400">#{entry.rank}</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                          {entry.name}
-                          {entry.userId === user?.id && (
-                            <span className="ml-2 text-xs bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-full">
-                              You
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedVolunteer(entry)}
+                              className="shrink-0"
+                              aria-label={`View ${entry.name}'s achievements`}
+                            >
+                              {avatarByUserId[entry.userId] ? (
+                                <img
+                                  src={avatarByUserId[entry.userId]}
+                                  alt=""
+                                  className="w-8 h-8 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 flex items-center justify-center text-xs font-bold">
+                                  {initialsFromName(entry.name, "?")}
+                                </div>
+                              )}
+                            </button>
+                            <span className="min-w-0 pl-1">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedVolunteer(entry)}
+                                className="hover:underline text-left break-words"
+                              >
+                                {entry.name}
+                              </button>
+                              {entry.userId === user?.id && (
+                                <span className="ml-2 text-xs bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded-full">
+                                  You
+                                </span>
+                              )}
                             </span>
-                          )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-                          {Math.floor(entry.totalMinutes / 60)}h {entry.totalMinutes % 60}m
+                          {formatHoursMinutes(entry.totalMinutes)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">
                           {entry.patrols}
@@ -681,24 +919,28 @@ export default function Leaderboard() {
                 value={`${Math.floor(userStats.totalMinutes / 60)}h`}
                 sub={`${userStats.totalMinutes % 60}m total`}
                 color="teal"
+                icon={FaClock}
               />
               <StatCard
                 label="Global Rank"
                 value={`#${userStats.globalRank}`}
                 sub="among all volunteers"
                 color="amber"
+                icon={FaTrophy}
               />
               <StatCard
                 label="Current Streak"
                 value={`${userStats.currentStreak} days`}
                 sub="keep it up!"
                 color="rose"
+                icon={FaFire}
               />
               <StatCard
                 label="Avg Duration"
                 value={`${Math.floor(userStats.averageDuration / 60)}h`}
                 sub={`${userStats.averageDuration % 60}m per patrol`}
                 color="violet"
+                icon={FaChartLine}
               />
             </div>
 
@@ -724,9 +966,32 @@ export default function Leaderboard() {
               </div>
             )}
 
+            <FunFactsPanel facts={funFacts} />
+            <BadgesPanel badgeState={badgeState} isSelf />
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
               <ActivityHeatmap patrolData={userPatrols} />
-              <FavoriteTimeRadar timeDistribution={userStats.timeDistribution} />
+              <div className="space-y-6 min-w-0">
+                <FavoriteTimeRadar timeDistribution={userStats.timeDistribution} />
+                <PatrolFuelCard
+                  vehicle={vehicleByUserId[user?.id]}
+                  stats={userStats}
+                  logs={userPatrols}
+                  routeRows={patrolRouteRows}
+                  locationPoints={locationPoints}
+                  priceZarPerLitre={petrol.price}
+                  onPriceChange={petrol.setPrice}
+                  onSaveArea={async () => {
+                    const result = await petrol.saveArea();
+                    if (result?.ok) toast.success("Neighbourhood petrol price saved");
+                    else toast.error(result?.message || "Could not save the neighbourhood price.");
+                  }}
+                  canSaveArea={petrol.canSaveArea}
+                  saving={petrol.saving}
+                  isSelf
+                  userId={user?.id}
+                />
+              </div>
             </div>
 
             {/* Route Statistics Card */}
@@ -834,8 +1099,10 @@ export default function Leaderboard() {
         {!userStats && !loading && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-12 text-center">
             <FaTrophy className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Patrol Data Yet</h3>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">Start patrolling to see your stats and climb the leaderboard!</p>
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Ready for the board?</h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-6">
+              Finish one patrol and you will show up here — with hours, a streak, and your first badge.
+            </p>
             <button
               onClick={() => navigate("/dashboard")}
               className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-medium transition"
@@ -845,6 +1112,21 @@ export default function Leaderboard() {
           </div>
         )}
       </div>
+
+      {selectedVolunteer && (
+        <VolunteerProfileSheet
+          volunteer={selectedVolunteer}
+          allLogs={allLogs}
+          allTimeRank={selectedAllTimeRank}
+          avatarUrl={avatarByUserId[selectedVolunteer.userId]}
+          vehicle={vehicleByUserId[selectedVolunteer.userId]}
+          petrolPrice={petrol.price}
+          isSelf={selectedVolunteer.userId === user?.id}
+          hourlyWeather={hourlyWeather}
+          weatherNow={weatherNow}
+          onClose={() => setSelectedVolunteer(null)}
+        />
+      )}
     </div>
   );
 }

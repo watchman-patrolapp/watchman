@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { supabase } from '../supabase/client';
 import { devLog, devWarn } from '../utils/devLog';
 import { distanceMeters, getGpsUploadThrottle } from '../utils/dataSaverProfile';
+import { getWorkingOrganizationId } from '../utils/organizationScope';
 
 async function ensureNativeLocationPermission() {
   if (!Capacitor.isNativePlatform()) return true;
@@ -112,6 +113,7 @@ const globalGPS = {
         accuracy: position.coords.accuracy,
         altitude: position.coords.altitude,
         speed: position.coords.speed,
+        organization_id: getWorkingOrganizationId(),
       });
 
     if (error) {

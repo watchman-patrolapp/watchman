@@ -50,8 +50,12 @@ export function parseChatForegroundPayload(payload, currentUserId) {
     sender_id: senderId,
     sender_name,
     text: text || rawBody || 'New message',
-    is_critical: detectCriticalMessage(text || rawBody),
+    is_critical:
+      data.isCritical === 'true' ||
+      data.is_critical === 'true' ||
+      detectCriticalMessage(text || rawBody),
     type: MessageType.TEXT,
+    ...(data.visibility ? { visibility: String(data.visibility) } : {}),
   };
 
   return {

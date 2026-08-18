@@ -1,4 +1,7 @@
-import { distanceMeters } from './dataSaverProfile';
+import { distanceMeters } from './dataSaverProfile.js';
+
+/** Ignore GPS crumbs shorter than a driveway shuffle. */
+export const MIN_ROUTE_KM = 0.05;
 
 /**
  * Stable key for a patrol log row (no DB id required).
@@ -34,10 +37,12 @@ export function distanceKmFromLatLngPoints(points) {
 
 /**
  * Match a patrol_routes row to a patrol_log by created_at ≈ end_time.
+ * Tight window first (map cards), then a looser overlap so late-saved routes still count.
  */
 export function matchRouteRowToLog(log, routeRows) {
   if (!routeRows?.length) return null;
   const end = new Date(log.end_time).getTime();
+  if (!Number.isFinite(end)) return null;
   let best = null;
   let bestDelta = Infinity;
   for (const row of routeRows) {
@@ -50,22 +55,232 @@ export function matchRouteRowToLog(log, routeRows) {
       best = row;
     }
   }
+  if (best) return best;
+
+  const start = new Date(log.start_time).getTime();
+  const looseEnd = end + 45 * 60 * 1000;
+  const looseStart = Number.isFinite(start) ? start - 15 * 60 * 1000 : end - 4 * 60 * 60 * 1000;
+  bestDelta = Infinity;
+  for (const row of routeRows) {
+    if (log.user_id && row.user_id && row.user_id !== log.user_id) continue;
+    if (!row.created_at) continue;
+    const c = new Date(row.created_at).getTime();
+    if (!Number.isFinite(c) || c < looseStart || c > looseEnd) continue;
+    const d = Math.abs(c - end);
+    if (d < bestDelta) {
+      bestDelta = d;
+      best = row;
+    }
+  }
   return best;
 }
 
 /**
- * GeoJSON LineString or Feature → [[lat,lng], ...]
+ * GeoJSON LineString, MultiLineString, Feature, or FeatureCollection → [[lat,lng], ...]
  */
 export function latLngsFromRouteGeoJson(geo) {
   if (!geo) return [];
   try {
-    const g = typeof geo === 'string' ? JSON.parse(geo) : geo;
-    const geom = g.type === 'Feature' ? g.geometry : g;
-    if (!geom || geom.type !== 'LineString' || !Array.isArray(geom.coordinates)) return [];
-    return geom.coordinates.map(([lng, lat]) => [lat, lng]);
+    const g = typeof geo === "string" ? JSON.parse(geo) : geo;
+    if (!g) return [];
+    if (g.type === "FeatureCollection" && Array.isArray(g.features)) {
+      return g.features.flatMap((feature) => latLngsFromRouteGeoJson(feature));
+    }
+    const geom = g.type === "Feature" ? g.geometry : g;
+    if (!geom || !Array.isArray(geom.coordinates)) return [];
+    if (geom.type === "LineString") return lineCoordsToLatLngs(geom.coordinates);
+    if (geom.type === "MultiLineString") {
+      return geom.coordinates.flatMap((line) => lineCoordsToLatLngs(line));
+    }
+    return [];
   } catch {
     return [];
   }
+}
+
+function lineCoordsToLatLngs(coords) {
+  if (!Array.isArray(coords) || coords.length < 2) return [];
+  return coords
+    .filter((pair) => Array.isArray(pair) && pair.length >= 2)
+    .map(([lng, lat]) => [lat, lng]);
+}
+
+function pointTimeMs(row) {
+  const t = new Date(row?.timestamp).getTime();
+  if (Number.isFinite(t)) return t;
+  const c = new Date(row?.created_at).getTime();
+  return Number.isFinite(c) ? c : NaN;
+}
+
+function asLatLng(row) {
+  const lat = Number(row?.latitude);
+  const lng = Number(row?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
+}
+
+function locationKmForLog(log, locationPoints) {
+  const start = new Date(log?.start_time).getTime();
+  const end = new Date(log?.end_time).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  const from = start - 15 * 60 * 1000;
+  const to = end + 2 * 60 * 60 * 1000;
+  const pts = [];
+  for (const row of Array.isArray(locationPoints) ? locationPoints : []) {
+    const t = pointTimeMs(row);
+    if (!Number.isFinite(t) || t < from || t > to) continue;
+    const ll = asLatLng(row);
+    if (ll) pts.push(ll);
+  }
+  if (pts.length < 2) return 0;
+  return distanceKmFromLatLngPoints(pts);
+}
+
+function routeRowKey(row) {
+  if (!row) return "";
+  if (row.id != null) return `id:${row.id}`;
+  return `${row.created_at || ""}|${Number(row.total_distance_km) || 0}`;
+}
+
+/**
+ * GPS km for one completed patrol: the longer of stored/GeoJSON route vs live points.
+ */
+export function logDistanceKm(log, routeRows = [], locationPoints = []) {
+  const matched = matchRouteRowToLog(log, routeRows);
+  const fromRoute = routeRowDistanceKm(matched);
+  const fromPts = locationKmForLog(log, locationPoints);
+  return Math.max(fromRoute, fromPts);
+}
+
+/**
+ * Same kilometre figure Patrol routes uses: stored total, else GeoJSON track.
+ */
+export function routeRowDistanceKm(row) {
+  if (!row) return 0;
+  const stored = Number(row.total_distance_km);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+  const latlngs = latLngsFromRouteGeoJson(row.route_geojson);
+  if (latlngs.length < 2) return 0;
+  return distanceKmFromLatLngPoints(latlngs.map(([lat, lng]) => ({ lat, lng })));
+}
+
+/**
+ * GPS kilometres for logs in a leaderboard window (week / month / all time).
+ * Per patrol uses the longer of route vs live points; unmatched GPS routes in the
+ * window are still counted so late-saved tracks are not dropped.
+ */
+export function summarizeGpsMileage(logs, routeRows, since = null, locationPoints = []) {
+  const inPeriodLogs = (Array.isArray(logs) ? logs : []).filter((log) => {
+    if (!since) return true;
+    const t = new Date(log.start_time);
+    return !Number.isNaN(t.getTime()) && t >= since;
+  });
+
+  const counted = new Set();
+  let km = 0;
+  let tracks = 0;
+
+  for (const log of inPeriodLogs) {
+    const matched = matchRouteRowToLog(log, routeRows);
+    if (matched) counted.add(routeRowKey(matched));
+    const d = Math.max(routeRowDistanceKm(matched), locationKmForLog(log, locationPoints));
+    if (d >= MIN_ROUTE_KM) {
+      km += d;
+      tracks += 1;
+    }
+  }
+
+  for (const row of Array.isArray(routeRows) ? routeRows : []) {
+    const key = routeRowKey(row);
+    if (!key || counted.has(key)) continue;
+    if (since) {
+      if (!row?.created_at) continue;
+      if (new Date(row.created_at) < since) continue;
+    }
+    const d = routeRowDistanceKm(row);
+    if (d >= MIN_ROUTE_KM) {
+      counted.add(key);
+      km += d;
+      tracks += 1;
+    }
+  }
+
+  return {
+    km,
+    tracks,
+    patrols: inPeriodLogs.length,
+    minutes: inPeriodLogs.reduce((sum, log) => sum + (Number(log.duration_minutes) || 0), 0),
+  };
+}
+
+async function fetchLocationPages(client, table, userId, fromIso, toIso, limit) {
+  const pageSize = 1000;
+  const out = [];
+  let offset = 0;
+  while (offset < limit) {
+    const { data, error } = await client
+      .from(table)
+      .select("latitude, longitude, timestamp, created_at")
+      .eq("user_id", userId)
+      .gte("timestamp", fromIso)
+      .lte("timestamp", toIso)
+      .order("timestamp", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error || !data?.length) break;
+    out.push(...data);
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+  return out;
+}
+
+/**
+ * Live GPS crumbs for fuel + maps. Includes soft-deleted rows (cleanup marks
+ * them after a week) and the archive table so all-time mileage is not only
+ * the last few days.
+ */
+export async function fetchPatrolLocationPoints(client, { userId, logs, limit = 80000 } = {}) {
+  if (!client || !userId || !Array.isArray(logs) || logs.length === 0) return [];
+  const times = [];
+  for (const log of logs) {
+    const start = new Date(log.start_time).getTime();
+    const end = new Date(log.end_time).getTime();
+    if (Number.isFinite(start)) times.push(start - 15 * 60 * 1000);
+    if (Number.isFinite(end)) times.push(end + 2 * 60 * 60 * 1000);
+  }
+  if (!times.length) return [];
+  const fromIso = new Date(Math.min(...times)).toISOString();
+  const toIso = new Date(Math.max(...times)).toISOString();
+
+  const [live, archived] = await Promise.all([
+    fetchLocationPages(client, "patrol_locations", userId, fromIso, toIso, limit),
+    fetchLocationPages(client, "patrol_locations_archive", userId, fromIso, toIso, limit).catch(() => []),
+  ]);
+  return [...live, ...archived];
+}
+
+/**
+ * Every saved patrol_routes row for a volunteer (not a 200-row slice).
+ */
+export async function fetchPatrolRouteRows(client, userId, limit = 2000) {
+  if (!client || !userId) return [];
+  const pageSize = 200;
+  const out = [];
+  let offset = 0;
+  while (offset < limit) {
+    const { data, error } = await client
+      .from("patrol_routes")
+      .select("id, user_id, total_distance_km, total_duration_seconds, route_geojson, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error || !data?.length) break;
+    out.push(...data);
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+  return out;
 }
 
 /**

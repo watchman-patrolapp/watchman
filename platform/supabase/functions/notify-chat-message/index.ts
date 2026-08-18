@@ -82,6 +82,27 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceRole)
 
+  const OPS_ROLES = new Set([
+    'admin',
+    'technical_support',
+    'nw_admin',
+    'committee',
+    'patroller',
+    'volunteer',
+    'investigator',
+    'security_admin',
+    'city_admin',
+  ])
+  const isOpsRole = (role: unknown) =>
+    OPS_ROLES.has(String(role || '').trim().toLowerCase().replace(/-/g, '_'))
+
+  const visibility = String(record.visibility ?? 'patrol')
+  const isCritical =
+    record.is_critical === true ||
+    record.is_critical === 'true' ||
+    /^sos\b/i.test(text)
+  const organizationId = String(record.organization_id ?? '').trim()
+
   // If sender_name is missing in the row payload, resolve from profiles.
   if (!senderName) {
     try {
@@ -97,10 +118,29 @@ Deno.serve(async (req) => {
     }
   }
 
-  let tokenQuery = supabase.from('user_push_tokens').select('token').neq('user_id', senderId)
+  let tokenQuery = supabase.from('user_push_tokens').select('token, user_id').neq('user_id', senderId)
 
-  // Optional room-targeting: if room_id exists and room_members table is available, only notify members in that room.
-  if (roomId) {
+  if (isCritical && organizationId) {
+    const orgIds = new Set<string>()
+    const { data: orgUsers } = await supabase.from('users').select('id').eq('organization_id', organizationId)
+    for (const u of orgUsers ?? []) orgIds.add(String(u.id))
+    const { data: members } = await supabase
+      .from('organization_members')
+      .select('user_id')
+      .eq('organization_id', organizationId)
+      .eq('status', 'active')
+    for (const m of members ?? []) orgIds.add(String(m.user_id))
+    orgIds.delete(senderId)
+    const memberIds = [...orgIds]
+    if (memberIds.length === 0) {
+      return new Response(JSON.stringify({ ok: true, sent: 0, reason: 'no_org_members' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    tokenQuery = tokenQuery.in('user_id', memberIds)
+  } else if (roomId) {
+    // Optional room-targeting: if room_id exists and room_members table is available, only notify members in that room.
     try {
       const { data: members, error: memberErr } = await supabase
         .from('room_members')
@@ -132,7 +172,43 @@ Deno.serve(async (req) => {
     })
   }
 
-  const tokens = (rows ?? []).map((r) => r.token as string).filter(Boolean)
+  let recipientRows = rows ?? []
+  try {
+    if (!isCritical && organizationId) {
+      const orgIds = new Set<string>()
+      const { data: orgUsers } = await supabase.from('users').select('id').eq('organization_id', organizationId)
+      for (const u of orgUsers ?? []) orgIds.add(String(u.id))
+      const { data: members } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('organization_id', organizationId)
+        .eq('status', 'active')
+      for (const m of members ?? []) orgIds.add(String(m.user_id))
+      if (orgIds.size > 0) {
+        recipientRows = recipientRows.filter((r) => orgIds.has(String(r.user_id)))
+      }
+    }
+
+    const userIds = [...new Set(recipientRows.map((r) => String(r.user_id || '')).filter(Boolean))]
+    if (userIds.length > 0 && !isCritical) {
+      const { data: userRows, error: userErr } = await supabase
+        .from('users')
+        .select('id, role')
+        .in('id', userIds)
+      if (!userErr) {
+        const roleById = new Map((userRows ?? []).map((u) => [String(u.id), u.role]))
+        const wantOps = visibility !== 'resident'
+        recipientRows = recipientRows.filter((r) => {
+          const ops = isOpsRole(roleById.get(String(r.user_id)))
+          return wantOps ? ops : !ops
+        })
+      }
+    }
+  } catch (e) {
+    console.warn('notify-chat-message: role filter skipped', e)
+  }
+
+  const tokens = recipientRows.map((r) => r.token as string).filter(Boolean)
   if (tokens.length === 0) {
     return new Response(JSON.stringify({ ok: true, sent: 0 }), {
       status: 200,
@@ -180,15 +256,39 @@ Deno.serve(async (req) => {
     })
   }
 
-  const title = `Watchman — ${senderName}`
-  const bodyText = `${senderName}: ${text}`.slice(0, 400)
   const publicUrl = (Deno.env.get('PUBLIC_APP_URL') ?? '').trim()
+  const opsTitle = isCritical
+    ? `SOS — ${senderName}`
+    : visibility === 'resident'
+      ? `Neighbour chat — ${senderName}`
+      : `Watchman — ${senderName}`
+  const opsBody = `${senderName}: ${text}`.slice(0, 400)
+  const streetTitle = 'SOS on your street'
+  const streetBody = 'A household in your neighbourhood needs help. Patrol has been notified.'
+
+  let roleById = new Map<string, unknown>()
+  try {
+    const ids = [...new Set(recipientRows.map((r) => String(r.user_id || '')).filter(Boolean))]
+    if (ids.length) {
+      const { data: userRows } = await supabase.from('users').select('id, role').in('id', ids)
+      roleById = new Map((userRows ?? []).map((u) => [String(u.id), u.role]))
+    }
+  } catch {
+    /* titles fall back to ops copy */
+  }
 
   let sent = 0
   const dead: string[] = []
 
-  for (const token of tokens) {
-    const webLink = publicUrl.length > 0 ? `${publicUrl.replace(/\/$/, '')}/chat` : '/chat'
+  for (const row of recipientRows) {
+    const token = String(row.token || '')
+    if (!token) continue
+    const ops = isOpsRole(roleById.get(String(row.user_id)))
+    const streetAlert = isCritical && !ops
+    const title = streetAlert ? streetTitle : opsTitle
+    const bodyText = streetAlert ? streetBody : opsBody
+    const path = streetAlert ? '/sos' : '/chat'
+    const webLink = publicUrl.length > 0 ? `${publicUrl.replace(/\/$/, '')}${path}` : path
     const webpush = {
       notification: {
         title,
@@ -210,9 +310,11 @@ Deno.serve(async (req) => {
           token,
           notification: { title, body: bodyText },
           data: {
-            url: '/chat',
-            tag: 'emergency_chat',
+            url: path,
+            tag: streetAlert ? 'sos_street' : 'emergency_chat',
             senderId,
+            visibility,
+            isCritical: isCritical ? 'true' : 'false',
             ...(String(record.id ?? '').trim()
               ? { messageId: String(record.id) }
               : {}),

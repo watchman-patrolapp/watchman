@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { FaTimes, FaUserSecret, FaExternalLinkAlt, FaUpload } from 'react-icons/fa';
 import { supabase } from '../../supabase/client';
 import { useAuth } from '../../auth/useAuth';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import toast from 'react-hot-toast';
 
 const RISK_OPTIONS = [
@@ -28,6 +29,7 @@ export default function QuickCreateProfileDrawer({
   returnToPath = '/incident/new',
 }) {
   const { user } = useAuth();
+  const { activeOrganizationId } = useActiveOrganization();
   const navigate = useNavigate();
   const [primaryName, setPrimaryName] = useState('');
   const [riskLevel, setRiskLevel] = useState('medium');
@@ -221,6 +223,7 @@ export default function QuickCreateProfileDrawer({
           photo_urls,
           created_by: authUid,
           first_identified_at: new Date().toISOString(),
+          organization_id: activeOrganizationId || user?.organizationId || null,
         })
         .select('id, primary_name, risk_level')
         .single();

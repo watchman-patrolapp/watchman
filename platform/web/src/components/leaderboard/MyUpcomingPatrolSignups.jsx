@@ -8,6 +8,7 @@ import {
   formatPatrolSlotTimeRange,
   isSlotEnded,
 } from "../../utils/patrolSlotWindows";
+import { useScopedOrganization } from "../../utils/organizationScope";
 
 function todayLocalStr() {
   const d = new Date();
@@ -22,6 +23,7 @@ function todayLocalStr() {
  */
 export default function MyUpcomingPatrolSignups({ userId }) {
   const navigate = useNavigate();
+  const { scope } = useScopedOrganization();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -38,9 +40,9 @@ export default function MyUpcomingPatrolSignups({ userId }) {
     setLoading(true);
     setErr(null);
     try {
-      const { data, error } = await supabase
-        .from("patrol_slots")
-        .select("id, date, start_time, end_time, zone")
+      const { data, error } = await scope(
+        supabase.from("patrol_slots").select("id, date, start_time, end_time, zone")
+      )
         .eq("volunteer_uid", userId)
         .gte("date", minDate)
         .order("date", { ascending: true })
@@ -53,7 +55,7 @@ export default function MyUpcomingPatrolSignups({ userId }) {
     } finally {
       setLoading(false);
     }
-  }, [userId, minDate]);
+  }, [userId, minDate, scope]);
 
   useEffect(() => {
     void load();

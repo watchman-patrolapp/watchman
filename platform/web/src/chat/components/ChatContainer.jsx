@@ -28,9 +28,19 @@ import { requestNotificationPermission } from '../services/fcmRegistration';
 import BrandedLoader from '../../components/layout/BrandedLoader';
 import { ChatIncomingOverlay } from './ChatIncomingOverlay';
 import { getIncomingPreviewText, reduceIncomingOverlayEnqueue } from '../utils/inAppUrgency';
+import { getWorkingOrganizationId } from '../../utils/organizationScope';
 import { parseChatForegroundPayload } from '../utils/fcmForegroundChat';
 import { closeServiceWorkerNotifications } from '../utils/clearForegroundNotifications';
 import { shouldShowInAppMessageOverlay } from '../../utils/inAppOverlayEligibility';
+import { useUnreadCount } from '../hooks/useUnreadCount';
+import {
+  CHAT_CHANNEL_PATROL,
+  CHAT_CHANNEL_RESIDENT,
+  canAccessPatrolOpsChat,
+  defaultChatChannel,
+  messageMatchesChannel,
+  shouldAlertForChatMessage,
+} from '../utils/chatChannels';
 
 const rateLimiter = new RateLimiter(30, 60000);
 const INCIDENT_TYPE_OPTIONS = [
@@ -107,6 +117,7 @@ function IncidentPinPicker({ pin, onPick }) {
         style={{ height: 180, width: '100%', borderRadius: 10 }}
         scrollWheelZoom
         zoomControl={false}
+        keyboard={false}
       >
         <TileLayer
           attribution='&copy; OpenStreetMap contributors'
@@ -178,6 +189,8 @@ export default function ChatContainer() {
   const { user } = useAuth();
   const { isOnline } = useNetworkStatus();
   const { addToQueue, queueLength } = useMessageQueue(isOnline);
+  const isOpsChat = canAccessPatrolOpsChat(user?.role);
+  const [chatChannel, setChatChannel] = useState(CHAT_CHANNEL_PATROL);
   
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -209,6 +222,20 @@ export default function ChatContainer() {
   const browserNotificationsRef = useRef([]);
 
   const { containerRef, endRef, scrollToBottom } = useScrollToBottom([messages.length]);
+  const chatChannelRef = useRef(chatChannel);
+  chatChannelRef.current = chatChannel;
+  const isOpsChatRef = useRef(isOpsChat);
+  isOpsChatRef.current = isOpsChat;
+
+  const { count: neighbourUnread } = useUnreadCount(
+    isOpsChat ? user?.id : null,
+    CHAT_CHANNEL_RESIDENT,
+    { pauseIncrements: chatChannel === CHAT_CHANNEL_RESIDENT }
+  );
+
+  useEffect(() => {
+    setChatChannel(defaultChatChannel(user?.role));
+  }, [user?.id, user?.role]);
 
   // Cleanup mounted ref on unmount
   useEffect(() => {
@@ -221,10 +248,6 @@ export default function ChatContainer() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-
-  useEffect(() => {
-    void markChatVisited(null);
-  }, []);
 
   useEffect(() => {
     if (!user?.id || !notificationsEnabled) return;
@@ -246,7 +269,7 @@ export default function ChatContainer() {
         last?.id && typeof last.id === 'string' && !String(last.id).startsWith('msg-')
           ? last.id
           : null;
-      void markChatVisited(serverId);
+      void markChatVisited(serverId, chatChannelRef.current);
     };
   }, []);
 
@@ -327,21 +350,29 @@ export default function ChatContainer() {
     }
   }, []);
 
-  // Load messages
+  // Load messages for the active room
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
+      if (isMountedRef.current) {
+        setMessages([]);
+      }
       try {
-        const data = await messageService.fetchMessages();
-        if (isMountedRef.current) setMessages(data);
+        const data = await messageService.fetchMessages(APP_CONFIG.MAX_MESSAGES, chatChannel);
+        if (!cancelled && isMountedRef.current) setMessages(data);
+        if (!cancelled) void markChatVisited(null, chatChannel);
       } catch (err) {
         console.error('Failed to load messages:', err);
-        toast.error('Failed to load messages');
+        if (!cancelled) toast.error('Failed to load messages');
       } finally {
-        if (isMountedRef.current) setIsLoading(false);
+        if (!cancelled && isMountedRef.current) setIsLoading(false);
       }
     };
     load();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [chatChannel]);
 
   useEffect(() => {
     const serverIds = messages.map((m) => m.id).filter(Boolean);
@@ -395,13 +426,18 @@ export default function ChatContainer() {
     if (!user) return;
     
     const unsubscribe = messageService.subscribe((newMessage) => {
-      // Play sound for incoming messages (if not from self)
-      if (soundEnabled && newMessage.sender_id !== user.id) {
+      const activeChannel = chatChannelRef.current;
+      const isOps = isOpsChatRef.current;
+      const matchesRoom = messageMatchesChannel(newMessage, activeChannel);
+      const shouldAlert =
+        newMessage.sender_id !== user.id &&
+        shouldAlertForChatMessage(newMessage, { activeChannel, isOps });
+
+      if (soundEnabled && shouldAlert) {
         playChatNotification();
       }
-      
-      // Foreground: in-app overlay (avoid duplicate OS banner). Background tab: system notification.
-      if (newMessage.sender_id !== user.id) {
+
+      if (shouldAlert) {
         if (shouldShowInAppMessageOverlay()) {
           if (isMountedRef.current) {
             const key =
@@ -418,8 +454,14 @@ export default function ChatContainer() {
           }
         } else if (notificationsEnabled && 'Notification' in window) {
           const preview = getIncomingPreviewText(newMessage);
+          const title =
+            newMessage.is_critical
+              ? 'SOS'
+              : newMessage.visibility === CHAT_CHANNEL_RESIDENT
+                ? 'Neighbour chat'
+                : 'Patrol ops';
           try {
-            const n = new Notification('New Emergency Message', {
+            const n = new Notification(title, {
               body: `${newMessage.sender_name}: ${preview.slice(0, 100)}`,
               icon: '/favicon.ico',
             });
@@ -429,6 +471,8 @@ export default function ChatContainer() {
           }
         }
       }
+
+      if (!matchesRoom) return;
       
       if (isMountedRef.current) {
         setMessages(prev => {
@@ -473,6 +517,14 @@ export default function ChatContainer() {
         if (!shouldShowInAppMessageOverlay()) return;
         const parsed = parseChatForegroundPayload(payload, user.id);
         if (!parsed) return;
+        if (
+          !shouldAlertForChatMessage(parsed.message, {
+            activeChannel: chatChannelRef.current,
+            isOps: isOpsChatRef.current,
+          })
+        ) {
+          return;
+        }
         setIncomingOverlay((prev) => {
           const next = reduceIncomingOverlayEnqueue(prev, parsed);
           if (next !== prev && soundEnabled) {
@@ -591,6 +643,7 @@ export default function ChatContainer() {
       localTimestamp: new Date().toISOString(),
       reply_to_message_id: replyToMessage?.id || null,
       reply_preview_text: replyPreviewText,
+      visibility: chatChannelRef.current,
       ...(hasLocation && {
         location_lat: messageContent.location_lat,
         location_lng: messageContent.location_lng,
@@ -627,6 +680,7 @@ export default function ChatContainer() {
             senderName: user.fullName || user.email,
             senderAvatar: user.avatarUrl,
             isCritical: templateData.isCritical,
+            visibility: chatChannelRef.current,
             replyToMessageId: replyToMessage?.id || null,
             replyPreviewText,
           });
@@ -637,6 +691,7 @@ export default function ChatContainer() {
             senderName: user.fullName || user.email,
             senderAvatar: user.avatarUrl,
             isCritical: templateData.isCritical,
+            visibility: chatChannelRef.current,
             replyToMessageId: replyToMessage?.id || null,
             replyPreviewText,
           });
@@ -696,6 +751,7 @@ export default function ChatContainer() {
       localTimestamp: new Date().toISOString(),
       reply_to_message_id: replyToMessageId,
       reply_preview_text: replyPreviewText,
+      visibility: chatChannelRef.current,
     };
 
     if (isMountedRef.current) {
@@ -715,6 +771,7 @@ export default function ChatContainer() {
         senderName: user.fullName || user.email,
         senderAvatar: user.avatarUrl,
         isCritical,
+        visibility: chatChannelRef.current,
         replyToMessageId,
         replyPreviewText,
       });
@@ -748,10 +805,22 @@ export default function ChatContainer() {
   }, []);
 
   const handleIncomingOverlayOpen = useCallback(() => {
-    removeCurrentIncomingItem();
-    // User explicitly chose "Open" — scroll even if they had scrolled up (shouldScrollRef would block otherwise).
+    setIncomingOverlay((prev) => {
+      const item = prev.queue.length
+        ? prev.queue[Math.min(prev.index, prev.queue.length - 1)]
+        : null;
+      const vis = item?.message?.visibility;
+      if (isOpsChatRef.current && vis && vis !== chatChannelRef.current) {
+        queueMicrotask(() => setChatChannel(vis));
+      }
+      if (prev.queue.length === 0) return prev;
+      const { queue, index } = prev;
+      const next = queue.filter((_, i) => i !== index);
+      const nextIndex = next.length === 0 ? 0 : Math.min(index, next.length - 1);
+      return { queue: next, index: nextIndex };
+    });
     scrollToBottom('smooth', true);
-  }, [removeCurrentIncomingItem, scrollToBottom]);
+  }, [scrollToBottom]);
 
   const handleIncomingOverlayQuickReply = useCallback(
     async (text) => {
@@ -801,6 +870,7 @@ export default function ChatContainer() {
       reply_to_message_id: replyToMessage?.id || null,
       reply_preview_text:
         replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
+      visibility: chatChannelRef.current,
     };
 
     if (isMountedRef.current) {
@@ -815,6 +885,7 @@ export default function ChatContainer() {
         senderId: user.id,
         senderName: user.fullName || user.email,
         senderAvatar: user.avatarUrl,
+        visibility: chatChannelRef.current,
         replyToMessageId: replyToMessage?.id || null,
         replyPreviewText:
           replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
@@ -861,6 +932,7 @@ export default function ChatContainer() {
       reply_to_message_id: replyToMessage?.id || null,
       reply_preview_text:
         replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
+      visibility: chatChannelRef.current,
     };
 
     if (isMountedRef.current) {
@@ -880,6 +952,7 @@ export default function ChatContainer() {
         senderId: user.id,
         senderName: user.fullName || user.email,
         senderAvatar: user.avatarUrl,
+        visibility: chatChannelRef.current,
         replyToMessageId: replyToMessage?.id || null,
         replyPreviewText:
           replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
@@ -994,6 +1067,7 @@ export default function ChatContainer() {
         reply_to_message_id: replyToMessage?.id || null,
         reply_preview_text:
           replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
+        visibility: chatChannelRef.current,
       };
 
       setMessages(prev => [...prev, optimisticMessage]);
@@ -1013,6 +1087,7 @@ export default function ChatContainer() {
           senderId: user.id,
           senderName: user.fullName || user.email,
           senderAvatar: user.avatarUrl,
+          visibility: chatChannelRef.current,
           replyToMessageId: replyToMessage?.id || null,
           replyPreviewText:
             replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
@@ -1127,6 +1202,7 @@ export default function ChatContainer() {
         submitted_at: new Date().toISOString(),
         submitted_by: user.id,
         submitted_by_name: user.fullName || user.email,
+        organization_id: getWorkingOrganizationId() || user.organizationId || null,
       };
       const { error } = await supabase.from('incidents').insert(payload);
       if (error) throw error;
@@ -1143,6 +1219,19 @@ export default function ChatContainer() {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
     }));
+  }, []);
+
+  const handleChannelChange = useCallback((next) => {
+    if (!next || next === chatChannelRef.current) return;
+    const list = messagesRef.current;
+    const last = list?.[list.length - 1];
+    const serverId =
+      last?.id && typeof last.id === 'string' && !String(last.id).startsWith('msg-')
+        ? last.id
+        : null;
+    void markChatVisited(serverId, chatChannelRef.current);
+    setReplyToMessage(null);
+    setChatChannel(next);
   }, []);
 
   const toggleSound = useCallback(() => setSoundEnabled(prev => !prev), []);
@@ -1226,6 +1315,10 @@ export default function ChatContainer() {
           isOnline={isOnline}
           messageCount={messages.length}
           isEmergencyMode={isEmergencyMode}
+          channel={chatChannel}
+          canSwitchChannels={isOpsChat}
+          neighbourUnread={neighbourUnread}
+          onChannelChange={handleChannelChange}
         />
 
         <OfflineBanner
@@ -1234,8 +1327,22 @@ export default function ChatContainer() {
         />
 
         <div className={`flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl shadow-lg border overflow-hidden flex flex-col min-h-0 transition-all ${
-          isEmergencyMode ? 'border-red-500 shadow-red-500/20' : 'border-gray-200 dark:border-gray-700'
+          isEmergencyMode
+            ? 'border-red-500 shadow-red-500/20'
+            : chatChannel === CHAT_CHANNEL_RESIDENT
+              ? 'border-teal-300 shadow-teal-500/10 dark:border-teal-700/70'
+              : 'border-amber-300 shadow-amber-500/10 dark:border-amber-700/70'
         }`}>
+          <div
+            className={`h-1 w-full shrink-0 ${
+              isEmergencyMode
+                ? 'bg-red-500'
+                : chatChannel === CHAT_CHANNEL_RESIDENT
+                  ? 'bg-gradient-to-r from-teal-500 to-teal-600'
+                  : 'bg-gradient-to-r from-amber-400 to-amber-600'
+            }`}
+            aria-hidden
+          />
           <MessageList
             messages={messages}
             currentUserId={user?.id}
@@ -1266,6 +1373,13 @@ export default function ChatContainer() {
             onComposerTyping={onComposerTyping}
             replyToMessage={replyToMessage}
             onClearReply={() => setReplyToMessage(null)}
+            composerPlaceholder={
+              !isOnline
+                ? 'Offline…'
+                : chatChannel === CHAT_CHANNEL_RESIDENT
+                  ? 'Message neighbours…'
+                  : 'Message the watch…'
+            }
           />
         </div>
       </div>

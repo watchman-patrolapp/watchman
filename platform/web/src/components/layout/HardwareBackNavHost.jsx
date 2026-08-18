@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { useAuth } from '../../auth/useAuth';
+import { homePathForRole } from '../../auth/roleMatrix';
 
 const AUTH_PATHS = new Set([
   '/login',
@@ -20,16 +21,21 @@ function isBackNavigationExcluded(p) {
   return p.includes('/print');
 }
 
+function isRoleHome(pathname, homePath) {
+  return pathname === homePath || pathname === '/';
+}
+
 /**
- * Android / native: hardware back jumps to the dashboard (or exits when already home).
+ * Android / native: hardware back jumps to the role home (or exits when already home).
  * Browser / PWA: after the history entry changes (back), non-auth routes are replaced with
- * `/dashboard` so users skip long in-app stacks. Auth screens keep normal back behavior.
+ * the role home so users skip long in-app stacks. Auth screens keep normal back behavior.
  */
 export default function HardwareBackNavHost() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, sessionReady } = useAuth();
   const pathRef = useRef(location.pathname);
+  const homePath = homePathForRole(user?.role, user?.platformRole);
 
   useEffect(() => {
     pathRef.current = location.pathname;
@@ -46,11 +52,11 @@ export default function HardwareBackNavHost() {
           window.history.back();
           return;
         }
-        if (p === '/dashboard' || p === '/') {
+        if (isRoleHome(p, homePath)) {
           void App.exitApp();
           return;
         }
-        navigate('/dashboard', { replace: true });
+        navigate(homePath, { replace: true });
       }).then((handle) => {
         sub = handle;
       });
@@ -62,13 +68,13 @@ export default function HardwareBackNavHost() {
     const onPopState = () => {
       queueMicrotask(() => {
         const p = window.location.pathname;
-        if (isAuthPath(p) || isBackNavigationExcluded(p) || p === '/dashboard' || p === '/') return;
-        navigate('/dashboard', { replace: true });
+        if (isAuthPath(p) || isBackNavigationExcluded(p) || isRoleHome(p, homePath)) return;
+        navigate(homePath, { replace: true });
       });
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [navigate, sessionReady, user?.id]);
+  }, [homePath, navigate, sessionReady, user?.id]);
 
   return null;
 }

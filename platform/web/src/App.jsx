@@ -3,11 +3,31 @@ import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import { useAuth } from "./auth/useAuth";
 import RequireRole from "./components/RequireRole";
+import RequirePlatformRole from "./components/RequirePlatformRole";
+import RequireActiveOrganization from "./components/RequireActiveOrganization";
 import { ADMIN_PANEL_ROLES } from "./auth/staffRoles";
+import {
+  PATROL_INCIDENT_ROLES,
+  RESIDENT_HOME_ROLES,
+  RESIDENT_DIRECTORY_ROLES,
+  CITY_HUB_VIEW_ROLES,
+  FEEDBACK_REVIEW_ROLES,
+  INCIDENT_STAFF_ROLES,
+  INTELLIGENCE_MEMBER_ROLES,
+  INTELLIGENCE_MODERATOR_ROLES,
+  PATROL_MEMBER_ROLES,
+  SOS_BOARD_ROLES,
+  SECURITY_DASHBOARD_ROLES,
+  CITY_ADMIN_DASHBOARD_ROLES,
+  EMERGENCY_DIRECTORY_MANAGER_ROLES,
+  AREA_BROADCAST_ROLES,
+  GLOBAL_APP_ROLES,
+} from "./auth/roleMatrix";
 import ChatErrorBoundary from './components/ChatErrorBoundary'; // ✅ NEW IMPORT
 import PageSkeleton from "./components/layout/PageSkeleton";
 import MobilePatrolDockHost from "./components/layout/MobilePatrolDockHost";
 import HardwareBackNavHost from "./components/layout/HardwareBackNavHost";
+import ScrollToTop from "./components/layout/ScrollToTop";
 import PermissionsPrimerModal from "./components/PermissionsPrimerModal";
 
 /** One-time permission intro (location + notifications) after sign-in; not tied to a single page. */
@@ -24,6 +44,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const PatrolSchedule = lazy(() => import("./pages/PatrolSchedule"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
+const AdminResidents = lazy(() => import("./pages/AdminResidents"));
 const AdminMemberProfiles = lazy(() => import("./pages/AdminMemberProfiles"));
 const PrintPatrolLogs = lazy(() => import("./pages/PrintPatrolLogs"));
 const IncidentForm = lazy(() => import("./pages/IncidentForm"));
@@ -40,6 +61,7 @@ const IntelligenceHome = lazy(() => import("./pages/intelligence/IntelligenceHom
 const ProfileSearch = lazy(() => import("./pages/intelligence/ProfileSearch"));
 const MatchQueue = lazy(() => import("./pages/intelligence/MatchQueue"));
 const CreateProfile = lazy(() => import("./pages/intelligence/CreateProfile"));
+const Hotspots = lazy(() => import("./pages/Hotspots"));
 
 // ✅ CHAT: New chat moved to pages folder
 const EmergencyChat = lazy(() => import("./pages/EmergencyChat"));
@@ -54,6 +76,28 @@ const ConfirmEmail = lazy(() => import("./pages/ConfirmEmail"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const UpdatePassword = lazy(() => import("./pages/UpdatePassword"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
+const ResidentDashboard = lazy(() => import("./pages/ResidentDashboard"));
+const ResidentSos = lazy(() => import("./pages/ResidentSos"));
+const ResidentActivityReport = lazy(() => import("./pages/ResidentActivityReport"));
+const ResidentActivityList = lazy(() => import("./pages/ResidentActivityList"));
+const ResidentNeighbours = lazy(() => import("./pages/ResidentNeighbours"));
+const ResidentSector = lazy(() => import("./pages/ResidentSector"));
+const OrganizationOnboarding = lazy(() => import("./pages/OrganizationOnboarding"));
+const CityHub = lazy(() => import("./pages/CityHub"));
+const BillingDashboard = lazy(() => import("./pages/BillingDashboard"));
+const SecurityMembershipReview = lazy(() => import("./pages/SecurityMembershipReview"));
+const SecurityCompanyInsights = lazy(() => import("./pages/SecurityCompanyInsights"));
+const SecurityCompanyDashboard = lazy(() => import("./pages/SecurityCompanyDashboard"));
+const SecuritySosBoard = lazy(() => import("./pages/SecuritySosBoard"));
+const SecurityBranding = lazy(() => import("./pages/SecurityBranding"));
+const EmergencyContacts = lazy(() => import("./pages/EmergencyContacts"));
+const ResidentGuide = lazy(() => import("./pages/ResidentGuide"));
+const AreaBroadcast = lazy(() => import("./pages/AreaBroadcast"));
+const CityAdminDashboard = lazy(() => import("./pages/CityAdminDashboard"));
+const SosEscalationBoard = lazy(() => import("./pages/SosEscalationBoard"));
+const PilotReadiness = lazy(() => import("./pages/PilotReadiness"));
+const RoleAccessGuide = lazy(() => import("./pages/RoleAccessGuide"));
+const ChooseArea = lazy(() => import("./pages/ChooseArea"));
 
 /** Don’t render login/register until INITIAL_SESSION finished — avoids faded sign-in flash on refresh */
 function AuthBootstrapGate({ children }) {
@@ -71,6 +115,14 @@ function PrivateRoute({ children }) {
     return <PageSkeleton message="Signing you in…" />;
   }
   return user ? children : <Navigate to="/login" />;
+}
+
+function NeighborhoodRoute({ children }) {
+  return (
+    <PrivateRoute>
+      <RequireActiveOrganization>{children}</RequireActiveOrganization>
+    </PrivateRoute>
+  );
 }
 
 function AppRoutes() {
@@ -121,76 +173,244 @@ function AppRoutes() {
         <Route path="/sop" element={<Navigate to="/dashboard" replace />} />
         
         <Route
-          path="/dashboard"
+          path="/choose-area"
           element={
             <PrivateRoute>
-              <Dashboard />
+              <ChooseArea />
             </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/security"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={SECURITY_DASHBOARD_ROLES} allowPlatformConsole>
+                <SecurityCompanyDashboard />
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/security/sos"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={SECURITY_DASHBOARD_ROLES} allowPlatformConsole>
+                <SecuritySosBoard />
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/security/profile"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={SECURITY_DASHBOARD_ROLES} allowPlatformConsole>
+                <SecurityBranding />
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route path="/security/branding" element={<Navigate to="/security/profile" replace />} />
+
+        <Route
+          path="/city-admin"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={CITY_ADMIN_DASHBOARD_ROLES} allowPlatformConsole>
+                <CityAdminDashboard />
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/resident"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ResidentDashboard />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/sos"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ResidentSos />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/activity/new"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ResidentActivityReport />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/activity"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ResidentActivityList />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/neighbours"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ResidentNeighbours />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/sector"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ResidentSector />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/contacts"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <EmergencyContacts />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/guide"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ResidentGuide />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route path="/resident/about" element={<Navigate to="/resident/guide" replace />} />
+
+        <Route
+          path="/dashboard"
+          element={
+            <NeighborhoodRoute>
+              <Dashboard />
+            </NeighborhoodRoute>
           }
         />
         
         <Route
+          path="/sos"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={SOS_BOARD_ROLES}>
+                <SosEscalationBoard />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
           path="/schedule"
           element={
-            <PrivateRoute>
-              <PatrolSchedule />
-            </PrivateRoute>
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES}>
+                <PatrolSchedule />
+              </RequireRole>
+            </NeighborhoodRoute>
           }
         />
         
         <Route
           path="/incidents"
           element={
-            <PrivateRoute>
-              <IncidentList />
-            </PrivateRoute>
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_INCIDENT_ROLES}>
+                <IncidentList />
+              </RequireRole>
+            </NeighborhoodRoute>
           }
         />
         
         <Route
           path="/incident/new"
           element={
-            <PrivateRoute>
-              <IncidentForm />
-            </PrivateRoute>
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_INCIDENT_ROLES}>
+                <IncidentForm />
+              </RequireRole>
+            </NeighborhoodRoute>
           }
         />
 
         <Route
           path="/incident/:id/edit"
           element={
-            <PrivateRoute>
-              <RequireRole allowedRoles={["admin", "committee", "technical_support"]}>
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={INCIDENT_STAFF_ROLES}>
                 <IncidentForm />
               </RequireRole>
-            </PrivateRoute>
+            </NeighborhoodRoute>
           }
         />
         
         <Route
           path="/incidents/print"
           element={
-            <PrivateRoute>
-              <PrintIncidents />
-            </PrivateRoute>
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_INCIDENT_ROLES}>
+                <PrintIncidents />
+              </RequireRole>
+            </NeighborhoodRoute>
           }
         />
 
         <Route
           path="/incidents/:id/print"
           element={
-            <PrivateRoute>
-              <PrintIncidentDetail />
-            </PrivateRoute>
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_INCIDENT_ROLES}>
+                <PrintIncidentDetail />
+              </RequireRole>
+            </NeighborhoodRoute>
           }
         />
 
         <Route
           path="/incidents/:id"
           element={
-            <PrivateRoute>
-              <IncidentDetail />
-            </PrivateRoute>
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_INCIDENT_ROLES}>
+                <IncidentDetail />
+              </RequireRole>
+            </NeighborhoodRoute>
           }
         />
         
@@ -198,11 +418,11 @@ function AppRoutes() {
         <Route
           path="/chat"
           element={
-            <PrivateRoute>
+            <NeighborhoodRoute>
               <ChatErrorBoundary>
                 <EmergencyChat />
               </ChatErrorBoundary>
-            </PrivateRoute>
+            </NeighborhoodRoute>
           }
         />
         
@@ -211,7 +431,9 @@ function AppRoutes() {
           element={
             <PrivateRoute>
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
-                <AdminChatLogs />
+                <RequireActiveOrganization>
+                  <AdminChatLogs />
+                </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>
           }
@@ -256,9 +478,9 @@ function AppRoutes() {
         <Route
           path="/leaderboard"
           element={
-            <PrivateRoute>
+            <NeighborhoodRoute>
               <Leaderboard />
-            </PrivateRoute>
+            </NeighborhoodRoute>
           }
         />
         
@@ -267,7 +489,9 @@ function AppRoutes() {
           element={
             <PrivateRoute>
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
-                <AdminDashboard />
+                <RequireActiveOrganization>
+                  <AdminDashboard />
+                </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>
           }
@@ -278,7 +502,48 @@ function AppRoutes() {
           element={
             <PrivateRoute>
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
-                <UserManagement />
+                <RequireActiveOrganization>
+                  <UserManagement />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/residents"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={RESIDENT_DIRECTORY_ROLES}>
+                <RequireActiveOrganization>
+                  <AdminResidents />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/contacts"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={EMERGENCY_DIRECTORY_MANAGER_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <EmergencyContacts />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/broadcast"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={AREA_BROADCAST_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <AreaBroadcast />
+                </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>
           }
@@ -289,18 +554,22 @@ function AppRoutes() {
           element={
             <PrivateRoute>
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
-                <AdminMemberProfiles />
+                <RequireActiveOrganization>
+                  <AdminMemberProfiles />
+                </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>
           }
         />
-        
+
         <Route
           path="/admin/print"
           element={
             <PrivateRoute>
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
-                <PrintPatrolLogs />
+                <RequireActiveOrganization>
+                  <PrintPatrolLogs />
+                </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>
           }
@@ -311,7 +580,9 @@ function AppRoutes() {
           element={
             <PrivateRoute>
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
-                <IncidentModeration />
+                <RequireActiveOrganization>
+                  <IncidentModeration />
+                </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>
           }
@@ -321,8 +592,94 @@ function AppRoutes() {
           path="/admin/feedback"
           element={
             <PrivateRoute>
-              <RequireRole allowedRoles={["technical_support"]}>
-                <AdminFeedbackReviews />
+              <RequireRole allowedRoles={FEEDBACK_REVIEW_ROLES}>
+                <RequireActiveOrganization>
+                  <AdminFeedbackReviews />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/organizations"
+          element={
+            <PrivateRoute>
+              <RequirePlatformRole>
+                <OrganizationOnboarding />
+              </RequirePlatformRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/city-hub"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={CITY_HUB_VIEW_ROLES} allowPlatformConsole>
+                <CityHub />
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/city-hub"
+          element={<Navigate to="/city-hub" replace />}
+        />
+
+        <Route
+          path="/admin/billing"
+          element={
+            <PrivateRoute>
+              <RequirePlatformRole>
+                <BillingDashboard />
+              </RequirePlatformRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/security-memberships"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={GLOBAL_APP_ROLES} allowPlatformConsole>
+                <SecurityMembershipReview />
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/security-insights"
+          element={
+            <PrivateRoute>
+              <RequirePlatformRole>
+                <SecurityCompanyInsights />
+              </RequirePlatformRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route path="/admin/sos" element={<Navigate to="/sos" replace />} />
+
+        <Route
+          path="/admin/pilot-readiness"
+          element={
+            <PrivateRoute>
+              <RequirePlatformRole>
+                <PilotReadiness />
+              </RequirePlatformRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/roles"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
+                <RoleAccessGuide />
               </RequireRole>
             </PrivateRoute>
           }
@@ -332,60 +689,51 @@ function AppRoutes() {
         <Route
           path="/intelligence"
           element={
-            <PrivateRoute>
-              <RequireRole
-                allowedRoles={[
-                  "admin",
-                  "committee",
-                  "technical_support",
-                  "patroller",
-                  "investigator",
-                  "volunteer",
-                  "user",
-                ]}
-              >
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={INTELLIGENCE_MEMBER_ROLES}>
                 <IntelligenceHome />
               </RequireRole>
-            </PrivateRoute>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/intelligence/contacts"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={INTELLIGENCE_MEMBER_ROLES}>
+                <EmergencyContacts />
+              </RequireRole>
+            </NeighborhoodRoute>
           }
         />
 
         <Route
           path="/intelligence/profiles/:id"
           element={
-            <PrivateRoute>
-              <RequireRole
-                allowedRoles={[
-                  "admin",
-                  "committee",
-                  "technical_support",
-                  "patroller",
-                  "investigator",
-                  "volunteer",
-                  "user",
-                ]}
-              >
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={INTELLIGENCE_MEMBER_ROLES}>
                 <CriminalProfileDetail />
               </RequireRole>
-            </PrivateRoute>
+            </NeighborhoodRoute>
           }
         />
         
         <Route
           path="/intelligence/profiles/:id/mobile"
           element={
-            <PrivateRoute>
+            <NeighborhoodRoute>
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
                 <MobileProfileView />
               </RequireRole>
-            </PrivateRoute>
+            </NeighborhoodRoute>
           }
         />
         
         <Route
           path="/intelligence/nearby"
           element={
-            <PrivateRoute>
+            <NeighborhoodRoute>
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
                 <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-6">
                   <div className="max-w-4xl mx-auto">
@@ -402,37 +750,38 @@ function AppRoutes() {
                   </div>
                 </div>
               </RequireRole>
-            </PrivateRoute>
+            </NeighborhoodRoute>
           }
         />
         
         <Route
           path="/intelligence/search"
           element={
-            <PrivateRoute>
-              <RequireRole
-                allowedRoles={[
-                  "admin",
-                  "committee",
-                  "technical_support",
-                  "patroller",
-                  "investigator",
-                  "volunteer",
-                  "user",
-                ]}
-              >
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={INTELLIGENCE_MEMBER_ROLES}>
                 <ProfileSearch />
               </RequireRole>
-            </PrivateRoute>
+            </NeighborhoodRoute>
           }
         />
         
         <Route
           path="/intelligence/matches"
           element={
-            <PrivateRoute>
-              <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={INTELLIGENCE_MODERATOR_ROLES}>
                 <MatchQueue />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/hotspots"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={INTELLIGENCE_MEMBER_ROLES}>
+                <Hotspots />
               </RequireRole>
             </PrivateRoute>
           }
@@ -441,21 +790,11 @@ function AppRoutes() {
         <Route
           path="/intelligence/profiles/new"
           element={
-            <PrivateRoute>
-              <RequireRole
-                allowedRoles={[
-                  "admin",
-                  "committee",
-                  "technical_support",
-                  "patroller",
-                  "investigator",
-                  "volunteer",
-                  "user",
-                ]}
-              >
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={INTELLIGENCE_MEMBER_ROLES}>
                 <CreateProfile />
               </RequireRole>
-            </PrivateRoute>
+            </NeighborhoodRoute>
           }
         />
         
@@ -468,6 +807,7 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <PermissionFlowHost />
       <AppRoutes />
       <HardwareBackNavHost />

@@ -1,0 +1,55 @@
+/* Hotspot map markers (Leaflet divIcon) */
+
+.hotspot-marker-wrap {
+  background: transparent !important;
+  border: none !important;
+}
+
+.hotspot-marker {
+  width: 22px;
+  height: 22px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.hotspot-marker--break {
+  background: #dc2626;
+  border: 2px solid #fef2f2;
+}
+
+.hotspot-marker--attempt {
+  background: #f59e0b;
+  border: 2px dashed #fffbeb;
+}
+
+.hotspot-marker--cable {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  transform: none;
+  background: #c2410c;
+  border: 2px solid #ffedd5;
+}
+
+.hotspot-marker--cable-attempt {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  transform: none;
+  background: #ea580c;
+  border: 2px dashed #fff7ed;
+}
+
+.hotspot-marker--camera {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  transform: none;
+  background: #0d9488;
+  border: 2px solid #ccfbf1;
+}
+
+.hotspot-marker--selected {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.45), 0 2px 8px rgba(0, 0, 0, 0.4);
+}

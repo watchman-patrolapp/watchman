@@ -7,9 +7,11 @@ import { supabase } from '../supabase/client';
 import { downloadDomAsPdf } from '../utils/downloadDomAsPdf';
 import { displayPatrolZone } from '../config/neighborhoodRegions';
 import BrandedLoader from '../components/layout/BrandedLoader';
+import { useScopedOrganization } from '../utils/organizationScope';
 
 export default function PrintPatrolLogs() {
   const navigate = useNavigate();
+  const { scope } = useScopedOrganization();
   const [searchParams, setSearchParams] = useSearchParams();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,10 +65,9 @@ export default function PrintPatrolLogs() {
   useEffect(() => {
     async function fetchLogs() {
       try {
-        const { data, error } = await supabase
-          .from('patrol_logs')
-          .select('*')
-          .order('start_time', { ascending: false });
+        const { data, error } = await scope(
+          supabase.from('patrol_logs').select('*')
+        ).order('start_time', { ascending: false });
 
         if (error) throw error;
 
@@ -86,7 +87,7 @@ export default function PrintPatrolLogs() {
       }
     }
     fetchLogs();
-  }, []);
+  }, [scope]);
 
   if (loading) {
     return (

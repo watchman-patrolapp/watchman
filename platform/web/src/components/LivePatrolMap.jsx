@@ -18,6 +18,7 @@ import { adaptivePollIntervalMs, subscribeDataBudgetHints, distanceMeters } from
 import { formatLastGpsForMap } from '../utils/formatPatrolClock';
 import PatrollerPhotoPreview from './patrol/PatrollerPhotoPreview';
 import BrandedLoader from './layout/BrandedLoader';
+import { useScopedOrganization } from '../utils/organizationScope';
 
 let garageRpcTriedAndMissing = false;
 
@@ -345,6 +346,7 @@ const createPatrolIcon = (patrol, isActive) => {
 
 export default function LivePatrolMap() {
   const { user } = useAuth();
+  const { scope } = useScopedOrganization();
   const [patrols, setPatrols] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -363,9 +365,9 @@ export default function LivePatrolMap() {
       const showSpinner = !initialMapFetchDoneRef.current;
       if (showSpinner) setLoading(true);
       try {
-        const { data: activePatrols, error: patrolError } = await supabase
-          .from('active_patrols')
-          .select('*');
+        const { data: activePatrols, error: patrolError } = await scope(
+          supabase.from('active_patrols').select('*')
+        );
 
         if (patrolError) throw patrolError;
         
@@ -536,7 +538,7 @@ export default function LivePatrolMap() {
       unsubBudget();
       if (subscription) supabase.removeChannel(subscription);
     };
-  }, []);
+  }, [scope]);
 
   const validPatrols = useMemo(() => patrols.filter(hasValidMapCoords), [patrols]);
 
@@ -568,6 +570,7 @@ export default function LivePatrolMap() {
         style={{ height: '100%', width: '100%', minHeight: '400px' }}
         className="h-full w-full z-0"
         scrollWheelZoom={true}
+        keyboard={false}
       >
         <ResilientPatrolTileLayer />
         <InvalidateMapWhenReady />

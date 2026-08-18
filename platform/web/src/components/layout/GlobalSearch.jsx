@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
 import { FaSearch, FaUserSecret, FaExclamationTriangle, FaEye } from 'react-icons/fa';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
+import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 
 const GlobalSearch = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -11,6 +13,8 @@ const GlobalSearch = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const searchRef = useRef(null);
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const includeUnscoped = shouldIncludeUnscopedProfiles(activeOrganization);
 
   // Debounced search
   useEffect(() => {
@@ -24,7 +28,7 @@ const GlobalSearch = () => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, activeOrganizationId, includeUnscoped]);
 
   const performSearch = async (query) => {
     setIsLoading(true);
@@ -32,9 +36,13 @@ const GlobalSearch = () => {
     
     try {
       // Search criminal profiles
-      const { data: profiles, error: profileError } = await supabase
-        .from('criminal_profiles')
-        .select('id, primary_name, photo_urls, risk_level, status, known_aliases')
+      const { data: profiles, error: profileError } = await scopeToOrganization(
+        supabase
+          .from('criminal_profiles')
+          .select('id, primary_name, photo_urls, risk_level, status, known_aliases'),
+        activeOrganizationId,
+        includeUnscoped
+      )
         .or(`primary_name.ilike.%${query}%,known_aliases.cs.{${query}}`)
         .limit(5);
 

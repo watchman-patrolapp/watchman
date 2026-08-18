@@ -6,9 +6,11 @@ import { FaPrint, FaFilePdf } from 'react-icons/fa';
 import { supabase } from '../supabase/client';
 import { downloadDomAsPdf } from '../utils/downloadDomAsPdf';
 import BrandedLoader from '../components/layout/BrandedLoader';
+import { useScopedOrganization } from '../utils/organizationScope';
 
 export default function PrintIncidents() {
   const navigate = useNavigate();
+  const { scope } = useScopedOrganization();
   const [searchParams, setSearchParams] = useSearchParams();
   const [incidents, setIncidents] = useState([]);
   const [sectionUpdateCountByIncident, setSectionUpdateCountByIncident] = useState({});
@@ -62,9 +64,9 @@ export default function PrintIncidents() {
 
   useEffect(() => {
     async function fetchIncidents() {
-      const { data, error } = await supabase
-        .from('incidents')
-        .select('*')
+      const { data, error } = await scope(
+        supabase.from('incidents').select('*')
+      )
         .eq('status', 'approved')
         .order('submitted_at', { ascending: false });
       if (error) {
@@ -92,7 +94,7 @@ export default function PrintIncidents() {
       setLoading(false);
     }
     fetchIncidents();
-  }, []);
+  }, [scope]);
 
   if (loading) {
     return (

@@ -8,6 +8,8 @@ import { DEFAULT_PATROL_ZONE } from "../config/neighborhoodRegions";
 import { isSlotEnded } from "../utils/patrolSlotWindows";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
+import { canAccessPatrolSchedule } from "../auth/roleMatrix";
+import { useScopedOrganization } from "../utils/organizationScope";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -73,6 +75,7 @@ const shortName = (fullName) => {
 export default function PatrolSchedule() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { activeOrganizationId, activeOrganization, scope } = useScopedOrganization();
 
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +84,7 @@ export default function PatrolSchedule() {
   const [scheduleNowMs, setScheduleNowMs] = useState(() => Date.now());
 
   const displayName = user?.fullName || user?.user_metadata?.full_name || user?.email || "Unknown";
+  const canUseSchedule = canAccessPatrolSchedule(user?.role);
   const dates = useMemo(() => getWindowDates(windowOffset), [windowOffset]);
 
   // Re-evaluate "ended" slots without a full page reload (e.g. 21:00 passes while on this page)
@@ -112,9 +116,9 @@ export default function PatrolSchedule() {
   const fetchSlots = useCallback(async (dateWindow) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("patrol_slots")
-        .select("*")
+      const { data, error } = await scope(
+        supabase.from("patrol_slots").select("*")
+      )
         .gte("date", dateWindow[0])
         .lte("date", dateWindow[dateWindow.length - 1])
         .order("date", { ascending: true })
@@ -127,7 +131,7 @@ export default function PatrolSchedule() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => { fetchSlots(dates); }, [fetchSlots, dates]);
 
@@ -178,9 +182,10 @@ export default function PatrolSchedule() {
       date,
       start_time: start,
       end_time: end,
-      zone: DEFAULT_PATROL_ZONE,
+      zone: activeOrganization?.name || DEFAULT_PATROL_ZONE,
       volunteer_uid: user.id,
       volunteer_name: displayName,
+      organization_id: activeOrganizationId,
     };
 
     setSlots((prev) => [...prev, optimistic]);
@@ -193,9 +198,10 @@ export default function PatrolSchedule() {
           date,
           start_time: start,
           end_time: end,
-          zone: DEFAULT_PATROL_ZONE,
+          zone: activeOrganization?.name || DEFAULT_PATROL_ZONE,
           volunteer_uid: user.id,
           volunteer_name: displayName,
+          organization_id: activeOrganizationId,
           created_at: new Date().toISOString(),
         })
         .select()
@@ -260,6 +266,23 @@ export default function PatrolSchedule() {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  if (!canUseSchedule) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-4 p-6">
+        <p className="text-gray-600 dark:text-gray-400 text-center max-w-sm">
+          Patrol scheduling is available to volunteer/patrol roles only.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard")}
+          className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700"
+        >
+          Back to dashboard
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">

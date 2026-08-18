@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { normalizeAppRole } from "../auth/staffRoles";
+import { GLOBAL_APP_ROLE_LABELS, GLOBAL_APP_ROLES, isGlobalAppRole, isResidentAppRole } from "../auth/roleMatrix";
+import { useActiveOrganization } from "../auth/useActiveOrganization";
+import AreaContextBar from "../components/layout/AreaContextBar";
 import { supabase } from "../supabase/client"; // ✅ Supabase client
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import toast from "react-hot-toast";
@@ -36,7 +39,9 @@ function InlineConfirm({ label, onConfirm, onCancel, disabled }) {
 export default function UserManagement() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
   const [users, setUsers] = useState([]);
+  const [memberUserIds, setMemberUserIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [pendingDeleteUid, setPendingDeleteUid] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -45,8 +50,30 @@ export default function UserManagement() {
   const currentRole = normalizeAppRole(currentUser?.role);
   const canDeleteUsers = currentRole === "admin" || currentRole === "technical_support";
 
+  const globalSlots = useMemo(
+    () =>
+      GLOBAL_APP_ROLES.map((role) => ({
+        role,
+        label: GLOBAL_APP_ROLE_LABELS[role],
+        accounts: users.filter((u) => normalizeAppRole(u.role) === role),
+      })),
+    [users]
+  );
+
+  const neighborhoodUsers = useMemo(() => {
+    if (!activeOrganizationId) {
+      return [];
+    }
+    return users.filter(
+      (u) =>
+        !isGlobalAppRole(u.role) &&
+        !isResidentAppRole(u.role) &&
+        (u.organizationId === activeOrganizationId || memberUserIds.has(u.uid))
+    );
+  }, [users, activeOrganizationId, memberUserIds]);
+
   const sortedUsers = useMemo(() => {
-    const list = [...users];
+    const list = [...neighborhoodUsers];
     const tie = (a, b) => String(a.uid).localeCompare(String(b.uid));
     list.sort((a, b) => {
       if (sortBy === "joined_desc" || sortBy === "joined_asc") {
@@ -73,11 +100,12 @@ export default function UserManagement() {
       return c !== 0 ? c : tie(a, b);
     });
     return list;
-  }, [users, sortBy]);
+  }, [neighborhoodUsers, sortBy]);
 
   useEffect(() => {
     let cancelled = false;
     async function fetchUsers() {
+      setLoading(true);
       try {
         const { data: rpcRows, error: rpcErr } = await supabase.rpc("list_users_for_staff");
         let raw = [];
@@ -101,8 +129,20 @@ export default function UserManagement() {
           email: u.email,
           role: u.role || "volunteer",
           createdAt: u.created_at || null,
+          organizationId: u.organization_id || null,
         }));
-        if (!cancelled) setUsers(usersData);
+        const { data: memberRows, error: memberErr } = activeOrganizationId
+          ? await supabase
+              .from("organization_members")
+              .select("user_id")
+              .eq("organization_id", activeOrganizationId)
+              .eq("status", "active")
+          : { data: [], error: null };
+        if (memberErr) throw memberErr;
+        if (!cancelled) {
+          setUsers(usersData);
+          setMemberUserIds(new Set((memberRows || []).map((row) => row.user_id)));
+        }
       } catch (err) {
         console.error("Error fetching users:", err);
       } finally {
@@ -113,9 +153,13 @@ export default function UserManagement() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeOrganizationId]);
 
   const handleRoleChange = async (uid, newRole) => {
+    if (isGlobalAppRole(newRole)) {
+      toast.error("Main admin and technical support are global and cannot be assigned here.");
+      return;
+    }
     try {
       const { error } = await supabase
         .from('users')
@@ -124,8 +168,10 @@ export default function UserManagement() {
 
       if (error) throw error;
 
-      // Update local state
       setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
+      if (isResidentAppRole(newRole)) {
+        toast.success("Moved to Residents.");
+      }
     } catch (err) {
       console.error("Error updating role:", err);
       alert("Failed to update role. Check console.");
@@ -168,6 +214,7 @@ export default function UserManagement() {
     }
   };
 
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -188,6 +235,7 @@ export default function UserManagement() {
             ← Back to Admin Dashboard
           </button>
           <div className="flex flex-wrap items-center gap-2">
+            <AreaContextBar />
             <ThemeToggle variant="toolbar" />
             <label htmlFor="user-mgmt-sort" className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
               Sort by
@@ -207,9 +255,54 @@ export default function UserManagement() {
           </div>
         </div>
         <h1 className="text-2xl font-bold dark:text-white">User Management</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          Watch and operational accounts for this neighborhood. Registered residents are listed separately.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/admin/residents")}
+          className="mt-2 text-sm font-medium text-teal-700 dark:text-teal-400 hover:underline"
+        >
+          Open Residents →
+        </button>
       </div>
 
+      <section className="bg-white dark:bg-gray-800 p-4 rounded shadow mb-6">
+        <h2 className="text-lg font-semibold dark:text-white">Global accounts</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-4">
+          Main admin and technical support are platform-wide. They are not transferred into a neighborhood
+          and each area keeps its own NW admin.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {globalSlots.map((slot) => (
+            <div key={slot.role} className="border rounded-lg p-3 dark:border-gray-700">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="font-medium text-gray-900 dark:text-white">{slot.label}</p>
+                <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                  Global
+                </span>
+              </div>
+              {slot.accounts.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">Not assigned yet</p>
+              ) : (
+                <ul className="space-y-2">
+                  {slot.accounts.map((account) => (
+                    <li key={account.uid} className="text-sm text-gray-700 dark:text-gray-300">
+                      <p className="font-medium">{account.fullName || "—"}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{account.email || "No email"}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="bg-white dark:bg-gray-800 p-4 rounded shadow overflow-x-auto">
+        <h2 className="text-lg font-semibold dark:text-white mb-3">
+          Watch users{activeOrganization ? ` · ${activeOrganization.name}` : ""}
+        </h2>
         <table className="min-w-full border dark:border-gray-700">
           <thead className="bg-gray-200 dark:bg-gray-700">
             <tr>
@@ -223,6 +316,24 @@ export default function UserManagement() {
             </tr>
           </thead>
           <tbody>
+            {sortedUsers.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={canDeleteUsers ? 5 : 4}
+                  className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                >
+                  No watch users in this neighborhood. Registered residents are on the{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/admin/residents")}
+                    className="font-medium text-teal-700 dark:text-teal-400 hover:underline"
+                  >
+                    Residents
+                  </button>{" "}
+                  page.
+                </td>
+              </tr>
+            ) : null}
             {sortedUsers.map(u => (
               <tr key={u.uid} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-700">
                 <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">{u.fullName || "—"}</td>
@@ -231,6 +342,8 @@ export default function UserManagement() {
                   <span className={`px-2 py-1 rounded text-sm ${
                     u.role === 'admin' 
                       ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
+                      : u.role === 'nw_admin' || u.role === 'city_admin' || u.role === 'security_admin'
+                      ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
                       : u.role === 'committee' 
                       ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
                       : u.role === 'technical_support'
@@ -252,14 +365,14 @@ export default function UserManagement() {
                       String(u.role || '').toLowerCase() === 'technical_support'
                     }
                   >
+                    <option value="resident" className="dark:bg-gray-700">Resident</option>
                     <option value="volunteer" className="dark:bg-gray-700">Volunteer</option>
                     <option value="patroller" className="dark:bg-gray-700">Patroller</option>
                     <option value="investigator" className="dark:bg-gray-700">Investigator</option>
-                    <option value="admin" className="dark:bg-gray-700">Admin</option>
+                    <option value="nw_admin" className="dark:bg-gray-700">NW Admin</option>
+                    <option value="security_admin" className="dark:bg-gray-700">Security Admin</option>
+                    <option value="city_admin" className="dark:bg-gray-700">City Admin</option>
                     <option value="committee" className="dark:bg-gray-700">Committee</option>
-                    <option value="technical_support" disabled className="dark:bg-gray-700">
-                      Technical support (Supabase only)
-                    </option>
                   </select>
                 </td>
                 {canDeleteUsers && (

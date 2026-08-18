@@ -3,11 +3,13 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
-import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRoute, FaRoad, FaCalendarAlt, FaClipboardList, FaCar, FaBook, FaInfoCircle, FaShieldAlt, FaPhone, FaClock, FaStopwatch } from "react-icons/fa";
+import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRoute, FaRoad, FaCalendarAlt, FaClipboardList, FaCar, FaBook, FaInfoCircle, FaShieldAlt, FaPhone, FaClock, FaStopwatch, FaFire, FaHome } from "react-icons/fa";
 import ActiveThreatsBanner from "../components/patrol/ActiveThreatsBanner";
+import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
 import toast from 'react-hot-toast';
 import SoundToggle from "../components/SoundToggle";
 import ThemeToggle from "../components/ThemeToggle";
+import AppNotificationBell from "../components/layout/AppNotificationBell";
 import VehicleIcon, { normalizeVehicleType, PatrolInfoIcon, ProfileVehicleGlyph } from '../components/VehicleIcon';
 import { getVehicleDisplayText } from '../utils/vehicleDisplay';
 import { 
@@ -19,6 +21,7 @@ import {
   playPatrolSigninNotification
 } from '../utils/sound';
 import { useChatNotifications, useUnreadCount, isActiveChatPath, markChatVisited } from '../chat';
+import { defaultChatChannel } from '../chat/utils/chatChannels';
 import { Avatar } from '../chat/components/common/Avatar';
 import { useGPSTracking } from '../hooks/useGPSTracking';
 import { enrichPatrolRowsWithAvatars } from '../utils/enrichPatrolAvatars';
@@ -27,12 +30,19 @@ import { syncActivePatrolVehicleFromVehicleList } from '../utils/syncActivePatro
 import { isLightMobilityVehicleType, getVehicleTypePublicLabel } from '../utils/vehicleTypeConstants';
 import PatrollerPhotoPreview from '../components/patrol/PatrollerPhotoPreview';
 import UpcomingScheduledPatrollers from '../components/patrol/UpcomingScheduledPatrollers';
+import HouseholdsAwayCard from '../components/patrol/HouseholdsAwayCard';
 import { DEFAULT_PATROL_ZONE, formatPatrolPlaceLabel } from '../config/neighborhoodRegions';
 import { adaptivePollIntervalMs, subscribeDataBudgetHints } from '../utils/dataSaverProfile';
 import startPatrolIcon from '../assets/start-patrol-icon.png';
 import appMark from '../assets/app-mark.png';
 import BrandedLoader from '../components/layout/BrandedLoader';
+import AreaWeatherChip from '../components/layout/AreaWeatherChip';
 import { canAccessAdminPanel, canReviewFeedback, isStaffForModerationAlerts } from '../auth/staffRoles';
+import { canAccessPatrolSchedule, canAccessSosBoard, canStartOrEndPatrol, canStaffVerifyResident, canUseHouseholdMode, canViewCityHub, canViewIntelligence, homePathForRole, isHouseholdModeRole } from '../auth/roleMatrix';
+import { hasHydratedAppRole } from '../auth/appRole';
+import { useActiveOrganization } from '../auth/useActiveOrganization';
+import { useScopedOrganization } from '../utils/organizationScope';
+import { useUnreadCityHubCount } from '../hooks/useUnreadCityHubCount';
 
 // --- Constants ---
 /** Warn after this many seconds on patrol (2h). */
@@ -72,6 +82,14 @@ function unlockAudio() {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { activeOrganization, isGlobalOperator } = useActiveOrganization();
+  const { scope } = useScopedOrganization();
+
+  useEffect(() => {
+    if (!hasHydratedAppRole(user?.role)) return;
+    const home = homePathForRole(user.role, user.platformRole);
+    if (home !== "/dashboard") navigate(home, { replace: true });
+  }, [user?.role, navigate]);
 
   // --- Patrol state ---
   const [activePatrol, setActivePatrol] = useState(null);
@@ -115,13 +133,21 @@ export default function Dashboard() {
   }, []);
 
   // --- New: Unread count via hook ---
-  const { count: unreadCount, refetch: refetchUnread } = useUnreadCount(user?.id);
+  const { count: unreadCount, refetch: refetchUnread } = useUnreadCount(
+    user?.id,
+    defaultChatChannel(user?.role)
+  );
 
   // Handle new messages
   const handleNewMessage = useCallback((message) => {
     refetchUnread();
     if (Notification.permission === 'granted') {
-      new Notification('New Emergency Message', {
+      const title = message?.is_critical
+        ? 'SOS'
+        : message?.visibility === 'resident'
+          ? 'Neighbour chat'
+          : 'Patrol ops';
+      new Notification(title, {
         body: `${message.sender_name}: ${message.text?.substring(0, 50)}...`,
         icon: '/favicon.ico',
       });
@@ -139,32 +165,30 @@ export default function Dashboard() {
   const fetchPendingIncidentCount = useCallback(async () => {
     if (!isStaffForModerationAlerts(user?.role)) return;
     try {
-      const { count, error } = await supabase
-        .from("incidents")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending");
+      const { count, error } = await scope(
+        supabase.from("incidents").select("*", { count: "exact", head: true })
+      ).eq("status", "pending").not("type", "ilike", "SOS");
       if (error) throw error;
       setPendingIncidentCount(count || 0);
     } catch {
       /* RLS or network — leave badge unchanged */
     }
-  }, [user?.role]);
+  }, [user?.role, scope]);
 
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
 
   const fetchPendingFeedbackCount = useCallback(async () => {
     if (!canReviewFeedback(user?.role)) return;
     try {
-      const { count, error } = await supabase
-        .from("feedback")
-        .select("*", { count: "exact", head: true })
-        .is("reviewed_at", null);
+      const { count, error } = await scope(
+        supabase.from("feedback").select("*", { count: "exact", head: true })
+      ).is("reviewed_at", null);
       if (error) throw error;
       setPendingFeedbackCount(count || 0);
     } catch {
       /* RLS or missing table before migration */
     }
-  }, [user?.role]);
+  }, [user?.role, scope]);
 
   useEffect(() => {
     if (!isStaffForModerationAlerts(user?.role)) {
@@ -267,6 +291,14 @@ export default function Dashboard() {
   }, [user]);
 
   const firstName = user?.fullName?.split(" ")[0] || "there";
+  const canUsePatrolSchedule = canAccessPatrolSchedule(user?.role);
+  const canUseSosBoard = canAccessSosBoard(user?.role);
+  const canDoPatrolOps = canStartOrEndPatrol(user?.role);
+  const canUseIntelligence = canViewIntelligence(user?.role);
+  const canUseCityHub = canViewCityHub(user?.role, user?.platformRole);
+  const unreadCityHubCount = useUnreadCityHubCount(canUseCityHub && !!(user?.id || user?.uid), user?.id || user?.uid);
+  const canVerifyResidents = canStaffVerifyResident(user?.role);
+  const canOpenHousehold = isHouseholdModeRole(user?.role) && canUseHouseholdMode(user?.role);
   const todayDate = new Date().toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
@@ -281,7 +313,7 @@ export default function Dashboard() {
       return prev;
     });
     try {
-      const { data, error } = await supabase.from('active_patrols').select('*');
+      const { data, error } = await scope(supabase.from('active_patrols').select('*'));
       if (cancelled) return;
       if (error) throw error;
       const incoming = await enrichPatrolRowsWithAvatars(supabase, data || []);
@@ -302,7 +334,7 @@ export default function Dashboard() {
       if (!cancelled) setFetchAllLoading(false);
     }
     return () => { cancelled = true; };
-  }, []);
+  }, [scope]);
 
   // --- Manual refresh ---
   const refreshData = useCallback(() => {
@@ -469,7 +501,8 @@ export default function Dashboard() {
           vehicle_reg: vehicle.registration,
           vehicle_color: vehicle.color,
           start_time: new Date(),
-          zone: DEFAULT_PATROL_ZONE,
+          zone: activeOrganization?.name || DEFAULT_PATROL_ZONE,
+          organization_id: activeOrganization?.id || user.organizationId || null,
         }, { onConflict: 'user_id' })
         .select();
       if (error) throw error;
@@ -491,7 +524,7 @@ export default function Dashboard() {
       console.error("Check-in failed:", err);
       toast.error("Check-in failed: " + err.message);
     }
-  }, [user, startTracking, setupAutoStopTimer]);
+  }, [user, startTracking, setupAutoStopTimer, activeOrganization]);
 
   const startPatrolWithLegacy = useCallback(async () => {
     try {
@@ -505,7 +538,8 @@ export default function Dashboard() {
           reg_number: user.registrationNumber || "—",
           vehicle_color: user.vehicleColor || "gray",
           start_time: new Date(),
-          zone: DEFAULT_PATROL_ZONE,
+          zone: activeOrganization?.name || DEFAULT_PATROL_ZONE,
+          organization_id: activeOrganization?.id || user.organizationId || null,
         }, { onConflict: 'user_id' })
         .select();
       if (error) throw error;
@@ -524,10 +558,14 @@ export default function Dashboard() {
       console.error("Check-in failed:", err);
       toast.error("Check-in failed: " + err.message);
     }
-  }, [user, startTracking, setupAutoStopTimer]);
+  }, [user, startTracking, setupAutoStopTimer, activeOrganization]);
 
   const handleCheckIn = useCallback(async () => {
     if (!user) return;
+    if (!canDoPatrolOps) {
+      toast.error("Your role does not allow starting patrols.");
+      return;
+    }
     if (user.vehicles && user.vehicles.length > 1) {
       setVehiclesList(user.vehicles);
       setShowVehiclePicker(true);
@@ -538,7 +576,7 @@ export default function Dashboard() {
       return;
     }
     await startPatrolWithLegacy();
-  }, [user, startPatrolWithVehicle, startPatrolWithLegacy]);
+  }, [user, startPatrolWithVehicle, startPatrolWithLegacy, canDoPatrolOps]);
 
   const handleCheckOut = useCallback(async (autoClosed = false) => {
     if (!activePatrol || isEndingRef.current) return;
@@ -602,8 +640,9 @@ export default function Dashboard() {
     let cancelled = false;
     const fetchInitial = async () => {
       try {
-        const { data, error } = await supabase
-          .from('active_patrols').select('*').eq('user_id', user.id).maybeSingle();
+        const { data, error } = await scope(
+          supabase.from('active_patrols').select('*')
+        ).eq('user_id', user.id).maybeSingle();
         if (cancelled) return;
         if (error) throw error;
         if (data) { 
@@ -622,7 +661,7 @@ export default function Dashboard() {
     fetchInitial();
     fetchAll();
     return () => { cancelled = true; };
-  }, [user, fetchAll]);
+  }, [user, fetchAll, scope]);
 
   const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600);
@@ -657,44 +696,32 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 md:pb-8 motion-safe:scroll-smooth">
       {/* ACTIVE THREATS BANNER - CRITICAL INTEGRATION */}
+      {canUseSosBoard ? <ActiveSosBanner /> : null}
       {userLocation && (
         <ActiveThreatsBanner userLocation={userLocation} maxDistanceKm={2} />
       )}
 
       <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
 
-        {/* App brand + zone — one line; lg+ larger hit area + right rail for future zone switcher */}
-        <div className="mb-5 flex min-w-0 items-center gap-2 sm:gap-3">
-          <div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-3 lg:gap-4">
-            <img
-              src={appMark}
-              alt=""
-              width={128}
-              height={128}
-              decoding="async"
-              className="h-9 w-9 shrink-0 rounded-xl object-contain sm:h-10 sm:w-10 lg:h-11 lg:w-11"
-            />
-            <span className="truncate text-base font-bold tracking-tight text-gray-900 dark:text-white sm:text-lg lg:text-xl">
-              Watchman
-            </span>
-            <span className="shrink-0 text-gray-400 dark:text-gray-500" aria-hidden>
-              ·
-            </span>
-            <span className="min-w-0 truncate text-base font-semibold text-teal-700 dark:text-teal-400 sm:text-lg lg:text-xl">
-              {formatPatrolPlaceLabel()}
-            </span>
-          </div>
-          <div
-            className="hidden min-h-[2.75rem] min-w-0 flex-1 items-center justify-end lg:flex"
-            aria-hidden="true"
+        <div className="mb-5 flex items-center gap-2 sm:gap-3 lg:gap-4">
+          <img
+            src={appMark}
+            alt=""
+            width={128}
+            height={128}
+            decoding="async"
+            className="h-9 w-9 shrink-0 rounded-xl object-contain sm:h-10 sm:w-10 lg:h-11 lg:w-11"
           />
+          <span className="text-base font-bold tracking-tight text-gray-900 dark:text-white sm:text-lg lg:text-xl">
+            Watchman
+          </span>
         </div>
 
         {/* Header — compact bento strip */}
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 dark:from-teal-800 dark:to-teal-900 rounded-2xl shadow-xl overflow-hidden mb-6 motion-safe:transition-shadow">
           <div className="px-5 py-6 sm:px-8 sm:py-7">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center space-x-4 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="flex items-start space-x-4 min-w-0">
                 <button type="button" onClick={() => navigate('/profile')} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-full shrink-0">
                   {user?.avatarUrl ? (
                     <img src={user.avatarUrl} alt="Avatar" className="h-16 w-16 rounded-full object-cover ring-2 ring-white dark:ring-gray-300 shadow-md" />
@@ -704,14 +731,26 @@ export default function Dashboard() {
                     </div>
                   )}
                 </button>
-                <div>
-                  <h1 className="text-2xl sm:text-3xl font-bold text-white">Welcome back, {firstName}!</h1>
+                <div className="min-w-0">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-white break-words">Welcome back, {firstName}!</h1>
                   <p className="text-teal-100 text-sm mt-1">{todayDate}</p>
-                  <div className="mt-2">
-                    <span className="inline-block bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-1 rounded-full">
-                      Free Beta
-                    </span>
-                  </div>
+                  <AreaWeatherChip
+                    organizationId={activeOrganization?.id}
+                    className="mt-1 text-white/90"
+                  />
+                  <p className="mt-2 flex items-start gap-1.5 text-sm font-medium text-white">
+                    <FaMapMarkerAlt className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-100" aria-hidden />
+                    <span className="min-w-0 break-words">{activeOrganization?.name || formatPatrolPlaceLabel()}</span>
+                  </p>
+                  {isGlobalOperator ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/choose-area")}
+                      className="mt-2 inline-block bg-white/20 hover:bg-white/30 text-white text-xs px-2 py-1 rounded-full"
+                    >
+                      Change neighbourhood
+                    </button>
+                  ) : null}
                 </div>
               </div>
               <div className="flex space-x-3 shrink-0">
@@ -719,6 +758,7 @@ export default function Dashboard() {
                   <FaSync className="w-4 h-4 text-white" />
                 </button>
                 <SoundToggle />
+                <AppNotificationBell variant="brand" />
                 <ThemeToggle />
               </div>
             </div>
@@ -866,7 +906,7 @@ export default function Dashboard() {
               </div>
               
               <div className="flex items-center gap-3">
-                {activePatrol && (
+                {activePatrol && canDoPatrolOps && (
                   <button
                     type="button"
                     onClick={() => handleCheckOut(false)}
@@ -875,7 +915,7 @@ export default function Dashboard() {
                     <FaStop className="mr-2" /> End Patrol
                   </button>
                 )}
-                {!activePatrol && (
+                {!activePatrol && canDoPatrolOps && (
                   <button
                     type="button"
                     onClick={handleCheckIn}
@@ -890,10 +930,13 @@ export default function Dashboard() {
           </div>
           </div>
 
-          <UpcomingScheduledPatrollers
-            className="lg:flex-1"
-            refreshNonce={upcomingScheduleRefresh}
-          />
+          {canUsePatrolSchedule ? (
+            <UpcomingScheduledPatrollers
+              className="lg:flex-1"
+              refreshNonce={upcomingScheduleRefresh}
+            />
+          ) : null}
+          <HouseholdsAwayCard />
         </div>
 
         {/* GPS — above Your profile on large screens (right column); below patrol on mobile */}
@@ -1059,34 +1102,62 @@ export default function Dashboard() {
               </span>
             )}
           </button>
-          <button
-            type="button"
-            onClick={() => navigate('/intelligence')}
-            className="bento-tile-interactive col-span-2 sm:col-span-1 flex flex-col items-center justify-center gap-2 min-h-[5.5rem] rounded-lg border-0 bg-gradient-to-br from-red-600 to-red-400 text-white font-semibold p-4 shadow-lg shadow-red-900/25 hover:shadow-xl transition dark:from-red-700 dark:to-red-600"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <span className="text-sm text-center leading-tight">Intelligence</span>
-          </button>
+          {canUseIntelligence ? (
+            <button
+              type="button"
+              onClick={() => navigate('/intelligence')}
+              className="bento-tile-interactive col-span-2 sm:col-span-1 flex flex-col items-center justify-center gap-2 min-h-[5.5rem] rounded-lg border-0 bg-gradient-to-br from-red-600 to-red-400 text-white font-semibold p-4 shadow-lg shadow-red-900/25 hover:shadow-xl transition dark:from-red-700 dark:to-red-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="text-sm text-center leading-tight">Intelligence</span>
+            </button>
+          ) : null}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-          <button type="button" onClick={() => navigate('/schedule')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-            <FaCalendarAlt className="text-indigo-500 dark:text-indigo-400 shrink-0" aria-hidden />
-            <span>Patrol schedule</span>
-          </button>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-8">
+          {canOpenHousehold ? (
+            <button type="button" onClick={() => navigate('/resident')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
+              <FaHome className="text-teal-600 dark:text-teal-400 shrink-0" aria-hidden />
+              <span>Resident Portal</span>
+            </button>
+          ) : null}
+          {canUsePatrolSchedule ? (
+            <button type="button" onClick={() => navigate('/schedule')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
+              <FaCalendarAlt className="text-indigo-500 dark:text-indigo-400 shrink-0" aria-hidden />
+              <span>Patrol schedule</span>
+            </button>
+          ) : null}
           <button type="button" onClick={() => navigate('/incidents')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
             <FaClipboardList className="text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden />
             <span>View incidents</span>
           </button>
-          <button type="button" onClick={() => navigate('/vehicles')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-            <FaCar className="text-slate-600 dark:text-slate-300 shrink-0" aria-hidden />
-            <span>Vehicles</span>
-          </button>
+          {canUseIntelligence ? (
+            <button type="button" onClick={() => navigate('/hotspots')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
+              <FaFire className="text-red-600 dark:text-red-400 shrink-0" aria-hidden />
+              <span>Hotspots</span>
+            </button>
+          ) : null}
           <button type="button" onClick={() => navigate('/leaderboard')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
             <FaTrophy className="text-amber-500 shrink-0" aria-hidden />
             <span>Leaderboard</span>
+          </button>
+          {canUseSosBoard ? (
+            <button type="button" onClick={() => navigate('/sos')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
+              <FaPhone className="text-red-600 dark:text-red-400 shrink-0" aria-hidden />
+              <span>SOS board</span>
+            </button>
+          ) : null}
+          {canVerifyResidents && !canAccessAdminPanel(user?.role) ? (
+            <button type="button" onClick={() => navigate('/admin/residents')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
+              <FaUser className="text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden />
+              <span>Verify residents</span>
+            </button>
+          ) : null}
+          <button type="button" onClick={() => navigate('/vehicles')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
+            <FaCar className="text-slate-600 dark:text-slate-300 shrink-0" aria-hidden />
+            <span>Vehicles</span>
           </button>
           <button type="button" onClick={() => navigate('/guide')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
             <FaBook className="text-violet-600 dark:text-violet-400 shrink-0" aria-hidden />
@@ -1100,7 +1171,7 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => navigate('/admin')}
-              className="relative bento-tile-interactive col-span-2 md:col-span-3 lg:col-span-6 p-3 text-sm font-semibold text-teal-700 dark:text-teal-300 flex items-center justify-center gap-2 text-center bg-teal-50/80 dark:bg-teal-950/40 border-teal-200/60 dark:border-teal-800/60"
+              className="relative bento-tile-interactive col-span-2 md:col-span-4 lg:col-span-5 p-3 text-sm font-semibold text-teal-700 dark:text-teal-300 flex items-center justify-center gap-2 text-center bg-teal-50/80 dark:bg-teal-950/40 border-teal-200/60 dark:border-teal-800/60"
             >
               <FaShieldAlt className="text-teal-600 dark:text-teal-400 shrink-0" aria-hidden />
               <span>Admin panel</span>
@@ -1112,6 +1183,28 @@ export default function Dashboard() {
                   {(pendingIncidentCount + pendingFeedbackCount) > 99
                     ? '99+'
                     : pendingIncidentCount + pendingFeedbackCount}
+                </span>
+              )}
+            </button>
+          )}
+          {canUseCityHub && (
+            <button
+              type="button"
+              onClick={() => navigate('/city-hub')}
+              className={`relative bento-tile-interactive col-span-2 md:col-span-4 lg:col-span-5 p-3 text-sm font-semibold flex items-center justify-center gap-2 text-center ${
+                unreadCityHubCount > 0
+                  ? 'text-red-800 dark:text-red-200 bg-red-50/90 dark:bg-red-950/45 ring-2 ring-red-500/85 shadow-[0_0_12px_rgba(239,68,68,0.28)]'
+                  : 'text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-950/40 border-rose-200/60 dark:border-rose-800/60'
+              }`}
+            >
+              <FaMapPin className={`shrink-0 ${unreadCityHubCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-rose-600 dark:text-rose-400'}`} aria-hidden />
+              <span>City hub</span>
+              {unreadCityHubCount > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 sm:top-1 sm:right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center motion-safe:animate-pulse"
+                  aria-label={`${unreadCityHubCount} unread City Hub post${unreadCityHubCount === 1 ? '' : 's'}`}
+                >
+                  {unreadCityHubCount > 99 ? '99+' : unreadCityHubCount}
                 </span>
               )}
             </button>

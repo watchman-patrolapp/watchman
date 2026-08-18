@@ -1,15 +1,41 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
+import { canUseHouseholdMode, isHouseholdModeRole, isResidentAppRole } from '../auth/roleMatrix';
 import { supabase } from '../supabase/client';
 import toast from 'react-hot-toast';
-import { FaUser, FaMapMarkerAlt, FaCar, FaSave, FaEnvelope, FaPhone, FaLock, FaExclamationTriangle } from 'react-icons/fa';
+import { FaUser, FaMapMarkerAlt, FaCar, FaSave, FaEnvelope, FaPhone, FaLock, FaExclamationTriangle, FaCheck } from 'react-icons/fa';
 import ThemeToggle from '../components/ThemeToggle';
+import AppNotificationBell from '../components/layout/AppNotificationBell';
 import { TbWifi, TbWifiOff } from 'react-icons/tb';
 import { getUserReduceMobileData, setUserReduceMobileData } from '../utils/dataSaverProfile';
 import { formatAuthErrorMessage } from '../utils/authErrorMessage';
 import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import SecurityMembershipCard from '../components/security/SecurityMembershipCard';
+import { formatVerifiedBy, getResidentVerificationLog } from '../utils/residentVerification';
+import { getMyHouseholdCivic, pingResidentPresence } from '../utils/householdCivic';
+import ResidentAwayForm from '../components/resident/ResidentAwayForm';
+import HouseholdCivicRow from '../components/resident/HouseholdCivicRow';
+import { isRpcNotFoundError } from '../utils/isRpcNotFound';
+import { loadPublicSignupOptions, securityCompanyOptionLabel } from '../utils/signupOptions';
+import { fetchResidentSecurityMemberships } from '../utils/residentSecurityMemberships';
+import {
+  claimSecurityCompany,
+  isActiveMembership,
+  listSecurityMembershipEvents,
+  membershipRpcMessage,
+  transferSecurityMembership,
+  withdrawSecurityMembership,
+} from '../utils/securityMembershipActions';
+import HomePinPicker from '../components/profile/HomePinPicker';
+import EmergencyContactSection from '../components/profile/EmergencyContactSection';
+import { hasHomePin, setMyHomePin } from '../utils/homePin';
+import { ensureMyHouseholdProfile } from '../utils/householdProfile';
+import { HOUSEHOLD_MODE_INTRO, markHouseholdIntroSeen } from '../utils/householdModeIntro';
+import { useScopedOrganization } from '../utils/organizationScope';
+import { resolveAreaCoords } from '../utils/areaWeather';
+import { displayWatchAreaName } from '../config/neighborhoodRegions';
 
 /**
  * Soft cap before we warn the user (not an abort). Embedded IDE browsers often take 30–60s+ for
@@ -20,6 +46,7 @@ const PASSWORD_CHANGE_FLOW_MS = 90_000;
 export default function Profile() {
   const navigate = useNavigate();
   const { user, refreshUser, signOut } = useAuth();
+  const { activeOrganizationId, activeOrganization } = useScopedOrganization();
   const [loading, setLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pwdLoading, setPwdLoading] = useState(false);
@@ -33,6 +60,25 @@ export default function Profile() {
     address: '',
     phone: '',
   });
+  const [securityCompanyOptions, setSecurityCompanyOptions] = useState([]);
+  const [securityMembershipForm, setSecurityMembershipForm] = useState({
+    security_company_id: '',
+    member_reference: '',
+  });
+  const [securityMembershipRow, setSecurityMembershipRow] = useState(null);
+  const [membershipEvents, setMembershipEvents] = useState([]);
+  const [transferForm, setTransferForm] = useState({
+    security_company_id: '',
+    member_reference: '',
+    notes: '',
+  });
+  const [membershipBusy, setMembershipBusy] = useState(false);
+  const [verificationLog, setVerificationLog] = useState([]);
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [civic, setCivic] = useState(null);
+  const [homePin, setHomePin] = useState(null);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [areaCenter, setAreaCenter] = useState(null);
 
   // Crop states
   const [selectedImage, setSelectedImage] = useState(null); // file object
@@ -49,8 +95,96 @@ export default function Profile() {
         address: user.address || '',
         phone: user.phone || '',
       });
+      setHomePin(
+        hasHomePin(user)
+          ? { lat: Number(user.homeLat), lng: Number(user.homeLng) }
+          : null
+      );
     }
   }, [user]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const scrollToPin = () => {
+      document.getElementById('home-pin')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    if (window.location.hash === '#home-pin') {
+      const t = window.setTimeout(scrollToPin, 80);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const coords = await resolveAreaCoords(
+        activeOrganizationId || user?.organizationId,
+        activeOrganization?.name
+      );
+      if (!cancelled) setAreaCenter(coords);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrganizationId, activeOrganization?.name, user?.organizationId]);
+
+  useEffect(() => {
+    if (!user?.id || !canUseHouseholdMode(user?.role)) return;
+    let cancelled = false;
+    void (async () => {
+      if (isHouseholdModeRole(user?.role)) {
+        await ensureMyHouseholdProfile();
+        markHouseholdIntroSeen(user.id);
+      }
+      const { data, error } = await getResidentVerificationLog(user.id);
+      if (cancelled) return;
+      if (error && !isRpcNotFoundError(error)) {
+        console.warn('verification log:', error.message);
+      }
+      setVerificationLog(data || []);
+      setVerificationPending(!user.isVerifiedResident && isResidentAppRole(user?.role));
+      await pingResidentPresence();
+      const civicRow = await getMyHouseholdCivic();
+      if (!cancelled) setCivic(civicRow);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role, user?.isVerifiedResident]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [{ securityCompanies }, membershipResult, eventsResult] = await Promise.all([
+          loadPublicSignupOptions(),
+          fetchResidentSecurityMemberships({ residentUserId: user.id, limit: 20 }),
+          listSecurityMembershipEvents(true),
+        ]);
+
+        if (cancelled) return;
+        const memberships = membershipResult.data || [];
+        const membership = memberships.find(isActiveMembership) || memberships[0] || null;
+        if (membershipResult.error) console.warn('Profile membership load:', membershipResult.error);
+        setSecurityCompanyOptions(securityCompanies);
+        setSecurityMembershipRow(membership);
+        setMembershipEvents(eventsResult.error ? [] : eventsResult.data || []);
+        if (membership && isActiveMembership(membership)) {
+          setSecurityMembershipForm({
+            security_company_id: membership.security_company_id || '',
+            member_reference: membership.member_reference || '',
+          });
+        }
+      } catch (err) {
+        console.warn('Profile membership load:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const [reduceMobileData, setReduceMobileData] = useState(() => getUserReduceMobileData());
 
@@ -319,6 +453,21 @@ export default function Profile() {
     }
   };
 
+  const saveHomePin = async (next) => {
+    setHomePin(next);
+    setPinBusy(true);
+    try {
+      const { error } = await setMyHomePin(next);
+      if (error) throw error;
+      await refreshUser();
+      toast.success(next ? 'Home pin saved.' : 'Home pin cleared.');
+    } catch (err) {
+      toast.error(err.message || 'Could not save home pin.');
+    } finally {
+      setPinBusy(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     const digits = String(form.phone || '').replace(/\D/g, '');
     if (digits.length < 10) {
@@ -389,6 +538,87 @@ export default function Profile() {
     }
   };
 
+  const reloadMembership = async () => {
+    const [{ data }, eventsResult] = await Promise.all([
+      fetchResidentSecurityMemberships({ residentUserId: user.id, limit: 20 }),
+      listSecurityMembershipEvents(true),
+    ]);
+    const memberships = data || [];
+    const membership = memberships.find(isActiveMembership) || memberships[0] || null;
+    setSecurityMembershipRow(membership);
+    setMembershipEvents(eventsResult.error ? [] : eventsResult.data || []);
+    return membership;
+  };
+
+  const handleSaveSecurityMembership = async () => {
+    if (!user?.id) return;
+    if (!securityMembershipForm.security_company_id) {
+      toast.error('Select your security company first.');
+      return;
+    }
+    setMembershipBusy(true);
+    try {
+      const { error } = await claimSecurityCompany(
+        securityMembershipForm.security_company_id,
+        securityMembershipForm.member_reference
+      );
+      if (error) throw error;
+      await reloadMembership();
+      toast.success('Security membership saved. Awaiting company verification.');
+    } catch (err) {
+      console.error(err);
+      toast.error(membershipRpcMessage(err));
+    } finally {
+      setMembershipBusy(false);
+    }
+  };
+
+  const handleWithdrawMembership = async () => {
+    if (!securityMembershipRow?.id) return;
+    if (!window.confirm('Withdraw this pending company claim?')) return;
+    setMembershipBusy(true);
+    try {
+      const { error } = await withdrawSecurityMembership(securityMembershipRow.id);
+      if (error) throw error;
+      const next = await reloadMembership();
+      if (!next || !isActiveMembership(next)) {
+        setSecurityMembershipForm({ security_company_id: '', member_reference: '' });
+      }
+      toast.success('Claim withdrawn.');
+    } catch (err) {
+      toast.error(membershipRpcMessage(err));
+    } finally {
+      setMembershipBusy(false);
+    }
+  };
+
+  const handleTransferMembership = async () => {
+    if (!transferForm.security_company_id) {
+      toast.error('Select the company you are moving to.');
+      return;
+    }
+    if (!window.confirm('Transfer your security membership to the new company? Your current company will be notified in the logs, and the new company must verify you again.')) {
+      return;
+    }
+    setMembershipBusy(true);
+    try {
+      const { error } = await transferSecurityMembership(
+        transferForm.security_company_id,
+        transferForm.member_reference,
+        transferForm.notes
+      );
+      if (error) throw error;
+      await reloadMembership();
+      setTransferForm({ security_company_id: '', member_reference: '', notes: '' });
+      toast.success('Transfer submitted. The new company still needs to verify you.');
+    } catch (err) {
+      toast.error(membershipRpcMessage(err));
+    } finally {
+      setMembershipBusy(false);
+    }
+  };
+
+  const areaName = displayWatchAreaName(activeOrganization?.name) || 'your neighbourhood';
   const primaryVehicle = user?.vehicles?.find(v => v.is_primary);
 
   return (
@@ -397,6 +627,7 @@ export default function Profile() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h1 className="text-2xl font-bold dark:text-white">Your Profile</h1>
           <div className="flex items-center gap-2 shrink-0">
+            <AppNotificationBell variant="toolbar" />
             <ThemeToggle variant="toolbar" />
             <button type="button" onClick={() => navigate(-1)} className="text-gray-600 dark:text-gray-400 hover:underline text-sm font-medium">
               Back
@@ -425,9 +656,124 @@ export default function Profile() {
           </label>
         </div>
 
+        {isHouseholdModeRole(user?.role) ? (
+          <section
+            id="household-settings"
+            className="mb-6 rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-900 dark:bg-teal-950/40"
+          >
+            <h2 className="text-lg font-semibold text-teal-950 dark:text-teal-100">
+              {HOUSEHOLD_MODE_INTRO.title}
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed text-teal-900/85 dark:text-teal-200/90">
+              {HOUSEHOLD_MODE_INTRO.body}
+            </p>
+            <p className="mt-2 text-xs text-teal-800 dark:text-teal-300">
+              Email is your login and stays unchanged here. Update phone only if it changed. Home pin
+              and security company are the household fields below.
+            </p>
+          </section>
+        ) : null}
+
+        <section
+          id="home-pin"
+          className="mb-6 scroll-mt-4 rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-900 dark:bg-teal-950/40"
+        >
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-teal-950 dark:text-teal-100">
+            <FaMapMarkerAlt className="h-4 w-4" aria-hidden />
+            Home pin
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-teal-900/85 dark:text-teal-200/90">
+            Your address is not detected automatically. The map opens on {areaName}. Set this pin so
+            My sector can show the closest households. Search often misses lots or lands in another
+            suburb — tap your roof, or use the location button while you are at home.
+          </p>
+          <div className="mt-3">
+            <HomePinPicker
+              pin={homePin}
+              areaCenter={areaCenter}
+              onPick={(next) => void saveHomePin(next)}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-teal-800 dark:text-teal-300">
+              {homePin
+                ? pinBusy
+                  ? 'Saving pin…'
+                  : 'Pin saved. Move it if this is the wrong roof.'
+                : 'No pin yet — My sector cannot rank nearby homes without it.'}
+            </p>
+            {homePin ? (
+              <button
+                type="button"
+                onClick={() => void saveHomePin(null)}
+                className="text-xs font-medium text-teal-800 underline dark:text-teal-200"
+              >
+                Clear pin
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        {canUseHouseholdMode(user?.role) && civic ? (
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+            <p className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Your household</p>
+            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+              Only you see this. Neighbours cannot.
+            </p>
+            <HouseholdCivicRow civic={civic} />
+          </div>
+        ) : null}
+
+        {isResidentAppRole(user?.role) ? (
+          <div
+            className={`mb-6 rounded-xl border p-4 ${
+              user?.isVerifiedResident
+                ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
+                : 'border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-950/30'
+            }`}
+          >
+            <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+              {user?.isVerifiedResident ? (
+                <FaCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-300" aria-hidden />
+              ) : (
+                <FaExclamationTriangle className="h-4 w-4 text-amber-600" aria-hidden />
+              )}
+              Household verification
+            </p>
+            {user?.isVerifiedResident ? (
+              <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-100">
+                {formatVerifiedBy(verificationLog)}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm font-medium text-amber-950 dark:text-amber-100">
+                Not verified yet
+                {verificationPending && verificationLog.length
+                  ? ` · ${verificationLog.filter((row) => row.kind === 'vouch').length}/2 neighbour vouches`
+                  : ''}
+              </p>
+            )}
+            {verificationLog.length > 0 ? (
+              <ul className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                {verificationLog.map((row, index) => (
+                  <li key={`${row.kind}-${row.actor_name}-${index}`}>
+                    {row.kind === 'staff'
+                      ? `${row.actor_name} · ${row.actor_role?.replace(/_/g, ' ') || 'staff'}`
+                      : `Vouch from ${row.actor_name}`}
+                    {row.created_at
+                      ? ` · ${new Date(row.created_at).toLocaleDateString()}`
+                      : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        {canUseHouseholdMode(user?.role) ? <ResidentAwayForm /> : null}
+
         {/* Crop Modal – fixed for vertical images */}
         {showCropModal && imagePreviewUrl && (
-          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/75 p-4">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-bold mb-4 dark:text-white">Crop Image</h2>
               <div className="flex justify-center items-center min-h-[300px]">
@@ -571,9 +917,17 @@ export default function Profile() {
                 value={form.address}
                 onChange={handleChange}
                 className="w-full focus:outline-none dark:bg-gray-800 dark:text-white"
+                placeholder="e.g. Lot 158 Kragga Kamma Road"
               />
             </div>
           </div>
+
+          {canUseHouseholdMode(user?.role) ? (
+            <div className="space-y-4">
+              <EmergencyContactSection slot={1} user={user} onSaved={() => void refreshUser()} />
+              <EmergencyContactSection slot={2} user={user} onSaved={() => void refreshUser()} />
+            </div>
+          ) : null}
 
           <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-4">
             <div className="flex items-start gap-3">
@@ -638,6 +992,131 @@ export default function Profile() {
           >
             Manage Vehicles
           </button>
+        </div>
+
+        <div className="mt-6 border-t dark:border-gray-700 pt-4 space-y-3">
+          <h2 className="text-lg font-semibold dark:text-white">Security-company membership</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Pick one armed-response company. They verify that you are their client. If you chose the wrong
+            company, withdraw the pending claim or transfer — do not add a second company.
+          </p>
+
+          {securityMembershipRow && isActiveMembership(securityMembershipRow) ? (
+            <>
+              <SecurityMembershipCard membership={securityMembershipRow} />
+              {securityMembershipRow.membership_status === 'self_reported' ? (
+                <button
+                  type="button"
+                  disabled={membershipBusy}
+                  onClick={handleWithdrawMembership}
+                  className="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Withdraw this pending claim
+                </button>
+              ) : null}
+
+              <div className="mt-4 space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-900 dark:bg-indigo-950/30">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Transfer to another company</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  This closes your current company and opens a pending claim at the new one. Transfers are
+                  logged so companies can see where clients came from or went.
+                </p>
+                <select
+                  value={transferForm.security_company_id}
+                  onChange={(e) =>
+                    setTransferForm((prev) => ({ ...prev, security_company_id: e.target.value }))
+                  }
+                  className="w-full rounded border px-3 py-2 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="">Select new company</option>
+                  {securityCompanyOptions
+                    .filter((company) => company.id !== securityMembershipRow.security_company_id)
+                    .map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {securityCompanyOptionLabel(company)}
+                      </option>
+                    ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="New membership reference (optional)"
+                  value={transferForm.member_reference}
+                  onChange={(e) =>
+                    setTransferForm((prev) => ({ ...prev, member_reference: e.target.value }))
+                  }
+                  className="w-full rounded border px-3 py-2 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                />
+                <input
+                  type="text"
+                  placeholder="Reason (optional)"
+                  value={transferForm.notes}
+                  onChange={(e) => setTransferForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="w-full rounded border px-3 py-2 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                />
+                <button
+                  type="button"
+                  disabled={membershipBusy}
+                  onClick={handleTransferMembership}
+                  className="rounded bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  Transfer membership
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {securityMembershipRow ? <SecurityMembershipCard membership={securityMembershipRow} /> : null}
+              <div className="grid gap-3 md:grid-cols-2">
+                <select
+                  value={securityMembershipForm.security_company_id}
+                  onChange={(e) =>
+                    setSecurityMembershipForm((prev) => ({ ...prev, security_company_id: e.target.value }))
+                  }
+                  className="w-full rounded border px-3 py-2 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="">Select security company</option>
+                  {securityCompanyOptions.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {securityCompanyOptionLabel(company)}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="Membership reference (optional)"
+                  value={securityMembershipForm.member_reference}
+                  onChange={(e) =>
+                    setSecurityMembershipForm((prev) => ({ ...prev, member_reference: e.target.value }))
+                  }
+                  className="w-full rounded border px-3 py-2 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={membershipBusy}
+                onClick={handleSaveSecurityMembership}
+                className="rounded bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                Save security membership
+              </button>
+            </>
+          )}
+
+          {membershipEvents.length > 0 ? (
+            <div className="pt-2">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Membership log</p>
+              <ul className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                {membershipEvents.slice(0, 8).map((event) => (
+                  <li key={event.id}>
+                    {event.created_at ? new Date(event.created_at).toLocaleDateString() : ''} ·{' '}
+                    {event.event_type === 'transferred'
+                      ? `Transferred ${event.from_company_name || '—'} → ${event.to_company_name || '—'}`
+                      : `${event.event_type}${event.to_company_name ? ` · ${event.to_company_name}` : event.from_company_name ? ` · ${event.from_company_name}` : ''}`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
 
         {/* Save button */}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../supabase/client';
+import { applyWorkingOrganizationScope } from '../utils/organizationScope';
 
 /**
  * Count of feedback rows not yet marked reviewed. Enable only for technical_support (see canReviewFeedback).
@@ -15,10 +16,9 @@ export function usePendingFeedbackCount(enabled) {
       return;
     }
     try {
-      const { count: n, error } = await supabase
-        .from('feedback')
-        .select('*', { count: 'exact', head: true })
-        .is('reviewed_at', null);
+      const { count: n, error } = await applyWorkingOrganizationScope(
+        supabase.from('feedback').select('*', { count: 'exact', head: true })
+      ).is('reviewed_at', null);
       if (error) throw error;
       setCount(typeof n === 'number' ? n : 0);
     } catch {

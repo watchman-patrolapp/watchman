@@ -8,35 +8,21 @@ import {
   FaPlusCircle,
   FaClipboardList,
   FaMapMarkerAlt,
+  FaFire,
+  FaPhone,
   FaChevronRight,
 } from 'react-icons/fa';
 import ThemeToggle from '../../components/ThemeToggle';
-
-const MEMBER_INTEL_ROLES = [
-  'admin',
-  'committee',
-  'technical_support',
-  'patroller',
-  'investigator',
-  'volunteer',
-  'user',
-];
-const COMMITTEE_ROLES = ['admin', 'committee', 'technical_support'];
-
-function normalizeIntelRole(role) {
-  if (role == null || role === '') return null;
-  const r = String(role).trim().toLowerCase();
-  if (r === 'patrol') return 'patroller';
-  return r;
-}
+import {
+  canModerateIntelligence,
+  canViewIntelligence,
+} from '../../auth/roleMatrix';
 
 export default function IntelligenceHome() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const normalized = normalizeIntelRole(user?.role);
-
-  const canMemberIntel = normalized && MEMBER_INTEL_ROLES.includes(normalized);
-  const canCommitteeIntel = normalized && COMMITTEE_ROLES.includes(normalized);
+  const canMemberIntel = canViewIntelligence(user?.role);
+  const canCommitteeIntel = canModerateIntelligence(user?.role);
 
   if (!canMemberIntel) {
     return (
@@ -84,6 +70,24 @@ export default function IntelligenceHome() {
       show: canCommitteeIntel,
     },
     {
+      id: 'hotspots',
+      title: 'Hotspots',
+      description: 'Break-ins and cable / infrastructure theft on the map, hot zones, travel paths, and camera suggestions.',
+      to: '/hotspots',
+      icon: FaFire,
+      color: 'bg-red-600',
+      show: true,
+    },
+    {
+      id: 'contacts',
+      title: 'Emergency contacts',
+      description: 'Police, ambulance, fire, electrical, and registered security companies with logos and control-room numbers.',
+      to: '/intelligence/contacts',
+      icon: FaPhone,
+      color: 'bg-blue-700',
+      show: true,
+    },
+    {
       id: 'nearby',
       title: 'Nearby threats',
       description: 'High-risk profiles mapped near patrol areas — coming soon; placeholder for future map integration.',
@@ -96,36 +100,34 @@ export default function IntelligenceHome() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 pb-20">
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <button
-              type="button"
-              onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
-            >
-              <FaArrowLeft className="w-3 h-3" />
-              Back to dashboard
-            </button>
-            <ThemeToggle variant="toolbar" />
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-lg shadow-red-900/20">
-              <FaUserSecret className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intelligence</h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 max-w-xl">
-                Start here: search the database, add profiles, and (for committee) verify incident matches. Use the{' '}
-                <strong className="text-gray-800 dark:text-gray-200">field guide</strong> on the database page for risk
-                levels, status, and MO definitions.
-              </p>
-            </div>
-          </div>
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/90">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 text-sm text-gray-600 transition dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+          >
+            <FaArrowLeft className="h-3 w-3" />
+            Back to dashboard
+          </button>
+          <ThemeToggle variant="toolbar" />
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mb-6 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-lg shadow-red-900/20">
+            <FaUserSecret className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intelligence</h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 max-w-xl">
+              Start here: search the database, add profiles, map break-in hotspots, and (for committee) verify incident matches. Use the{' '}
+              <strong className="text-gray-800 dark:text-gray-200">field guide</strong> on the database page for risk
+              levels, status, and MO definitions.
+            </p>
+          </div>
+        </div>
         <ul className="space-y-3">
           {cards.map((card) => {
             const Icon = card.icon;

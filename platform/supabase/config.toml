@@ -397,6 +397,12 @@ verify_jwt = false
 import_map = "./functions/notify-chat-message/deno.json"
 entrypoint = "./functions/notify-chat-message/index.ts"
 
+[functions.notify-resident-event]
+enabled = true
+# CORS preflight has no JWT; the function checks the session itself.
+verify_jwt = false
+entrypoint = "./functions/notify-resident-event/index.ts"
+
 [functions.notify-password-changed]
 enabled = true
 verify_jwt = true

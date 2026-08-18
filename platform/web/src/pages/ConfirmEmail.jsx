@@ -8,6 +8,7 @@ export default function ConfirmEmail() {
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email || null;
+  const signupTrack = location.state?.signupTrack || null;
 
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
@@ -64,6 +65,11 @@ export default function ConfirmEmail() {
 
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
           Click the link in the email to verify your account, then sign in.
+          {signupTrack === "security_company"
+            ? " If you picked a listed company, your account is linked to it. If you typed a new company name, it stays pending until platform staff activate it."
+            : signupTrack === "neighborhood_watch"
+              ? " Your neighborhood watch stays pending until platform staff activate it."
+              : ""}
         </p>
 
         <div className="space-y-3">

@@ -24,6 +24,8 @@ const InfoCard = ({ title, icon: Icon, children, className = "" }) => (
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCriminalProfile, useProfileIncidents } from '../../hooks/useCriminalIntelligence';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
+import { shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 import { 
   FaArrowLeft, FaUser, FaExclamationTriangle, FaMapMarkerAlt, FaPhone, FaEye, FaHistory,
   FaFingerprint, FaClock, FaCalendarAlt, FaCar, FaWalking, FaBicycle, FaExclamation
@@ -39,7 +41,12 @@ const MobileProfileView = () => {
   const navigate = useNavigate();
   const [photoLightbox, setPhotoLightbox] = useState(null);
 
-  const { data: profile, isLoading: profileLoading } = useCriminalProfile(id);
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const { data: profile, isLoading: profileLoading } = useCriminalProfile(
+    id,
+    activeOrganizationId,
+    shouldIncludeUnscopedProfiles(activeOrganization)
+  );
   const { data: incidents } = useProfileIncidents(id);
 
   const getRiskBadgeClass = (riskLevel) => {

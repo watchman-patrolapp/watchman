@@ -9,9 +9,13 @@ import {
   PROFILE_INCIDENT_CONFIDENCE_EXPLAINER,
 } from '../../data/profileIncidentLinkTaxonomy';
 import BrandedLoader from '../layout/BrandedLoader';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
+import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 
 const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
   const navigate = useNavigate();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const includeUnscoped = shouldIncludeUnscopedProfiles(activeOrganization);
   const location = useLocation();
   const reportReturnPath = `${location.pathname}${location.search}`;
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
@@ -29,9 +33,13 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
   const fetchProfileCatalog = async () => {
     setCatalogLoading(true);
     try {
-      const { data: profiles, error } = await supabase
-        .from('criminal_profiles')
-        .select('id, primary_name, photo_urls, risk_level, status, known_aliases')
+      const { data: profiles, error } = await scopeToOrganization(
+        supabase
+          .from('criminal_profiles')
+          .select('id, primary_name, photo_urls, risk_level, status, known_aliases'),
+        activeOrganizationId,
+        includeUnscoped
+      )
         .order('primary_name', { ascending: true, nullsFirst: false })
         .limit(1000);
 

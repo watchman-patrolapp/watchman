@@ -8,10 +8,12 @@ import toast from 'react-hot-toast';
 import { FaArrowLeft, FaCheck, FaUndo, FaSync, FaEnvelope, FaUser, FaClock } from 'react-icons/fa';
 import ThemeToggle from '../components/ThemeToggle';
 import BrandedLoader from '../components/layout/BrandedLoader';
+import { useScopedOrganization } from '../utils/organizationScope';
 
 export default function AdminFeedbackReviews() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { scope } = useScopedOrganization();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
@@ -28,10 +30,11 @@ export default function AdminFeedbackReviews() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('feedback')
-        .select('id, name, email, message, created_at, reviewed_at, reviewed_by, submitter_user_id')
-        .order('created_at', { ascending: false });
+      const { data, error } = await scope(
+        supabase
+          .from('feedback')
+          .select('id, name, email, message, created_at, reviewed_at, reviewed_by, submitter_user_id')
+      ).order('created_at', { ascending: false });
       if (error) throw error;
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -41,7 +44,7 @@ export default function AdminFeedbackReviews() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     void load();

@@ -112,11 +112,14 @@ export const getEvidenceStats = (evidence) => {
 };
 
 // AI MATCHING FUNCTIONS (heuristic — not facial recognition)
-export const analyzeEvidenceForMatches = async (evidenceEntry, incidentData) => {
+export const analyzeEvidenceForMatches = async (evidenceEntry, incidentData, organizationId = null) => {
   const type = incidentData?.type;
   if (!type || !String(type).trim()) return [];
 
-  const { data: potentialMatches, error } = await supabase.from('criminal_profiles').select('*').limit(40);
+  let query = supabase.from('criminal_profiles').select('*').limit(40);
+  if (organizationId) query = query.eq('organization_id', organizationId);
+  else query = query.eq('organization_id', '00000000-0000-0000-0000-000000000000');
+  const { data: potentialMatches, error } = await query;
 
   if (error || !potentialMatches?.length) return [];
 

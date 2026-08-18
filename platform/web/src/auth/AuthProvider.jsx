@@ -46,7 +46,7 @@ function buildPhase1Profile(data, authUser) {
   return {
     fullName: data.full_name,
     address: data.address,
-    phone: data.phone ?? authUser.user_metadata?.phone ?? null,
+    phone: data.phone ?? authUser.user_metadata?.contact_phone ?? authUser.user_metadata?.phone ?? null,
     carType: data.car_type,
     registrationNumber: data.registration_number,
     vehicleColor: data.vehicle_color,
@@ -55,8 +55,66 @@ function buildPhase1Profile(data, authUser) {
     sopVersionAccepted: data.sop_version_accepted,
     sopAcceptedAt: data.sop_accepted_at,
     createdAt: data.created_at,
+    organizationId: data.organization_id ?? null,
+    activeOrganizationId: data.active_organization_id ?? null,
+    homeSuburbId: data.home_suburb_id ?? null,
+    patrollerSuburbId: data.patroller_suburb_id ?? null,
+    homeLat: data.home_lat ?? null,
+    homeLng: data.home_lng ?? null,
+    homePinSetAt: data.home_pin_set_at ?? null,
+    isVerifiedResident: Boolean(data.verified),
+    verificationMethod: data.verification_method ?? "pending",
+    platformRole: data.platform_role ?? "none",
+    emergencyContactName: data.emergency_contact_name ?? null,
+    emergencyContactPhone: data.emergency_contact_phone ?? null,
+    emergencyContactUserId: data.emergency_contact_user_id ?? null,
+    emergencyContactRelationship: data.emergency_contact_relationship ?? null,
+    emergencyContact2Name: data.emergency_contact_2_name ?? null,
+    emergencyContact2Phone: data.emergency_contact_2_phone ?? null,
+    emergencyContact2UserId: data.emergency_contact_2_user_id ?? null,
+    emergencyContact2Relationship: data.emergency_contact_2_relationship ?? null,
     vehicles: [],
     requiredSopVersion: null,
+  }
+}
+
+async function syncResidentSecurityMembershipFromMetadata(authUser, profileData) {
+  const membershipFlag = authUser?.user_metadata?.security_membership
+  const companyId = String(authUser?.user_metadata?.security_company_id || '').trim()
+  const companyName = String(authUser?.user_metadata?.security_company_name || '').trim()
+  if (membershipFlag !== 'yes' && !companyId) return
+
+  let securityCompanyId = companyId || null
+  if (securityCompanyId) {
+    const { data: existingCompany } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('id', securityCompanyId)
+      .eq('type', 'security_company')
+      .maybeSingle()
+    if (!existingCompany?.id) return
+    securityCompanyId = existingCompany.id
+  } else if (companyName) {
+    const { data: existingCompany } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('type', 'security_company')
+      .ilike('name', companyName)
+      .maybeSingle()
+    if (!existingCompany?.id) return
+    securityCompanyId = existingCompany.id
+  } else {
+    return
+  }
+
+  if (!securityCompanyId || !profileData?.id) return
+
+  const { error } = await supabase.rpc('claim_security_company', {
+    p_company_id: securityCompanyId,
+    p_member_reference: authUser?.user_metadata?.security_membership_reference || null,
+  })
+  if (error && !String(error.message || '').includes('transfer_required')) {
+    console.warn('syncResidentSecurityMembershipFromMetadata:', error.message)
   }
 }
 
@@ -127,6 +185,20 @@ export const AuthProvider = ({ children }) => {
     devLog('Auth: Fetching profile for', authUser.id)
 
     const loadPromise = (async () => {
+      try {
+        const { error: signupErr } = await withTimeout(
+          supabase.rpc('apply_my_signup_profile'),
+          8000
+        )
+        if (signupErr && !isRpcNotFoundError(signupErr)) {
+          console.warn('Auth: apply_my_signup_profile', signupErr.message)
+        }
+      } catch (signupApplyError) {
+        if (!isRpcNotFoundError(signupApplyError)) {
+          console.warn('Auth: apply_my_signup_profile', signupApplyError)
+        }
+      }
+
       const loadUserCore = async () => {
         const { data, error } = await supabase
           .from('users')
@@ -172,6 +244,11 @@ export const AuthProvider = ({ children }) => {
           try {
             const { vehicles, requiredSopVersion, syncedPhone } = await withTimeout(loadUserExtras())
             if (!mounted.current) return
+            try {
+              await syncResidentSecurityMembershipFromMetadata(authUser, data)
+            } catch (membershipSyncError) {
+              console.warn('Auth: security membership sync', membershipSyncError)
+            }
             setUser((prev) => {
               if (!prev?.uid || prev.uid !== authUser.id) return prev
               return {

@@ -2,6 +2,45 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+/** Replaces a leftover production Workbox SW so localhost is not stuck on offline.html. */
+const DEV_DESTROY_STALE_SW = `/* vite-dev: unregister stale PWA workers */
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    await self.clients.claim();
+    await self.registration.unregister();
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    await Promise.all(clients.map((client) => client.navigate(client.url)));
+  })());
+});
+`;
+
+function destroyStaleServiceWorkersInDev() {
+  const isKillSwitchPath = (url = '') => {
+    const path = url.split('?')[0];
+    return path === '/sw.js' || path === '/dev-sw.js';
+  };
+
+  const writeKillSwitch = (res) => {
+    res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.end(DEV_DESTROY_STALE_SW);
+  };
+
+  return {
+    name: 'destroy-stale-service-workers-in-dev',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!isKillSwitchPath(req.url)) return next();
+        writeKillSwitch(res);
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const isCapacitor = mode === 'capacitor';
   const isVercel = process.env.VERCEL === '1';
@@ -9,6 +48,7 @@ export default defineConfig(({ mode }) => {
   return {
     base: isCapacitor ? './' : '/',
     plugins: [
+      destroyStaleServiceWorkersInDev(),
       react(),
       !isVercel &&
         !isCapacitor &&
@@ -53,7 +93,7 @@ export default defineConfig(({ mode }) => {
             ],
           },
           workbox: {
-            navigateFallback: '/offline.html',
+            navigateFallback: '/index.html',
             navigateFallbackAllowlist: [/^\/.*$/],
             navigateFallbackDenylist: [
               /^\/api/,
@@ -79,6 +119,11 @@ export default defineConfig(({ mode }) => {
     ].filter(Boolean),
     optimizeDeps: {
       include: ['leaflet', 'react-leaflet'],
+    },
+    server: {
+      headers: {
+        'Cache-Control': 'no-store',
+      },
     },
     build: {
       chunkSizeWarningLimit: 1000,

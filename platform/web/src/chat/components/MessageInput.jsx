@@ -279,6 +279,7 @@ export const MessageInput = React.memo(function MessageInput({
   onComposerTyping,
   replyToMessage = null,
   onClearReply,
+  composerPlaceholder,
 }) {
   const [text, setText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -298,6 +299,10 @@ export const MessageInput = React.memo(function MessageInput({
   const adjustComposerHeight = useCallback(() => {
     const el = messageTextareaRef.current;
     if (!el) return;
+    if (!el.value) {
+      el.style.height = '';
+      return;
+    }
     el.style.height = 'auto';
     const maxPx = 120;
     el.style.height = `${Math.min(el.scrollHeight, maxPx)}px`;
@@ -341,7 +346,7 @@ export const MessageInput = React.memo(function MessageInput({
   );
 
   useEffect(() => {
-    if (text === '') adjustComposerHeight();
+    adjustComposerHeight();
   }, [text, adjustComposerHeight]);
 
   const handleImageSelect = useCallback(async (e) => {
@@ -514,7 +519,7 @@ export const MessageInput = React.memo(function MessageInput({
         </div>
       )}
 
-      <div className="flex gap-2 items-end max-w-full">
+      <div className="flex max-w-full items-center gap-2">
         {/* Quick Templates Toggle */}
         <button
           type="button"
@@ -670,7 +675,7 @@ export const MessageInput = React.memo(function MessageInput({
               )}
             </div>
 
-            <div className="flex min-w-0 flex-1 items-end gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <div className="min-w-0 flex-1">
                 {replyToMessage && (
                   <div className="mb-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs dark:border-teal-700 dark:bg-teal-900/30">
@@ -704,19 +709,19 @@ export const MessageInput = React.memo(function MessageInput({
                       adjustComposerHeight();
                     }}
                     onKeyDown={handleComposerKeyDown}
-                    placeholder={isOnline ? 'Message…' : 'Offline…'}
+                    placeholder={composerPlaceholder || (isOnline ? 'Message…' : 'Offline…')}
                     maxLength={APP_CONFIG.MAX_MESSAGE_LENGTH}
                     disabled={disabled || !isOnline}
-                    className="max-h-[7.5rem] min-h-[2.75rem] w-full resize-none overflow-y-auto rounded-xl border border-gray-300 px-3 py-2.5 pr-16 text-base leading-snug text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                    className="block h-11 max-h-[7.5rem] min-h-[2.75rem] w-full resize-none overflow-y-auto rounded-xl border border-gray-300 px-3 py-2.5 pr-11 text-base leading-5 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 sm:h-12 sm:min-h-[3rem]"
                     aria-label="Message input"
                   />
                   {isEmergencyMode && (
                     <FaExclamationTriangle
-                      className="pointer-events-none absolute right-12 top-3 h-4 w-4 animate-pulse text-red-500"
+                      className="pointer-events-none absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-pulse text-red-500"
                       aria-hidden="true"
                     />
                   )}
-                  <div className="absolute right-3 top-2.5" ref={emojiPickerRef}>
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2" ref={emojiPickerRef}>
                     <button
                       type="button"
                       onClick={() => setShowEmojiPicker((v) => !v)}

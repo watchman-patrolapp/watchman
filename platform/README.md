@@ -7,7 +7,7 @@ This folder holds everything that ships as the product:
 | `web/` | Vite + React PWA (`npm run dev` / `npm run build`). Capacitor config lives here; `webDir` is `dist`. |
 | `android/` | **Capacitor Android project** (native shell, bundled web assets, plugins). Built with Gradle from this folder; `capacitor.config.json` in `web/` sets `"android": { "path": "../android" }`. |
 | `supabase/` | Database migrations, Edge Functions, and Supabase project config. |
-| `docs/` | Privacy, user guides, and operational runbooks. |
+| `docs/` | Privacy, user guides, operational runbooks, and [`SCALE_ROADMAP.md`](docs/SCALE_ROADMAP.md) (where we are / pending / next). |
 | `scripts/` | Small maintenance scripts (e.g. scheduled location cleanup helper). |
 
 **Vercel:** set the project **Root Directory** to `platform/web` (not the repository root).

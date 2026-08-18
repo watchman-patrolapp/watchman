@@ -19,6 +19,9 @@ import toast from "react-hot-toast";
 import StructuredEvidenceList, { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceList";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
+import { belongsToActiveOrganization, useScopedOrganization } from "../utils/organizationScope";
+import { canPublishCityHub } from "../auth/roleMatrix";
+import ShareToCityHubSheet from "../components/incident/ShareToCityHubSheet";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -26,6 +29,52 @@ import BrandedLoader from "../components/layout/BrandedLoader";
 
 const POLLING_INTERVAL = 30000; // 30s fallback polling
 const CACHE_STALE_TIME = 1000; // 1s before refetch
+
+async function createResidentStatusEvents({
+  incidentId,
+  reporterId,
+  actorUserId,
+  resolvedStatus,
+  rejectionReason = null,
+}) {
+  if (!incidentId || !reporterId || !actorUserId) return;
+  const resolvedTitle =
+    resolvedStatus === "approved"
+      ? "Report resolved: approved"
+      : resolvedStatus === "rejected"
+        ? "Report resolved: rejected"
+        : "Report status updated";
+  const resolvedDetails =
+    resolvedStatus === "approved"
+      ? "Your report was reviewed and approved by the moderation team."
+      : resolvedStatus === "rejected"
+        ? `Your report was reviewed and closed as rejected.${rejectionReason ? ` Reason: ${rejectionReason}` : ""}`
+        : `Status changed to ${resolvedStatus}.`;
+
+  const payload = [
+    {
+      incident_id: incidentId,
+      reporter_id: reporterId,
+      event_type: "assigned",
+      title: "Report assigned",
+      details: "A moderator has taken ownership of your report.",
+      actor_user_id: actorUserId,
+    },
+    {
+      incident_id: incidentId,
+      reporter_id: reporterId,
+      event_type: "resolved",
+      title: resolvedTitle,
+      details: resolvedDetails,
+      actor_user_id: actorUserId,
+    },
+  ];
+
+  const { error } = await supabase.from("resident_report_events").insert(payload);
+  if (error) {
+    console.warn("resident_report_events insert:", error.message);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -176,11 +225,14 @@ function ModerationCard({ incident, onApprove, onReject, processing }) {
 export default function IncidentModeration() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { scope, activeOrganizationId, activeOrganization, includeUnscoped } = useScopedOrganization();
+  const canShareToCityHub = canPublishCityHub(user?.role, user?.platformRole);
   
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(null);
+  const [shareIncident, setShareIncident] = useState(null);
   
   // Track processed IDs to prevent re-appearing (cache-busting)
   const processedIds = useRef(new Set());
@@ -204,10 +256,11 @@ export default function IncidentModeration() {
     setError(null);
     
     try {
-      const { data, error: fetchError } = await supabase
-        .from('incidents')
-        .select('*')
+      const { data, error: fetchError } = await scope(
+        supabase.from('incidents').select('*')
+      )
         .eq('status', 'pending')
+        .not('type', 'ilike', 'SOS')
         .order('submitted_at', { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -245,7 +298,7 @@ export default function IncidentModeration() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   // ---------------------------------------------------------------------------
   // Realtime Subscription (primary sync method)
@@ -288,6 +341,9 @@ export default function IncidentModeration() {
               break;
               
             case 'INSERT':
+              if (!belongsToActiveOrganization(payload.new, activeOrganizationId, includeUnscoped)) {
+                break;
+              }
               // Only add if not locally processed — load evidence rows for this incident
               if (!processedIds.current.has(payload.new.id)) {
                 void (async () => {
@@ -329,6 +385,7 @@ export default function IncidentModeration() {
   
   const handleApprove = async (id) => {
     if (processing) return; // Prevent concurrent actions
+    const selected = incidents.find((row) => row.id === id) || null;
     
     setProcessing(`approve-${id}`);
     
@@ -360,7 +417,21 @@ export default function IncidentModeration() {
         throw rpcError;
       }
 
-      toast.success("Incident approved and published");
+      await createResidentStatusEvents({
+        incidentId: id,
+        reporterId: selected?.reporter_id,
+        actorUserId: user.id,
+        resolvedStatus: "approved",
+      });
+
+      toast.success(
+        canShareToCityHub
+          ? "Incident approved. Review the City Hub share if other neighborhoods need this."
+          : "Incident approved and published"
+      );
+      if (canShareToCityHub && selected) {
+        setShareIncident({ ...selected, status: "approved" });
+      }
       
       // Verify after short delay (catches any cache lag)
       setTimeout(() => verifyRemoval(id, 'approved'), 500);
@@ -383,6 +454,8 @@ export default function IncidentModeration() {
     // User cancelled
     if (reason === null) return;
     
+    const selected = incidents.find((row) => row.id === id) || null;
+
     setProcessing(`reject-${id}`);
     
     // Optimistic removal
@@ -397,6 +470,14 @@ export default function IncidentModeration() {
       });
 
       if (rpcError) throw rpcError;
+
+      await createResidentStatusEvents({
+        incidentId: id,
+        reporterId: selected?.reporter_id,
+        actorUserId: user.id,
+        resolvedStatus: "rejected",
+        rejectionReason: reason || null,
+      });
 
       toast.success("Incident rejected and archived");
       
@@ -523,6 +604,15 @@ export default function IncidentModeration() {
           )}
         </div>
       </div>
+
+      <ShareToCityHubSheet
+        open={Boolean(shareIncident)}
+        onClose={() => setShareIncident(null)}
+        incident={shareIncident}
+        organizationName={activeOrganization?.name}
+        organizationId={activeOrganizationId}
+        userId={user?.id}
+      />
     </div>
   );
 }

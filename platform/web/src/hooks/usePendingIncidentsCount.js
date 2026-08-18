@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../supabase/client';
+import { applyWorkingOrganizationScope } from '../utils/organizationScope';
 
 /**
  * Count of incidents awaiting moderation. Only meaningful when the caller enables it
@@ -16,10 +17,9 @@ export function usePendingIncidentsCount(enabled) {
       return;
     }
     try {
-      const { count: n, error } = await supabase
-        .from('incidents')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
+      const { count: n, error } = await applyWorkingOrganizationScope(
+        supabase.from('incidents').select('*', { count: 'exact', head: true })
+      ).eq('status', 'pending').not('type', 'ilike', 'SOS');
       if (error) throw error;
       setCount(typeof n === 'number' ? n : 0);
     } catch {

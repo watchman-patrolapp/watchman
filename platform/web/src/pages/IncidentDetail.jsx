@@ -4,7 +4,7 @@ import { supabase } from '../supabase/client';
 import { format } from 'date-fns';
 import { 
   FaArrowLeft, FaUserSecret, FaFileAlt, FaExclamationTriangle, FaCar, FaTrash, FaEdit,
-  FaPrint, FaFilePdf, FaHistory, FaUser
+  FaPrint, FaFilePdf, FaHistory, FaUser, FaShareAlt
 } from 'react-icons/fa';
 import CriminalProfileCard from '../components/intelligence/CriminalProfileCard';
 import { SeenByChip } from '../components/intelligence/SightingsLogEditor';
@@ -16,6 +16,7 @@ import StructuredEvidenceList, {
 } from '../components/evidence/StructuredEvidenceList';
 import IncidentSectionPanel from '../components/incident/IncidentSectionPanel';
 import AddIncidentSectionUpdateModal from '../components/incident/AddIncidentSectionUpdateModal';
+import ShareToCityHubSheet from '../components/incident/ShareToCityHubSheet';
 import {
   INCIDENT_SECTION_KEYS,
   INCIDENT_SECTION_LABELS,
@@ -34,6 +35,9 @@ import {
   PROFILE_INCIDENT_CONFIDENCE_NOT_SET_HINT,
 } from '../data/profileIncidentLinkTaxonomy';
 import { canStaffManageIncidents } from '../auth/staffRoles';
+import { canPublishCityHub } from '../auth/roleMatrix';
+import { belongsToActiveOrganization, useScopedOrganization } from '../utils/organizationScope';
+import { fetchCityHubShareForIncident } from '../utils/cityHubShare';
 
 /**
  * `incident_suspects` is populated for every structured suspect submit; `incident_evidence` rows can be
@@ -207,6 +211,7 @@ export default function IncidentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { activeOrganizationId, activeOrganization, includeUnscoped } = useScopedOrganization();
   const [incident, setIncident] = useState(null);
   const [evidence, setEvidence] = useState([]);
   const [incidentSuspects, setIncidentSuspects] = useState([]);
@@ -219,8 +224,11 @@ export default function IncidentDetail() {
   const [updateModal, setUpdateModal] = useState(null);
   const [sectionUpdateBusy, setSectionUpdateBusy] = useState(false);
   const [migrateLegacyBusy, setMigrateLegacyBusy] = useState(false);
+  const [cityHubShare, setCityHubShare] = useState(null);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
 
   const showAdminDelete = canStaffManageIncidents(user?.role);
+  const canShareToCityHub = canPublishCityHub(user?.role, user?.platformRole);
   const canAddUpdates = canAddIncidentSectionUpdates(user?.role);
   const updatesBySection = groupIncidentSectionUpdatesByKey(sectionUpdates);
   const hasAnySectionUpdates = sectionUpdates.length > 0;
@@ -274,6 +282,11 @@ export default function IncidentDetail() {
         .single();
 
       if (incidentError) throw incidentError;
+      if (!belongsToActiveOrganization(incidentData, activeOrganizationId, includeUnscoped)) {
+        toast.error('This incident belongs to another neighborhood.');
+        navigate('/incidents', { replace: true });
+        return;
+      }
       setIncident(incidentData);
 
       // Fetch evidence
@@ -319,13 +332,21 @@ export default function IncidentDetail() {
       if (suError) throw suError;
       setSectionUpdates(suData || []);
 
+      try {
+        const shared = await fetchCityHubShareForIncident(id);
+        setCityHubShare(shared);
+      } catch (shareErr) {
+        console.warn('City Hub share lookup:', shareErr);
+        setCityHubShare(incidentData?.city_hub_post_id ? { id: incidentData.city_hub_post_id } : null);
+      }
+
     } catch (error) {
       console.error('Error fetching incident:', error);
       toast.error('Failed to load incident details');
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, activeOrganizationId, includeUnscoped, navigate]);
 
   const handleMigrateLegacyScenePhotos = useCallback(async () => {
     if (!id || !incident || !user?.id) return;
@@ -440,81 +461,105 @@ export default function IncidentDetail() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <button 
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 shadow-sm backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/90">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:px-6 lg:px-8">
+          <button
+            type="button"
             onClick={() => navigate('/incidents')}
-            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-2"
+            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
           >
-            <FaArrowLeft /> Back to Incidents
+            <FaArrowLeft className="h-3 w-3" />
+            Back to Incidents
           </button>
-          <div className="flex justify-between items-start gap-4 flex-wrap">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Incident #{id.slice(0, 8)}
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Reported by {incident.submitted_by_name} on {format(new Date(incident.submitted_at), 'MMM dd, yyyy HH:mm')}
-              </p>
-              {hasAnySectionUpdates && (
-                <p className="mt-2 inline-flex items-center gap-2 text-xs font-medium text-amber-900 dark:text-amber-200">
-                  <FaHistory className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                  This report has official section updates below (original submission is preserved).
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                incident.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200' :
-                incident.status === 'approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' :
-                'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
-              }`}>
-                {incident.status?.toUpperCase()}
-              </span>
-              <div className="flex flex-wrap justify-end gap-2 items-center">
-                <ThemeToggle variant="toolbar" />
-                <button
-                  type="button"
-                  onClick={() => navigate(`/incidents/${id}/print`)}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700"
-                >
-                  <FaPrint className="w-3.5 h-3.5" />
-                  Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/incidents/${id}/print?intent=pdf`)}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-indigo-700 text-white hover:bg-indigo-800"
-                >
-                  <FaFilePdf className="w-3.5 h-3.5" />
-                  Save as PDF
-                </button>
-                {showAdminDelete && incident.status === 'approved' && (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/incident/${id}/edit`)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700"
-                  >
-                    <FaEdit className="w-3.5 h-3.5" />
-                    Edit report
-                  </button>
-                )}
-                {showAdminDelete && (
-                  <button
-                    type="button"
-                    disabled={deleteBusy}
-                    onClick={handleAdminDelete}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <FaTrash className="w-3.5 h-3.5" />
-                    {deleteBusy ? 'Deleting…' : 'Delete incident (admin)'}
-                  </button>
-                )}
-              </div>
-            </div>
+          <div className="flex items-center gap-2">
+            <span className={`px-3 py-1 rounded-full text-xs font-medium sm:text-sm ${
+              incident.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200' :
+              incident.status === 'approved' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' :
+              'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
+            }`}>
+              {incident.status?.toUpperCase()}
+            </span>
+            <ThemeToggle variant="toolbar" />
           </div>
         </div>
       </header>
+
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Incident #{id.slice(0, 8)}
+            </h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Reported by {incident.submitted_by_name} on {format(new Date(incident.submitted_at), 'MMM dd, yyyy HH:mm')}
+            </p>
+            {hasAnySectionUpdates && (
+              <p className="mt-2 inline-flex items-center gap-2 text-xs font-medium text-amber-900 dark:text-amber-200">
+                <FaHistory className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                This report has official section updates below (original submission is preserved).
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => navigate(`/incidents/${id}/print`)}
+              className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700"
+            >
+              <FaPrint className="h-3.5 w-3.5" />
+              Print
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/incidents/${id}/print?intent=pdf`)}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-800"
+            >
+              <FaFilePdf className="h-3.5 w-3.5" />
+              Save as PDF
+            </button>
+            {canShareToCityHub && incident.status === 'approved' && !cityHubShare && (
+              <button
+                type="button"
+                onClick={() => setShareSheetOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+              >
+                <FaShareAlt className="h-3.5 w-3.5" />
+                Share to City Hub
+              </button>
+            )}
+            {canShareToCityHub && incident.status === 'approved' && cityHubShare && (
+              <button
+                type="button"
+                onClick={() => navigate('/city-hub')}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+              >
+                Shared to City Hub
+              </button>
+            )}
+            {showAdminDelete && incident.status === 'approved' && (
+              <button
+                type="button"
+                onClick={() => navigate(`/incident/${id}/edit`)}
+                className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
+              >
+                <FaEdit className="h-3.5 w-3.5" />
+                Edit report
+              </button>
+            )}
+            {showAdminDelete && (
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={handleAdminDelete}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FaTrash className="h-3.5 w-3.5" />
+                {deleteBusy ? 'Deleting…' : 'Delete incident (admin)'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -976,6 +1021,18 @@ export default function IncidentDetail() {
         entryHint={updateModal?.entryHint}
         onSubmit={handleSubmitSectionUpdate}
         busy={sectionUpdateBusy}
+      />
+
+      <ShareToCityHubSheet
+        open={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        incident={incident}
+        organizationName={activeOrganization?.name}
+        organizationId={activeOrganizationId}
+        userId={user?.id}
+        linkedProfiles={linkedProfiles}
+        incidentSuspects={incidentSuspects}
+        onShared={(post) => setCityHubShare(post || { id: true })}
       />
     </div>
   );

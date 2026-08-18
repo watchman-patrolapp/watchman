@@ -4,11 +4,13 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
 import { canAccessAdminPanel, canReviewFeedback } from "../auth/staffRoles";
+import { canAccessPlatformConsole } from "../auth/platformRoles";
+import { canPreviewResidentHome, canManageEmergencyDirectory, canPostAreaBroadcast, canUseHouseholdMode, isGlobalAppRole, isHouseholdModeRole } from "../auth/roleMatrix";
 import { supabase } from "../supabase/client";
 import { useSupabaseQuery } from "../hooks/useSupabaseQuery";
 import ExcelJS from 'exceljs';
 import toast from 'react-hot-toast';
-import { FaCar, FaTrash, FaArrowLeft, FaFileExcel, FaPrint, FaFilePdf, FaUsers, FaClock, FaShieldAlt, FaTrophy, FaWalking, FaBicycle, FaMapMarkerAlt, FaPhone, FaStopwatch, FaIdCard, FaComments } from "react-icons/fa";
+import { FaCar, FaTrash, FaArrowLeft, FaFileExcel, FaPrint, FaFilePdf, FaUsers, FaClock, FaShieldAlt, FaTrophy, FaWalking, FaBicycle, FaMapMarkerAlt, FaPhone, FaStopwatch } from "react-icons/fa";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid, Legend
@@ -16,15 +18,21 @@ import {
 import VehicleIcon, { COLOR_HEX, normalizeVehicleType, PatrolInfoIcon } from '../components/VehicleIcon';
 import LivePatrolMap from '../components/LivePatrolMap';
 import AdminPatrolRoutesSection from '../components/admin/AdminPatrolRoutesSection';
+import HouseholdsAwayCard from '../components/patrol/HouseholdsAwayCard';
 import { getVehicleDisplayText } from '../utils/vehicleDisplay';
 import { enrichPatrolRowsWithAvatars } from '../utils/enrichPatrolAvatars';
 import { resolvePatrolAvatarUrl } from '../utils/patrolAvatarUrl';
 import { Avatar } from '../chat/components/common/Avatar';
 import PatrollerPhotoPreview from '../components/patrol/PatrollerPhotoPreview';
 import ThemeToggle from '../components/ThemeToggle';
+import AppNotificationBell from '../components/layout/AppNotificationBell';
 import BrandedLoader from '../components/layout/BrandedLoader';
-import { DEFAULT_PATROL_ZONE, displayPatrolZone } from '../config/neighborhoodRegions';
+import { DEFAULT_PATROL_ZONE, displayPatrolZone, displayWatchAreaName } from '../config/neighborhoodRegions';
 import { adaptivePollIntervalMs, subscribeDataBudgetHints } from '../utils/dataSaverProfile';
+import { useActiveOrganization } from '../auth/useActiveOrganization';
+import { useScopedOrganization } from '../utils/organizationScope';
+import AreaContextBar from '../components/layout/AreaContextBar';
+import AdminToolsMenu from '../components/admin/AdminToolsMenu';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -98,6 +106,8 @@ function InlineConfirm({ label, onConfirm, onCancel, danger = true }) {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const { scope } = useScopedOrganization();
 
   // Role guard (skip until public.users.role is loaded — not JWT "authenticated")
   useEffect(() => {
@@ -128,56 +138,63 @@ export default function AdminDashboard() {
   }, []);
 
   const isFeedbackReviewer = canReviewFeedback(user?.role);
+  const isPlatformConsoleUser = canAccessPlatformConsole(user?.platformRole);
+  const isGlobalAppUser = isGlobalAppRole(user?.role);
+  const canOpenResidentPreview = canPreviewResidentHome(user?.role);
+  const canOpenHousehold = isHouseholdModeRole(user?.role) && canUseHouseholdMode(user?.role);
+  const canEditEmergencyContacts = canManageEmergencyDirectory(user?.role, user?.platformRole);
+  const canSendAreaNotice = canPostAreaBroadcast(user?.role, user?.platformRole);
 
   // ---------------------------------------------------------------------------
   // useSupabaseQuery hooks
   // ---------------------------------------------------------------------------
   const fetchPatrolLogs = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('patrol_logs').select('*').order('start_time', { ascending: false });
+    const { data, error } = await scope(
+      supabase.from('patrol_logs').select('*')
+    ).order('start_time', { ascending: false });
     if (error) throw error;
     return data || [];
-  }, []);
+  }, [scope]);
 
   const fetchPatrolSlots = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('patrol_slots')
-      .select('*')
+    const { data, error } = await scope(
+      supabase.from('patrol_slots').select('*')
+    )
       .gte('date', todayLocal)
       .order('date', { ascending: true })
       .order('start_time', { ascending: true });
     if (error) throw error;
     return data || [];
-  }, [todayLocal]);
+  }, [todayLocal, scope]);
 
   const fetchPendingCount = useCallback(async () => {
-    const { count, error } = await supabase
-      .from('incidents').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+    const { count, error } = await scope(
+      supabase.from('incidents').select('*', { count: 'exact', head: true })
+      ).eq('status', 'pending').not('type', 'ilike', 'SOS');
     if (error) throw error;
     return count || 0;
-  }, []);
+  }, [scope]);
 
   const fetchPendingFeedbackCount = useCallback(async () => {
-    const { count, error } = await supabase
-      .from('feedback')
-      .select('*', { count: 'exact', head: true })
-      .is('reviewed_at', null);
+    const { count, error } = await scope(
+      supabase.from('feedback').select('*', { count: 'exact', head: true })
+    ).is('reviewed_at', null);
     if (error) throw error;
     return count || 0;
-  }, []);
+  }, [scope]);
 
   const { data: patrolLogs = [], loading: logsLoading, error: logsError, refetch: refetchLogs } =
-    useSupabaseQuery(fetchPatrolLogs);
+    useSupabaseQuery(fetchPatrolLogs, [activeOrganizationId]);
   const { data: patrolSlots = [], loading: slotsLoading, error: slotsError, refetch: refetchSlots } =
-    useSupabaseQuery(fetchPatrolSlots);
+    useSupabaseQuery(fetchPatrolSlots, [activeOrganizationId]);
   const { data: pendingCount = 0, loading: pendingLoading, error: pendingError, refetch: refetchPending } =
-    useSupabaseQuery(fetchPendingCount);
+    useSupabaseQuery(fetchPendingCount, [activeOrganizationId]);
   const {
     data: pendingFeedbackCount = 0,
     loading: pendingFeedbackLoading,
     error: pendingFeedbackError,
     refetch: refetchPendingFeedback,
-  } = useSupabaseQuery(fetchPendingFeedbackCount, [user?.role], { enabled: isFeedbackReviewer });
+  } = useSupabaseQuery(fetchPendingFeedbackCount, [user?.role, activeOrganizationId], { enabled: isFeedbackReviewer });
 
   // Patrol signups table is static after initial load unless we refetch — volunteers delete from Schedule without this page mounted.
   useEffect(() => {
@@ -221,7 +238,7 @@ export default function AdminDashboard() {
     const silent = opts.silent === true;
     if (!silent) setActivePatrolsLoading(true);
     try {
-      const { data, error } = await supabase.from('active_patrols').select('*');
+      const { data, error } = await scope(supabase.from('active_patrols').select('*'));
       if (error) throw error;
       const enriched = await enrichPatrolRowsWithAvatars(supabase, data || []);
       setActivePatrols(enriched);
@@ -231,7 +248,7 @@ export default function AdminDashboard() {
     } finally {
       if (!silent) setActivePatrolsLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     fetchActivePatrols();
@@ -273,9 +290,11 @@ export default function AdminDashboard() {
     setRecentActivityError(null);
     try {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const activeQuery = scope(supabase.from('active_patrols').select('*')).gte('start_time', since);
+      const completedQuery = scope(supabase.from('patrol_logs').select('*')).gte('start_time', since);
       const [{ data: active, error: e1 }, { data: completed, error: e2 }] = await Promise.all([
-        supabase.from('active_patrols').select('*').gte('start_time', since),
-        supabase.from('patrol_logs').select('*').gte('start_time', since),
+        activeQuery,
+        completedQuery,
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
@@ -289,7 +308,7 @@ export default function AdminDashboard() {
     } finally {
       setRecentActivityLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     void fetchRecentActivity();
@@ -410,6 +429,7 @@ export default function AdminDashboard() {
         vehicle_make_model: patrol.vehicle_make_model || patrol.car_type || null,
         vehicle_reg: patrol.vehicle_reg || patrol.reg_number || null,
         vehicle_color: patrol.vehicle_color || 'gray',
+        organization_id: activeOrganizationId || patrol.organization_id || null,
       });
       if (insertError) throw insertError;
       const { error: deleteError } = await supabase.from('active_patrols').delete().eq('user_id', patrol.user_id);
@@ -522,7 +542,7 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Header */}
-        <div className="mb-8 space-y-3">
+        <div className="mb-8 space-y-3 border-b border-gray-200 pb-4 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate("/dashboard")}
@@ -533,88 +553,63 @@ export default function AdminDashboard() {
             </button>
             <h1 className="text-[1.35rem] sm:text-3xl font-bold text-gray-900 dark:text-white leading-tight">Admin Dashboard</h1>
           </div>
-          <div className="flex flex-nowrap overflow-x-auto gap-2 sm:gap-3 items-center">
+          {activeOrganization ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">{displayWatchAreaName(activeOrganization.name)}</p>
+          ) : null}
+          <AreaContextBar />
+          <div className="flex flex-nowrap items-center gap-1.5 sm:gap-2">
+            <AppNotificationBell variant="toolbar" />
             <ThemeToggle variant="toolbar" />
             <button
               type="button"
               onClick={exportToExcel}
               disabled={exporting || !patrolLogs?.length}
-              className="inline-flex shrink-0 items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl transition text-sm font-medium shadow-sm"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-green-600 px-2.5 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-green-700 disabled:opacity-50 sm:gap-2 sm:px-3 sm:text-sm"
             >
-              <FaFileExcel className="w-4 h-4" aria-hidden="true" />
+              <FaFileExcel className="h-4 w-4" aria-hidden="true" />
               {exporting ? 'Exporting...' : 'Export'}
             </button>
             <button
               type="button"
               onClick={() => navigate("/admin/print")}
-              className="inline-flex shrink-0 items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-purple-600 px-2.5 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-purple-700 sm:gap-2 sm:px-3 sm:text-sm"
             >
-              <FaPrint className="w-4 h-4" aria-hidden="true" />
+              <FaPrint className="h-4 w-4" aria-hidden="true" />
               Print
             </button>
             <button
               type="button"
               onClick={() => navigate("/admin/print?intent=pdf")}
-              className="inline-flex shrink-0 items-center gap-2 px-3 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl transition text-sm font-medium shadow-sm"
+              title="Save as PDF"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-indigo-700 px-2.5 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-indigo-800 sm:gap-2 sm:px-3 sm:text-sm"
             >
-              <FaFilePdf className="w-4 h-4" aria-hidden="true" />
-              Save as PDF
+              <FaFilePdf className="h-4 w-4" aria-hidden="true" />
+              <span className="sm:hidden">PDF</span>
+              <span className="hidden sm:inline">Save as PDF</span>
             </button>
           </div>
         </div>
 
-        {/* Management Buttons */}
-        <div className="flex flex-wrap gap-3 mb-8">
-          <button
-            type="button"
-            onClick={() => navigate("/admin/members")}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
-          >
-            <FaIdCard className="w-4 h-4" aria-hidden />
-            Member profiles
-          </button>
-          <button onClick={() => navigate("/admin/users")} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition text-sm font-medium shadow-sm">
-            Manage Users
-          </button>
-          <button onClick={() => navigate("/admin/incidents")} className="relative px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition text-sm font-medium shadow-sm">
-            Moderate Incidents
-            {pendingCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-          <button onClick={() => navigate("/admin/chat")} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition text-sm font-medium shadow-sm">
-            Chat Logs
-          </button>
-          {isFeedbackReviewer && (
-            <button
-              type="button"
-              onClick={() => navigate("/admin/feedback")}
-              className="relative inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
-            >
-              <FaComments className="w-4 h-4" aria-hidden />
-              Feedback reviews
-              {pendingFeedbackCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
-                  {pendingFeedbackCount > 99 ? "99+" : pendingFeedbackCount}
-                </span>
-              )}
-            </button>
-          )}
-          {(pendingError || (isFeedbackReviewer && pendingFeedbackError)) && (
-            <button
-              type="button"
-              onClick={() => {
-                if (pendingError) void refetchPending();
-                if (isFeedbackReviewer && pendingFeedbackError) void refetchPendingFeedback();
-              }}
-              className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm"
-            >
-              Retry counts
-            </button>
-          )}
-        </div>
+        {/* Management tools — operations first; collapsible on mobile */}
+        <AdminToolsMenu
+          pendingCount={pendingCount}
+          pendingFeedbackCount={pendingFeedbackCount}
+          showRetryCounts={Boolean(pendingError || (isFeedbackReviewer && pendingFeedbackError))}
+          isFeedbackReviewer={isFeedbackReviewer}
+          isPlatformConsoleUser={isPlatformConsoleUser}
+          isGlobalAppUser={isGlobalAppUser}
+          canOpenResidentPreview={canOpenResidentPreview}
+          canOpenHousehold={canOpenHousehold}
+          canEditEmergencyContacts={canEditEmergencyContacts}
+          canSendAreaNotice={canSendAreaNotice}
+          onNavigate={(to) => navigate(to)}
+          onRetryCounts={() => {
+            if (pendingError) void refetchPending();
+            if (isFeedbackReviewer && pendingFeedbackError) void refetchPendingFeedback();
+          }}
+        />
+
+        <HouseholdsAwayCard className="mb-8" />
 
         {/* ── Currently on Patrol (live ops first) ── */}
         <div className="mb-8 rounded-2xl border border-green-200 dark:border-green-800 bg-green-50/90 dark:bg-green-950/25 shadow-sm overflow-hidden">

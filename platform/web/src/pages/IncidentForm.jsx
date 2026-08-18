@@ -17,6 +17,7 @@ import { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceLis
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { canStaffManageIncidents } from "../auth/staffRoles";
+import { useActiveOrganization } from "../auth/useActiveOrganization";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -284,6 +285,7 @@ export default function IncidentForm() {
   const { id: editIncidentId } = useParams();
   const isEditMode = Boolean(editIncidentId);
   const { user } = useAuth();
+  const { activeOrganizationId } = useActiveOrganization();
   const [form, setForm] = useState(INITIAL_FORM);
   const [evidence, setEvidence] = useState(EMPTY_EVIDENCE);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -571,6 +573,7 @@ export default function IncidentForm() {
           submitted_by_reg: user.user_metadata?.registration_number || null,
           status: "pending",
           submitted_at: new Date().toISOString(),
+          organization_id: activeOrganizationId || user.organizationId || null,
         };
 
         const { data: incident, error: insertError } = await supabase
@@ -780,7 +783,11 @@ export default function IncidentForm() {
           // Already linked in the report; do not prompt to create a new profile.
           if (suspect.linked_profile_id) continue;
           const evidenceRowId = formEntryIdToEvidenceId[suspect.id];
-          const matches = await analyzeEvidenceForMatches(suspect, incidentDataForMatch);
+          const matches = await analyzeEvidenceForMatches(
+            suspect,
+            incidentDataForMatch,
+            activeOrganizationId || user.organizationId || null
+          );
 
           if (matches.length > 0) {
             if (evidenceRowId) {

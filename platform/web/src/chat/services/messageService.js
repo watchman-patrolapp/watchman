@@ -2,6 +2,12 @@
 import { supabase } from '../../supabase/client';
 import { APP_CONFIG, MessageType } from '../utils/constants';
 import { sanitizeInput } from '../utils/security';
+import {
+  applyWorkingOrganizationScope,
+  getWorkingOrganizationId,
+  messageBelongsToWorkingOrganization,
+} from '../../utils/organizationScope';
+import { messageMatchesChannel } from '../utils/chatChannels';
 
 /** Duplicate read row (PK message_id, user_id) — not a failure. */
 function isChatReadDuplicateError(error) {
@@ -9,6 +15,30 @@ function isChatReadDuplicateError(error) {
   if (String(error.code) === '23505') return true;
   const blob = `${error.message || ''} ${error.details || ''}`.toLowerCase();
   return blob.includes('duplicate') || blob.includes('unique constraint');
+}
+
+function isMissingVisibilityColumn(error) {
+  if (!error) return false;
+  if (String(error.code) === '42501') return false;
+  const blob = `${error.code || ''} ${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
+  if (blob.includes('row-level security')) return false;
+  return (
+    String(error.code) === '42703' ||
+    blob.includes('schema cache') ||
+    (blob.includes('visibility') &&
+      (blob.includes('does not exist') || blob.includes('could not find') || blob.includes('schema cache')))
+  );
+}
+
+async function insertChatMessage(row) {
+  let { data, error } = await supabase.from('chat_messages').insert(row).select().single();
+  if (error && row.visibility && isMissingVisibilityColumn(error)) {
+    const fallback = { ...row };
+    delete fallback.visibility;
+    ({ data, error } = await supabase.from('chat_messages').insert(fallback).select().single());
+  }
+  if (error) throw error;
+  return data;
 }
 
 class MessageService {
@@ -42,6 +72,7 @@ class MessageService {
         .on('postgres_changes', 
           { event: 'INSERT', schema: 'public', table: 'chat_messages' },
           (payload) => {
+            if (!messageBelongsToWorkingOrganization(payload.new)) return;
             this.subscribers.forEach(cb => {
               try { cb(payload.new); } catch (e) { console.error(e); }
             });
@@ -91,14 +122,25 @@ class MessageService {
     };
   }
 
-  async fetchMessages(limit = APP_CONFIG.MAX_MESSAGES) {
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: true })
-      .limit(limit);
+  async fetchMessages(limit = APP_CONFIG.MAX_MESSAGES, visibility = null) {
+    const build = (filterVisibility) => {
+      let query = applyWorkingOrganizationScope(
+        supabase.from('chat_messages').select('*')
+      )
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: true })
+        .limit(limit);
+      if (filterVisibility) query = query.eq('visibility', filterVisibility);
+      return query;
+    };
 
+    let { data, error } = await build(visibility);
+    if (error && visibility && isMissingVisibilityColumn(error)) {
+      ({ data, error } = await build(null));
+      if (!error) {
+        return (data || []).filter((row) => messageMatchesChannel(row, visibility));
+      }
+    }
     if (error) throw error;
     return data || [];
   }
@@ -114,81 +156,66 @@ class MessageService {
     return data || [];
   }
 
-  async sendText({ text, senderId, senderName, senderAvatar, isCritical, replyToMessageId = null, replyPreviewText = null }) {
+  async sendText({ text, senderId, senderName, senderAvatar, isCritical, replyToMessageId = null, replyPreviewText = null, visibility = null }) {
     await this.#ensureSession();
 
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert({
-        sender_id: senderId,
-        sender_name: sanitizeInput(senderName),
-        sender_avatar: senderAvatar,
-        text: sanitizeInput(text),
-        type: MessageType.TEXT,
-        is_critical: isCritical,
-        reply_to_message_id: replyToMessageId,
-        reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return insertChatMessage({
+      sender_id: senderId,
+      sender_name: sanitizeInput(senderName),
+      sender_avatar: senderAvatar,
+      text: sanitizeInput(text),
+      type: MessageType.TEXT,
+      is_critical: isCritical,
+      reply_to_message_id: replyToMessageId,
+      reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      organization_id: getWorkingOrganizationId(),
+      ...(visibility ? { visibility } : {}),
+    });
   }
 
-  async sendImage({ fileUrl, senderId, senderName, senderAvatar, width, height, replyToMessageId = null, replyPreviewText = null }) {
+  async sendImage({ fileUrl, senderId, senderName, senderAvatar, width, height, replyToMessageId = null, replyPreviewText = null, visibility = null }) {
     await this.#ensureSession();
 
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert({
-        sender_id: senderId,
-        sender_name: sanitizeInput(senderName),
-        sender_avatar: senderAvatar,
-        type: MessageType.IMAGE,
-        media_url: fileUrl,
-        media_width: width,
-        media_height: height,
-        text: '',
-        is_critical: false,
-        reply_to_message_id: replyToMessageId,
-        reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return insertChatMessage({
+      sender_id: senderId,
+      sender_name: sanitizeInput(senderName),
+      sender_avatar: senderAvatar,
+      type: MessageType.IMAGE,
+      media_url: fileUrl,
+      media_width: width,
+      media_height: height,
+      text: '',
+      is_critical: false,
+      reply_to_message_id: replyToMessageId,
+      reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      organization_id: getWorkingOrganizationId(),
+      ...(visibility ? { visibility } : {}),
+    });
   }
 
-  async sendVoice({ fileUrl, duration, senderId, senderName, senderAvatar, replyToMessageId = null, replyPreviewText = null }) {
+  async sendVoice({ fileUrl, duration, senderId, senderName, senderAvatar, replyToMessageId = null, replyPreviewText = null, visibility = null }) {
     await this.#ensureSession();
 
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert({
-        sender_id: senderId,
-        sender_name: sanitizeInput(senderName),
-        sender_avatar: senderAvatar,
-        type: MessageType.VOICE,
-        media_url: fileUrl,
-        duration,
-        text: '',
-        is_critical: false,
-        reply_to_message_id: replyToMessageId,
-        reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return insertChatMessage({
+      sender_id: senderId,
+      sender_name: sanitizeInput(senderName),
+      sender_avatar: senderAvatar,
+      type: MessageType.VOICE,
+      media_url: fileUrl,
+      duration,
+      text: '',
+      is_critical: false,
+      reply_to_message_id: replyToMessageId,
+      reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      organization_id: getWorkingOrganizationId(),
+      ...(visibility ? { visibility } : {}),
+    });
   }
 
-  async sendLocation({ lat, lng, address, text, senderId, senderName, senderAvatar, isCritical = false, replyToMessageId = null, replyPreviewText = null }) {
+  async sendLocation({ lat, lng, address, text, senderId, senderName, senderAvatar, isCritical = false, replyToMessageId = null, replyPreviewText = null, visibility = null }) {
     await this.#ensureSession();
 
     const latNum = Number(lat);
@@ -197,27 +224,22 @@ class MessageService {
       throw new Error('Invalid coordinates');
     }
 
-    const { data, error } = await supabase
-      .from('chat_messages')
-      .insert({
-        sender_id: senderId,
-        sender_name: sanitizeInput(senderName),
-        sender_avatar: senderAvatar,
-        type: MessageType.LOCATION,
-        location_lat: latNum,
-        location_lng: lngNum,
-        location_address: address ? sanitizeInput(address) : null,
-        text: text ? sanitizeInput(text) : '',
-        is_critical: isCritical,
-        reply_to_message_id: replyToMessageId,
-        reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return insertChatMessage({
+      sender_id: senderId,
+      sender_name: sanitizeInput(senderName),
+      sender_avatar: senderAvatar,
+      type: MessageType.LOCATION,
+      location_lat: latNum,
+      location_lng: lngNum,
+      location_address: address ? sanitizeInput(address) : null,
+      text: text ? sanitizeInput(text) : '',
+      is_critical: isCritical,
+      reply_to_message_id: replyToMessageId,
+      reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      organization_id: getWorkingOrganizationId(),
+      ...(visibility ? { visibility } : {}),
+    });
   }
 
   /** Record that the current user viewed another member's critical message. */

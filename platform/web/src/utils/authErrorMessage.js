@@ -24,6 +24,9 @@ export function formatAuthErrorMessage(err) {
   ) {
     return 'An account with this email already exists. Use Sign in, or reset your password from the login page.';
   }
+  if (lower.includes('database error saving new user')) {
+    return 'Registration could not be completed. Please try again, or contact support if it keeps happening.';
+  }
   if (lower.includes('invalid login credentials') || code === 'invalid_credentials') {
     return 'Email or password is incorrect.';
   }

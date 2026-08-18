@@ -64,6 +64,7 @@ export default function PatrolRouteMapPanel({ latlngs, className = '' }) {
         className="h-full w-full min-h-[220px] z-0"
         scrollWheelZoom
         attributionControl
+        keyboard={false}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

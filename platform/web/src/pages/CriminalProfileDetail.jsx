@@ -43,6 +43,8 @@ import {
 import PatrollerPhotoPreview from '../components/patrol/PatrollerPhotoPreview';
 import ProfileRecordAudit from '../components/intelligence/ProfileRecordAudit';
 import { collectUserIdsFromProfiles, fetchUserLabelMap } from '../utils/profileUserLabels';
+import { useActiveOrganization } from '../auth/useActiveOrganization';
+import { belongsToActiveOrganization, scopeToOrganization, shouldIncludeUnscopedProfiles } from '../utils/organizationScope';
 
 const DETAIL_SECTION =
   'rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:shadow-lg';
@@ -119,6 +121,8 @@ export default function CriminalProfileDetail() {
     return q ? `/intelligence/profiles/${id}?${q}` : `/intelligence/profiles/${id}`;
   };
   const { user } = useAuth();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const includeUnscoped = shouldIncludeUnscopedProfiles(activeOrganization);
   
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -187,9 +191,13 @@ export default function CriminalProfileDetail() {
     const t = setTimeout(async () => {
       setAssociateSearchLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('criminal_profiles')
-          .select('id, primary_name, risk_level, status, photo_urls')
+        const { data, error } = await scopeToOrganization(
+          supabase
+            .from('criminal_profiles')
+            .select('id, primary_name, risk_level, status, photo_urls'),
+          activeOrganizationId,
+          includeUnscoped
+        )
           .neq('id', id)
           .ilike('primary_name', `%${q}%`)
           .limit(12);
@@ -207,22 +215,30 @@ export default function CriminalProfileDetail() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [associateSearchQuery, location.search, id, associatesDraft]);
+  }, [associateSearchQuery, location.search, id, associatesDraft, activeOrganizationId, includeUnscoped]);
 
   useEffect(() => {
     fetchProfile();
-  }, [id]);
+  }, [id, activeOrganizationId, includeUnscoped]);
 
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('criminal_profiles')
-        .select('*')
+      const { data, error } = await scopeToOrganization(
+        supabase.from('criminal_profiles').select('*'),
+        activeOrganizationId,
+        includeUnscoped
+      )
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data || !belongsToActiveOrganization(data, activeOrganizationId, includeUnscoped)) {
+        setProfile(null);
+        toast.error('This profile is not in the selected area.');
+        navigate('/intelligence/search', { replace: true });
+        return;
+      }
       
       setProfile(data);
       setEditForm({ ...data, sightings_log: initialSightingsLogForForm(data) });

@@ -6,6 +6,8 @@ import { FaUserSecret, FaExclamationTriangle, FaEye, FaHistory, FaCheck, FaTimes
 import ThemeToggle from '../../components/ThemeToggle';
 import toast from 'react-hot-toast';
 import BrandedLoader from '../../components/layout/BrandedLoader';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
+import { belongsToActiveOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 
 function formatSourceType(sourceType) {
   if (!sourceType) return 'Unknown';
@@ -21,6 +23,8 @@ function confidenceBadgeClass(pct) {
 
 export default function MatchQueue() {
   const navigate = useNavigate();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const includeUnscoped = shouldIncludeUnscopedProfiles(activeOrganization);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMatch, setSelectedMatch] = useState(null);
@@ -42,7 +46,7 @@ export default function MatchQueue() {
           suggested_profile_id,
           source_evidence_id,
           profile:suggested_profile_id (
-            id, primary_name, photo_urls, risk_level, status, known_aliases, last_seen_at
+            id, primary_name, photo_urls, risk_level, status, known_aliases, last_seen_at, organization_id
           ),
           incident:source_incident_id (
             id, type, description, location, submitted_at, submitted_by_name
@@ -52,14 +56,18 @@ export default function MatchQueue() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setMatches(data || []);
+      setMatches(
+        (data || []).filter((row) =>
+          belongsToActiveOrganization(row.profile, activeOrganizationId, includeUnscoped)
+        )
+      );
     } catch (error) {
       console.error('Error fetching matches:', error);
       toast.error('Failed to load match queue');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeOrganizationId, includeUnscoped]);
 
   useEffect(() => {
     fetchMatches();
@@ -158,32 +166,30 @@ export default function MatchQueue() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 shadow-sm backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800/90">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => navigate('/intelligence/search')}
-            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-3 transition"
+            className="flex items-center gap-2 text-sm text-gray-600 transition dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
           >
-            <FaArrowLeft className="w-3 h-3" />
+            <FaArrowLeft className="h-3 w-3" />
             Back to criminal database
           </button>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <FaExclamationTriangle className="text-red-600" />
-              Match Verification Queue
-            </h1>
-            <div className="flex items-center gap-2 shrink-0">
-              <ThemeToggle variant="toolbar" />
-              <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                {matches.length} pending {matches.length === 1 ? 'match' : 'matches'}
-              </div>
-            </div>
-          </div>
+          <ThemeToggle variant="toolbar" />
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <FaExclamationTriangle className="text-red-600" />
+            Match Verification Queue
+          </h1>
+          <div className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+            {matches.length} pending {matches.length === 1 ? 'match' : 'matches'}
+          </div>
+        </div>
         {loading ? (
           <div className="flex justify-center py-12">
             <BrandedLoader message="Loading matches…" size="md" />

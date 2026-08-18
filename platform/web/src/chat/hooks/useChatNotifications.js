@@ -3,6 +3,12 @@ import { supabase } from '../../supabase/client';
 import { playChatNotification } from '../../utils/sound';
 import { isActiveChatPath } from '../utils/chatPaths';
 import { adaptivePollIntervalMs } from '../../utils/dataSaverProfile';
+import {
+  applyWorkingOrganizationScope,
+  messageBelongsToWorkingOrganization,
+} from '../../utils/organizationScope';
+import { useAuth } from '../../auth/useAuth';
+import { canAccessPatrolOpsChat, shouldAlertForChatMessage } from '../utils/chatChannels';
 
 /**
  * Dashboard (and similar) listener for new chat_messages.
@@ -11,6 +17,8 @@ import { adaptivePollIntervalMs } from '../../utils/dataSaverProfile';
  *   in background tabs (sound may still be blocked; system Notification helps).
  */
 export const useChatNotifications = (userId, onNewMessage) => {
+  const { user } = useAuth();
+  const isOps = canAccessPatrolOpsChat(user?.role);
   const soundThrottleRef = useRef({});
   const lastRemoteMessageIdRef = useRef(null);
 
@@ -31,6 +39,8 @@ export const useChatNotifications = (userId, onNewMessage) => {
 
     const applyRemoteMessage = (message) => {
       if (!message || message.sender_id === userId) return;
+      if (!messageBelongsToWorkingOrganization(message)) return;
+      if (!shouldAlertForChatMessage(message, { isOps })) return;
       const mid = message.id;
       if (mid && lastRemoteMessageIdRef.current === mid) return;
       if (mid) lastRemoteMessageIdRef.current = mid;
@@ -40,9 +50,9 @@ export const useChatNotifications = (userId, onNewMessage) => {
     };
 
     (async () => {
-      const { data } = await supabase
-        .from('chat_messages')
-        .select('id')
+      const { data } = await applyWorkingOrganizationScope(
+        supabase.from('chat_messages').select('id')
+      )
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -68,9 +78,9 @@ export const useChatNotifications = (userId, onNewMessage) => {
 
     const pollTick = async () => {
       if (!seeded || document.visibilityState !== 'hidden') return;
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('id, sender_id, sender_name, text, created_at')
+      const { data, error } = await applyWorkingOrganizationScope(
+        supabase.from('chat_messages').select('id, sender_id, sender_name, text, created_at')
+      )
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -101,5 +111,5 @@ export const useChatNotifications = (userId, onNewMessage) => {
       if (pollInterval) clearInterval(pollInterval);
       supabase.removeChannel(subscription);
     };
-  }, [userId, onNewMessage, playThrottled]);
+  }, [userId, onNewMessage, playThrottled, isOps]);
 };

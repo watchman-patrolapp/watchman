@@ -23,6 +23,7 @@ export async function flushChatQueueItem(raw) {
         senderName,
         senderAvatar,
         isCritical: !!item.is_critical,
+        visibility: item.visibility || null,
       });
       return { ok: true };
     }
@@ -37,6 +38,7 @@ export async function flushChatQueueItem(raw) {
         senderName,
         senderAvatar,
         isCritical: !!item.is_critical,
+        visibility: item.visibility || null,
       });
       return { ok: true };
     }
@@ -56,6 +58,7 @@ export async function flushChatQueueItem(raw) {
         senderId,
         senderName,
         senderAvatar,
+        visibility: item.visibility || null,
       });
       if (item._mediaKey) await queueMediaDelete(item._mediaKey);
       return { ok: true };
@@ -76,6 +79,7 @@ export async function flushChatQueueItem(raw) {
         senderId,
         senderName,
         senderAvatar,
+        visibility: item.visibility || null,
       });
       if (item._mediaKey) await queueMediaDelete(item._mediaKey);
       return { ok: true };

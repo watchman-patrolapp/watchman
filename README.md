@@ -5,5 +5,6 @@ Application source lives under **`platform/`** (web app, Supabase backend, docs,
 - **Develop the UI:** `cd platform/web` then `npm install` and `npm run dev`.
 - **Vercel:** connect this repository and set **Root Directory** to `platform/web`.
 - **Details:** see [`platform/README.md`](platform/README.md).
+- **Scale status / pending work:** [`platform/docs/SCALE_ROADMAP.md`](platform/docs/SCALE_ROADMAP.md).
 
 Legacy duplicate trees may still exist on disk at the repository root (`src/`, `public/`, old `android/`, etc.); they are **not** part of the product and are listed in `.gitignore` so they are not committed again.

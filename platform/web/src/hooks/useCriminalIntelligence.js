@@ -2,18 +2,22 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase/client';
 import { matchQueueConfidenceToScore } from '../utils/intelligenceConfidence';
 import { fetchAssociatesBidirectional } from '../utils/profileAssociates';
+import { scopeToOrganization } from '../utils/organizationScope';
 
-export const useCriminalProfile = (profileId) => {
+export const useCriminalProfile = (profileId, organizationId = null, includeUnscoped = false) => {
   return useQuery({
-    queryKey: ['criminal-profile', profileId],
+    queryKey: ['criminal-profile', profileId, organizationId, includeUnscoped],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('criminal_profiles')
-        .select('*')
+      const { data, error } = await scopeToOrganization(
+        supabase.from('criminal_profiles').select('*'),
+        organizationId,
+        includeUnscoped
+      )
         .eq('id', profileId)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
+      if (!data) throw new Error('Profile is not in the selected area.');
       return data;
     },
     enabled: !!profileId
@@ -90,7 +94,8 @@ export const useCreateProfileFromEvidence = () => {
         first_identified_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
         last_seen_location: inc?.location ?? null,
-        created_by: uid
+        created_by: uid,
+        organization_id: evidenceData.organizationId || incidentId?.organization_id || null,
       };
       
       const { data: profile, error: profileError } = await supabase
@@ -106,7 +111,8 @@ export const useCreateProfileFromEvidence = () => {
         profile_id: profile.id,
         incident_id: incidentUuid,
         connection_type: 'probable_suspect',
-        linked_by: uid
+        linked_by: uid,
+        organization_id: profile.organization_id || evidenceData.organizationId || null,
       };
       const { error: linkError } = await supabase.from('profile_incidents').insert(linkRow);
       if (linkError) throw linkError;

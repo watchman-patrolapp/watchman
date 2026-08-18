@@ -7,6 +7,10 @@ import BrandedLoader from "../components/layout/BrandedLoader";
 import { normalizeVehicleType, ProfileVehicleGlyph } from "../components/VehicleIcon";
 import { isLightMobilityVehicleType, getVehicleTypePublicLabel } from "../utils/vehicleTypeConstants";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
+import { useActiveOrganization } from "../auth/useActiveOrganization";
+import { filterUsersForOrganization } from "../utils/organizationUsers";
+import { isResidentAppRole } from "../auth/roleMatrix";
+import AreaContextBar from "../components/layout/AreaContextBar";
 
 function initialsFromRow(row) {
   const name = row?.full_name?.trim();
@@ -127,6 +131,7 @@ function ProfileCardBody({ row, vehicles }) {
 
 export default function AdminMemberProfiles() {
   const navigate = useNavigate();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
   const [rows, setRows] = useState([]);
   const [vehiclesByUser, setVehiclesByUser] = useState({});
   const [loading, setLoading] = useState(true);
@@ -152,6 +157,23 @@ export default function AdminMemberProfiles() {
           users = data || [];
         }
 
+        const { data: memberRows, error: memberErr } = activeOrganizationId
+          ? await supabase
+              .from("organization_members")
+              .select("user_id")
+              .eq("organization_id", activeOrganizationId)
+              .eq("status", "active")
+          : { data: [], error: null };
+        if (memberErr) throw memberErr;
+
+        const scopedUsers = activeOrganizationId
+          ? filterUsersForOrganization(
+              users,
+              activeOrganizationId,
+              new Set((memberRows || []).map((row) => row.user_id))
+            ).filter((user) => !isResidentAppRole(user.role))
+          : [];
+
         const { data: vehicles, error: vErr } = await supabase.from("user_vehicles").select("*");
         if (vErr) throw vErr;
         if (cancelled) return;
@@ -160,7 +182,7 @@ export default function AdminMemberProfiles() {
           if (!map[v.user_id]) map[v.user_id] = [];
           map[v.user_id].push(v);
         }
-        setRows(users);
+        setRows(scopedUsers);
         setVehiclesByUser(map);
       } catch (e) {
         if (!cancelled) setError(e?.message || "Failed to load members");
@@ -172,7 +194,7 @@ export default function AdminMemberProfiles() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeOrganizationId]);
 
   const sortedRows = useMemo(() => {
     const list = [...rows];
@@ -235,6 +257,7 @@ export default function AdminMemberProfiles() {
               Back to Admin Dashboard
             </button>
             <div className="flex flex-wrap items-center gap-2">
+              <AreaContextBar />
               <ThemeToggle variant="toolbar" />
               <label htmlFor="member-sort" className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                 Sort by
@@ -252,6 +275,20 @@ export default function AdminMemberProfiles() {
             </div>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Member profiles</h1>
+          {activeOrganization ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{activeOrganization.name}</p>
+          ) : null}
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Watch members only. Household accounts are on{" "}
+            <button
+              type="button"
+              onClick={() => navigate("/admin/residents")}
+              className="font-medium text-teal-700 dark:text-teal-400 hover:underline"
+            >
+              Residents
+            </button>
+            .
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

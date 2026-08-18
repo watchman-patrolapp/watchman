@@ -16,6 +16,7 @@ import {
 } from '../constants/incidentSectionUpdates';
 import { connectionTypeLabel } from '../data/profileIncidentLinkTaxonomy';
 import BrandedLoader from '../components/layout/BrandedLoader';
+import { belongsToActiveOrganization, useScopedOrganization } from '../utils/organizationScope';
 
 /** Renders public image URLs for screen + print/PDF (browser must be able to fetch the URL). */
 function EvidenceImageGrid({ urls, altPrefix }) {
@@ -41,6 +42,7 @@ function EvidenceImageGrid({ urls, altPrefix }) {
 }
 
 export default function PrintIncidentDetail() {
+  const { activeOrganizationId, includeUnscoped } = useScopedOrganization();
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -88,6 +90,13 @@ export default function PrintIncidentDetail() {
           .eq('id', id)
           .single();
         if (incErr) throw incErr;
+        if (!belongsToActiveOrganization(inc, activeOrganizationId, includeUnscoped)) {
+          if (!cancelled) {
+            toast.error('This incident belongs to another neighborhood.');
+            navigate('/incidents', { replace: true });
+          }
+          return;
+        }
 
         const { data: ev, error: evErr } = await supabase
           .from('incident_evidence')
@@ -125,7 +134,7 @@ export default function PrintIncidentDetail() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, activeOrganizationId, includeUnscoped, navigate]);
 
   const pdfIntent = searchParams.get('intent');
   useEffect(() => {

@@ -3,8 +3,18 @@ import { supabase } from '../../supabase/client';
 import { CHAT_READ_CURSOR_EVENT } from '../utils/markChatVisited';
 import { isActiveChatPath } from '../utils/chatPaths';
 import { isRpcNotFoundError } from '../../utils/isRpcNotFound';
+import {
+  applyWorkingOrganizationScope,
+  getWorkingOrganizationId,
+  messageBelongsToWorkingOrganization,
+} from '../../utils/organizationScope';
 
-export const useUnreadCount = (userId) => {
+function messageVisibility(message) {
+  return message?.visibility || 'patrol';
+}
+
+export const useUnreadCount = (userId, visibility = null, options = {}) => {
+  const pauseIncrements = Boolean(options.pauseIncrements);
   const [count, setCount] = useState(0);
 
   const fetchCount = useCallback(async () => {
@@ -14,7 +24,21 @@ export const useUnreadCount = (userId) => {
     }
 
     try {
-      const { data, error } = await supabase.rpc('chat_unread_for_me');
+      const args = {
+        p_organization_id: getWorkingOrganizationId() || null,
+      };
+      if (visibility) args.p_visibility = visibility;
+      let { data, error } = await supabase.rpc('chat_unread_for_me', args);
+      if (
+        error &&
+        visibility &&
+        !isRpcNotFoundError(error) &&
+        /p_visibility|schema cache|could not find the function/i.test(error.message || '')
+      ) {
+        ({ data, error } = await supabase.rpc('chat_unread_for_me', {
+          p_organization_id: getWorkingOrganizationId() || null,
+        }));
+      }
       if (!error && typeof data === 'number') {
         setCount(data);
         return;
@@ -26,9 +50,9 @@ export const useUnreadCount = (userId) => {
       const transient =
         e instanceof TypeError ||
         (typeof e?.message === 'string' &&
-          (e.message.includes('NetworkError') || e.message.includes('Failed to fetch')))
+          (e.message.includes('NetworkError') || e.message.includes('Failed to fetch')));
       if (!transient) {
-        console.warn('chat_unread_for_me failed', e)
+        console.warn('chat_unread_for_me failed', e);
       }
     }
 
@@ -39,12 +63,14 @@ export const useUnreadCount = (userId) => {
     }
 
     try {
-      const { count: newCount, error } = await supabase
-        .from('chat_messages')
-        .select('*', { count: 'exact', head: true })
+      let query = applyWorkingOrganizationScope(
+        supabase.from('chat_messages').select('*', { count: 'exact', head: true })
+      )
         .gt('created_at', lastVisit)
         .neq('sender_id', userId)
         .gt('expires_at', new Date().toISOString());
+      if (visibility) query = query.eq('visibility', visibility);
+      const { count: newCount, error } = await query;
 
       if (!error) {
         setCount(newCount || 0);
@@ -52,23 +78,29 @@ export const useUnreadCount = (userId) => {
     } catch (err) {
       console.error('Error fetching unread count (fallback):', err);
     }
-  }, [userId]);
+  }, [userId, visibility]);
 
   useEffect(() => {
-    const loadData = async () => {
-      await fetchCount();
-    };
-    void loadData();
+    if (!userId) {
+      setCount(0);
+      return undefined;
+    }
+
+    void fetchCount();
 
     const subscription = supabase
-      .channel('unread-count')
+      .channel(`unread-count-${visibility || 'default'}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
         (payload) => {
-          if (payload.new.sender_id !== userId && !isActiveChatPath()) {
-            setCount((prev) => prev + 1);
-          }
+          if (!messageBelongsToWorkingOrganization(payload.new)) return;
+          if (payload.new.sender_id === userId) return;
+          const vis = messageVisibility(payload.new);
+          if (visibility && vis !== visibility) return;
+          if (pauseIncrements) return;
+          if (!visibility && isActiveChatPath()) return;
+          setCount((prev) => prev + 1);
         }
       )
       .subscribe();
@@ -86,7 +118,7 @@ export const useUnreadCount = (userId) => {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener(CHAT_READ_CURSOR_EVENT, onReadCursor);
     };
-  }, [userId, fetchCount]);
+  }, [userId, visibility, pauseIncrements, fetchCount]);
 
   return { count, refetch: fetchCount };
 };

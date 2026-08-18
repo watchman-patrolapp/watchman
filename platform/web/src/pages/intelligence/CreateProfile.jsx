@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
+import { belongsToActiveOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 import { supabase } from '../../supabase/client';
 import { safeInternalReturnPath } from '../../utils/safeReturnPath';
 import MoTemplatePicker from '../../components/intelligence/MoTemplatePicker';
@@ -55,6 +57,8 @@ export default function CreateProfile() {
   const descriptionHint = searchParams.get('description') || '';
   const hintName = searchParams.get('hintName') || '';
   const { user } = useAuth();
+  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const includeUnscoped = shouldIncludeUnscopedProfiles(activeOrganization);
   const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [fieldGuideTopic, setFieldGuideTopic] = useState(null);
@@ -153,6 +157,11 @@ export default function CreateProfile() {
 
         if (incErr || !inc) {
           console.warn('Prefill: incident load failed', incErr);
+          prefillFromIncidentRef.current = false;
+          return;
+        }
+        if (!belongsToActiveOrganization(inc, activeOrganizationId, includeUnscoped)) {
+          toast.error('That incident belongs to another neighborhood.');
           prefillFromIncidentRef.current = false;
           return;
         }
@@ -413,7 +422,8 @@ export default function CreateProfile() {
           
           // Metadata (must match auth.uid() for RLS delete-as-creator)
           created_by: authUid,
-          first_identified_at: new Date().toISOString()
+          first_identified_at: new Date().toISOString(),
+          organization_id: activeOrganizationId || user?.organizationId || null,
         })
         .select()
         .single();

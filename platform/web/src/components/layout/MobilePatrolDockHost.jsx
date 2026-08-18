@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
 import { useUnreadCount } from '../../chat';
+import { defaultChatChannel } from '../../chat/utils/chatChannels';
 import { usePendingIncidentsCount } from '../../hooks/usePendingIncidentsCount';
 import { usePendingFeedbackCount } from '../../hooks/usePendingFeedbackCount';
 import { canReviewFeedback, isStaffForModerationAlerts } from '../../auth/staffRoles';
@@ -23,7 +24,7 @@ function shouldShowDock(pathname, hasUser) {
 export default function MobilePatrolDockHost() {
   const { user } = useAuth();
   const location = useLocation();
-  const { count: unreadCount } = useUnreadCount(user?.id);
+  const { count: unreadCount } = useUnreadCount(user?.id, defaultChatChannel(user?.role));
   const staffAlerts = isStaffForModerationAlerts(user?.role);
   const pendingIncidentsCount = usePendingIncidentsCount(!!user?.id && staffAlerts);
   const pendingFeedbackCount = usePendingFeedbackCount(!!user?.id && canReviewFeedback(user?.role));
