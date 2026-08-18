@@ -16,7 +16,7 @@ import { writeSecurityCompanyBrand } from "../utils/securityBrandCache";
 import { useAuth } from "../auth/useAuth";
 
 export default function SecurityBranding() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const logoInputRef = useRef(null);
   const bannerInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -117,7 +117,18 @@ export default function SecurityBranding() {
           subtitle="This is how residents and intelligence see your company. Use Settings to change the cover, logo, and contact details."
           backTo="/security"
           backLabel="Back to command"
-          rightSlot={<ThemeToggle variant="toolbar" />}
+          rightSlot={
+            <div className="flex items-center gap-3">
+              <ThemeToggle variant="toolbar" />
+              <button
+                type="button"
+                onClick={signOut}
+                className="text-xs text-gray-500 underline transition hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+              >
+                Sign Out
+              </button>
+            </div>
+          }
         />
 
         {loading ? (

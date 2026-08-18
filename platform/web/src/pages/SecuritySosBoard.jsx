@@ -10,6 +10,7 @@ import {
   uniquePartnerAreas,
   usePartnerSosAlerts,
 } from "../components/security/PartnerSosBoard";
+import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import { isActiveSos } from "../utils/residentSos";
@@ -84,6 +85,7 @@ const PAST_ACCENT = {
 };
 
 export default function SecuritySosBoard() {
+  const { signOut } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const areaFilter = searchParams.get("area") || "";
   const view = areaFilter ? "area" : "summary";
@@ -157,7 +159,18 @@ export default function SecuritySosBoard() {
           subtitle="Summary is the last 24 hours across assigned areas. Pick a neighborhood for the full history."
           backTo="/security"
           backLabel="Back to command"
-          rightSlot={<ThemeToggle variant="toolbar" />}
+          rightSlot={
+            <div className="flex items-center gap-3">
+              <ThemeToggle variant="toolbar" />
+              <button
+                type="button"
+                onClick={signOut}
+                className="text-xs text-gray-500 underline transition hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+              >
+                Sign Out
+              </button>
+            </div>
+          }
         />
 
         <div className="flex flex-wrap gap-2">
