@@ -8,8 +8,8 @@ import { formatRelativeTime } from "../../utils/formatRelativeTime";
 function greetingPeriod(date) {
   const hour = date.getHours();
   if (hour >= 5 && hour < 12) return "morning";
-  if (hour < 18) return "afternoon";
-  if (hour < 21) return "evening";
+  if (hour >= 12 && hour < 18) return "afternoon";
+  if (hour >= 18 && hour < 21) return "evening";
   return "night";
 }
 
