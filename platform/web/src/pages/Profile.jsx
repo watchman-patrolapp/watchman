@@ -4,7 +4,7 @@ import { useAuth } from '../auth/useAuth';
 import { canUseHouseholdMode, isHouseholdModeRole, isResidentAppRole } from '../auth/roleMatrix';
 import { supabase } from '../supabase/client';
 import toast from 'react-hot-toast';
-import { FaUser, FaMapMarkerAlt, FaCar, FaSave, FaEnvelope, FaPhone, FaLock, FaExclamationTriangle, FaCheck } from 'react-icons/fa';
+import { FaUser, FaMapMarkerAlt, FaCar, FaSave, FaEnvelope, FaPhone, FaLock, FaExclamationTriangle, FaCheck, FaShieldAlt } from 'react-icons/fa';
 import ThemeToggle from '../components/ThemeToggle';
 import AppNotificationBell from '../components/layout/AppNotificationBell';
 import { TbWifi, TbWifiOff } from 'react-icons/tb';
@@ -13,7 +13,7 @@ import { formatAuthErrorMessage } from '../utils/authErrorMessage';
 import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import SecurityMembershipCard from '../components/security/SecurityMembershipCard';
-import { formatVerifiedBy, getResidentVerificationLog } from '../utils/residentVerification';
+import { formatVerifiedBy, getResidentVerificationLog, requestPatrollerRole, withdrawPatrollerRoleRequest } from '../utils/residentVerification';
 import { getMyHouseholdCivic, pingResidentPresence } from '../utils/householdCivic';
 import ResidentAwayForm from '../components/resident/ResidentAwayForm';
 import HouseholdCivicRow from '../components/resident/HouseholdCivicRow';
@@ -75,6 +75,8 @@ export default function Profile() {
   const [membershipBusy, setMembershipBusy] = useState(false);
   const [verificationLog, setVerificationLog] = useState([]);
   const [verificationPending, setVerificationPending] = useState(false);
+  const [patrollerRequestStatus, setPatrollerRequestStatus] = useState(null);
+  const [patrollerRequestBusy, setPatrollerRequestBusy] = useState(false);
   const [civic, setCivic] = useState(null);
   const [homePin, setHomePin] = useState(null);
   const [pinBusy, setPinBusy] = useState(false);
@@ -147,6 +149,19 @@ export default function Profile() {
       await pingResidentPresence();
       const civicRow = await getMyHouseholdCivic();
       if (!cancelled) setCivic(civicRow);
+      if (isResidentAppRole(user?.role)) {
+        const { data: requestRow, error: requestErr } = await supabase
+          .from('resident_profiles')
+          .select('patroller_request_status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!cancelled) {
+          if (requestErr && !isRpcNotFoundError(requestErr) && !/patroller_request/i.test(requestErr.message || '')) {
+            console.warn('patroller request status:', requestErr.message);
+          }
+          setPatrollerRequestStatus(requestRow?.patroller_request_status || null);
+        }
+      }
     })();
     return () => {
       cancelled = true;
@@ -468,6 +483,32 @@ export default function Profile() {
     }
   };
 
+  const handlePatrollerRequest = async (withdraw) => {
+    setPatrollerRequestBusy(true);
+    try {
+      const { error } = withdraw
+        ? await withdrawPatrollerRoleRequest()
+        : await requestPatrollerRole();
+      if (error) {
+        if (isRpcNotFoundError(error)) {
+          toast.error('Apply the patroller-request SQL on Supabase first.');
+          return;
+        }
+        throw error;
+      }
+      setPatrollerRequestStatus(withdraw ? null : 'pending');
+      toast.success(
+        withdraw
+          ? 'Request cancelled.'
+          : 'Request sent. Neighbourhood admin will review it.'
+      );
+    } catch (err) {
+      toast.error(err.message || 'Could not send that request.');
+    } finally {
+      setPatrollerRequestBusy(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     const digits = String(form.phone || '').replace(/\D/g, '');
     if (digits.length < 10) {
@@ -766,6 +807,64 @@ export default function Profile() {
                 ))}
               </ul>
             ) : null}
+          </div>
+        ) : null}
+
+        {isResidentAppRole(user?.role) ? (
+          <div className="mb-6 rounded-xl border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-900 dark:bg-cyan-950/30">
+            <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+              <FaShieldAlt className="h-4 w-4 text-cyan-700 dark:text-cyan-300" aria-hidden />
+              Become a patroller
+            </p>
+            <p className="mt-1 text-sm text-cyan-950/80 dark:text-cyan-100/90">
+              Ask your neighbourhood watch to promote this household account to patroller. You keep
+              the same login. Main admin, technical support, or NW admin will approve or decline.
+            </p>
+            {patrollerRequestStatus === 'pending' ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                  Request sent — waiting for review.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handlePatrollerRequest(true)}
+                  disabled={patrollerRequestBusy}
+                  className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600"
+                >
+                  {patrollerRequestBusy ? 'Cancelling…' : 'Cancel request'}
+                </button>
+              </div>
+            ) : patrollerRequestStatus === 'rejected' ? (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm font-medium text-rose-900 dark:text-rose-100">
+                  Your last request was declined. You can ask again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handlePatrollerRequest(false)}
+                  disabled={patrollerRequestBusy || !user?.isVerifiedResident}
+                  className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-800 disabled:opacity-50"
+                >
+                  {patrollerRequestBusy ? 'Sending…' : 'Request again'}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {!user?.isVerifiedResident ? (
+                  <p className="text-xs text-amber-900 dark:text-amber-100">
+                    Verify your household first, then you can send this request.
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void handlePatrollerRequest(false)}
+                  disabled={patrollerRequestBusy || !user?.isVerifiedResident}
+                  className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-800 disabled:opacity-50"
+                >
+                  {patrollerRequestBusy ? 'Sending…' : 'Request to become a patroller'}
+                </button>
+              </div>
+            )}
           </div>
         ) : null}
 

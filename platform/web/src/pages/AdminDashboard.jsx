@@ -5,7 +5,7 @@ import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
 import { canAccessAdminPanel, canReviewFeedback } from "../auth/staffRoles";
 import { canAccessPlatformConsole } from "../auth/platformRoles";
-import { canPreviewResidentHome, canManageEmergencyDirectory, canPostAreaBroadcast, canUseHouseholdMode, isGlobalAppRole, isHouseholdModeRole } from "../auth/roleMatrix";
+import { canPreviewResidentHome, canManageEmergencyDirectory, canPostAreaBroadcast, canUseHouseholdMode, isGlobalAppRole, isHouseholdModeRole, canReviewPatrollerRequests } from "../auth/roleMatrix";
 import { supabase } from "../supabase/client";
 import { useSupabaseQuery } from "../hooks/useSupabaseQuery";
 import ExcelJS from 'exceljs';
@@ -33,6 +33,7 @@ import { useActiveOrganization } from '../auth/useActiveOrganization';
 import { useScopedOrganization } from '../utils/organizationScope';
 import AreaContextBar from '../components/layout/AreaContextBar';
 import AdminToolsMenu from '../components/admin/AdminToolsMenu';
+import { countPendingPatrollerRequests } from '../utils/residentVerification';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -138,6 +139,7 @@ export default function AdminDashboard() {
   }, []);
 
   const isFeedbackReviewer = canReviewFeedback(user?.role);
+  const isPatrollerReviewer = canReviewPatrollerRequests(user?.role);
   const isPlatformConsoleUser = canAccessPlatformConsole(user?.platformRole);
   const isGlobalAppUser = isGlobalAppRole(user?.role);
   const canOpenResidentPreview = canPreviewResidentHome(user?.role);
@@ -195,6 +197,15 @@ export default function AdminDashboard() {
     error: pendingFeedbackError,
     refetch: refetchPendingFeedback,
   } = useSupabaseQuery(fetchPendingFeedbackCount, [user?.role, activeOrganizationId], { enabled: isFeedbackReviewer });
+
+  const fetchPendingPatrollerCount = useCallback(async () => {
+    return countPendingPatrollerRequests();
+  }, []);
+  const { data: pendingPatrollerCount = 0 } = useSupabaseQuery(
+    fetchPendingPatrollerCount,
+    [user?.role, activeOrganizationId],
+    { enabled: isPatrollerReviewer }
+  );
 
   // Patrol signups table is static after initial load unless we refetch — volunteers delete from Schedule without this page mounted.
   useEffect(() => {
@@ -594,6 +605,7 @@ export default function AdminDashboard() {
         <AdminToolsMenu
           pendingCount={pendingCount}
           pendingFeedbackCount={pendingFeedbackCount}
+          pendingPatrollerCount={pendingPatrollerCount}
           showRetryCounts={Boolean(pendingError || (isFeedbackReviewer && pendingFeedbackError))}
           isFeedbackReviewer={isFeedbackReviewer}
           isPlatformConsoleUser={isPlatformConsoleUser}

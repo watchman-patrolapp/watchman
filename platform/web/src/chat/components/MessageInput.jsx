@@ -259,6 +259,17 @@ const VoiceRecorder = React.memo(function VoiceRecorder({ onSend, onCancel, maxD
   );
 });
 
+const COMPOSER_EMOJIS = [
+  '😀', '😁', '😂', '🤣', '😊', '😍', '😮', '😢',
+  '🙏', '👍', '👎', '👏', '🔥', '✅', '🚨', '🆘',
+  '🔍', '📹', '🚓', '📍', '💡', '⚠️', '👀', '❤️',
+];
+const COMPOSER_MAX_HEIGHT_PX = 120;
+
+function readComposerHasText(el) {
+  return Boolean(el?.value?.trim());
+}
+
 // ============================================================================
 // MAIN: MessageInput Component (MOBILE-OPTIMIZED FORM)
 // ============================================================================
@@ -281,7 +292,7 @@ export const MessageInput = React.memo(function MessageInput({
   onClearReply,
   composerPlaceholder,
 }) {
-  const [text, setText] = useState('');
+  const [hasText, setHasText] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -295,43 +306,60 @@ export const MessageInput = React.memo(function MessageInput({
   const attachMenuRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const messageTextareaRef = useRef(null);
+  const composerHeightRafRef = useRef(0);
 
-  const adjustComposerHeight = useCallback(() => {
-    const el = messageTextareaRef.current;
-    if (!el) return;
-    if (!el.value) {
-      el.style.height = '';
-      return;
-    }
-    el.style.height = 'auto';
-    const maxPx = 120;
-    el.style.height = `${Math.min(el.scrollHeight, maxPx)}px`;
+  const scheduleComposerHeight = useCallback(() => {
+    if (composerHeightRafRef.current) return;
+    composerHeightRafRef.current = requestAnimationFrame(() => {
+      composerHeightRafRef.current = 0;
+      const el = messageTextareaRef.current;
+      if (!el) return;
+      if (!el.value) {
+        el.style.height = '';
+        return;
+      }
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+    });
   }, []);
 
-  const composerEmojis = [
-    '😀', '😁', '😂', '🤣', '😊', '😍', '😮', '😢',
-    '🙏', '👍', '👎', '👏', '🔥', '✅', '🚨', '🆘',
-    '🔍', '📹', '🚓', '📍', '💡', '⚠️', '👀', '❤️'
-  ];
+  useEffect(
+    () => () => {
+      if (composerHeightRafRef.current) {
+        cancelAnimationFrame(composerHeightRafRef.current);
+      }
+    },
+    []
+  );
+
+  const syncHasText = useCallback(() => {
+    setHasText(readComposerHasText(messageTextareaRef.current));
+  }, []);
 
   const handleSubmit = useCallback(async (e) => {
     e?.preventDefault();
-    if (!text.trim() || isSending || disabled) return;
+    const trimmed = (messageTextareaRef.current?.value || '').trim();
+    if (!trimmed || isSending || disabled) return;
     setIsSending(true);
     try {
-      await onSendText(text.trim(), {
+      await onSendText(trimmed, {
         replyToMessageId: replyToMessage?.id || null,
         replyPreviewText:
           replyToMessage?.reply_preview_text ||
           replyToMessage?.text ||
           (replyToMessage?.type ? `[${replyToMessage.type}]` : null),
       });
-      setText('');
+      const el = messageTextareaRef.current;
+      if (el) {
+        el.value = '';
+        el.style.height = '';
+      }
+      setHasText(false);
       onClearReply?.();
     } finally {
       setIsSending(false);
     }
-  }, [text, onSendText, isSending, disabled, replyToMessage, onClearReply]);
+  }, [onSendText, isSending, disabled, replyToMessage, onClearReply]);
 
   /** Enter = newline (mobile-friendly). Ctrl/Cmd+Enter sends (desktop). */
   const handleComposerKeyDown = useCallback(
@@ -345,9 +373,22 @@ export const MessageInput = React.memo(function MessageInput({
     [handleSubmit]
   );
 
-  useEffect(() => {
-    adjustComposerHeight();
-  }, [text, adjustComposerHeight]);
+  const handleComposerInput = useCallback(
+    (e) => {
+      syncHasText();
+      if (!e.nativeEvent?.isComposing) {
+        onComposerTyping?.();
+      }
+      scheduleComposerHeight();
+    },
+    [onComposerTyping, scheduleComposerHeight, syncHasText]
+  );
+
+  const handleComposerCompositionEnd = useCallback(() => {
+    syncHasText();
+    onComposerTyping?.();
+    scheduleComposerHeight();
+  }, [onComposerTyping, scheduleComposerHeight, syncHasText]);
 
   const handleImageSelect = useCallback(async (e) => {
     const file = e.target.files?.[0];
@@ -438,13 +479,25 @@ export const MessageInput = React.memo(function MessageInput({
   }, [showEmojiPicker]);
 
   const insertEmoji = useCallback((emoji) => {
-    setText((prev) => {
-      const next = `${prev}${emoji}`;
-      return next.length > APP_CONFIG.MAX_MESSAGE_LENGTH ? prev : next;
-    });
+    const el = messageTextareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    const next = `${el.value.slice(0, start)}${emoji}${el.value.slice(end)}`;
+    if (next.length > APP_CONFIG.MAX_MESSAGE_LENGTH) return;
+    el.value = next;
+    const caret = start + emoji.length;
+    try {
+      el.setSelectionRange(caret, caret);
+    } catch {
+      /* some Android WebViews reject setSelectionRange while unfocused */
+    }
+    syncHasText();
     onComposerTyping?.();
+    scheduleComposerHeight();
     setShowEmojiPicker(false);
-  }, [onComposerTyping]);
+    el.focus();
+  }, [onComposerTyping, scheduleComposerHeight, syncHasText]);
 
   const submitManualLocation = useCallback(async () => {
     const parsed = parseLatLngFromUserInput(manualLat, manualLng);
@@ -700,14 +753,14 @@ export const MessageInput = React.memo(function MessageInput({
                 <div className="relative">
                   <textarea
                     ref={messageTextareaRef}
-                    value={text}
+                    defaultValue=""
                     rows={1}
                     enterKeyHint="enter"
-                    onChange={(e) => {
-                      setText(e.target.value);
-                      onComposerTyping?.();
-                      adjustComposerHeight();
-                    }}
+                    autoComplete="off"
+                    autoCorrect="on"
+                    autoCapitalize="sentences"
+                    onInput={handleComposerInput}
+                    onCompositionEnd={handleComposerCompositionEnd}
                     onKeyDown={handleComposerKeyDown}
                     placeholder={composerPlaceholder || (isOnline ? 'Message…' : 'Offline…')}
                     maxLength={APP_CONFIG.MAX_MESSAGE_LENGTH}
@@ -735,7 +788,7 @@ export const MessageInput = React.memo(function MessageInput({
                     {showEmojiPicker && (
                       <div className="absolute bottom-full right-0 z-[6000] mb-2 w-64 rounded-xl border border-gray-200 bg-white p-2 shadow-xl dark:border-gray-600 dark:bg-gray-800">
                         <div className="grid grid-cols-8 gap-1">
-                          {composerEmojis.map((emoji) => (
+                          {COMPOSER_EMOJIS.map((emoji) => (
                             <button
                               key={emoji}
                               type="button"
@@ -755,7 +808,7 @@ export const MessageInput = React.memo(function MessageInput({
 
               <button
                 type="submit"
-                disabled={!text.trim() || isSending || disabled || !isOnline}
+                disabled={!hasText || isSending || disabled || !isOnline}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white transition hover:bg-teal-700 disabled:opacity-50 sm:h-12 sm:w-12"
                 title="Send message"
                 aria-label="Send message"

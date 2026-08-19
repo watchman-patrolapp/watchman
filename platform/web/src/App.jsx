@@ -46,6 +46,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 const AdminResidents = lazy(() => import("./pages/AdminResidents"));
 const AdminMemberProfiles = lazy(() => import("./pages/AdminMemberProfiles"));
+const AdminResidentProfiles = lazy(() => import("./pages/AdminResidentProfiles"));
 const PrintPatrolLogs = lazy(() => import("./pages/PrintPatrolLogs"));
 const IncidentForm = lazy(() => import("./pages/IncidentForm"));
 const IncidentList = lazy(() => import("./pages/IncidentList"));
@@ -67,6 +68,7 @@ const Hotspots = lazy(() => import("./pages/Hotspots"));
 const EmergencyChat = lazy(() => import("./pages/EmergencyChat"));
 
 const AdminChatLogs = lazy(() => import("./pages/AdminChatLogs"));
+const AdminWatchStaffActivity = lazy(() => import("./pages/AdminWatchStaffActivity"));
 const AdminFeedbackReviews = lazy(() => import("./pages/AdminFeedbackReviews"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Vehicles = lazy(() => import("./pages/Vehicles"));
@@ -438,6 +440,19 @@ function AppRoutes() {
             </PrivateRoute>
           }
         />
+
+        <Route
+          path="/admin/staff-activity"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={GLOBAL_APP_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <AdminWatchStaffActivity />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
         
         <Route
           path="/profile"
@@ -556,6 +571,19 @@ function AppRoutes() {
               <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
                 <RequireActiveOrganization>
                   <AdminMemberProfiles />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/resident-profiles"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
+                <RequireActiveOrganization>
+                  <AdminResidentProfiles />
                 </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>

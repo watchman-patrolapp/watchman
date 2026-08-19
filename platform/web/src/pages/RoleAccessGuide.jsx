@@ -64,13 +64,22 @@ export default function RoleAccessGuide() {
             </p>
             <p>
               Registered <span className="font-medium">residents</span> are a separate household group
-              under Admin → Residents. User Management and Member profiles list watch and operational
-              accounts only.
+              under Admin → Residents. User Management lists watch and operational accounts.
+              Admin → Patroller member profiles shows verified patrollers for the selected suburb.
+              Admin → Verified resident profiles shows verified households for that suburb.
+            </p>
+            <p>
+              Main admin and technical support can open{" "}
+              <span className="font-medium">NW admin activity</span> to see what neighborhood admins
+              and committee members did: household verification, suburb assignment, notices, role
+              changes, and incident moderation.
             </p>
             <p>
               A resident stays <span className="font-medium">Pending</span> until an admin, NW admin, or
               patroller verifies them, or two already-verified neighbours vouch. The{" "}
-              <span className="font-medium">Verified</span> badge then appears.
+              <span className="font-medium">Verified</span> badge then appears. Verified households can
+              request to become a patroller from Profile. Main admin, technical support, and NW admin
+              see that request on Admin → Residents and can approve or reject it.
             </p>
             <p>
               Local watch members (patroller, volunteer, investigator, committee, NW admin) keep one

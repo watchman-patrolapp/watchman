@@ -53,7 +53,7 @@ function SeenByChip({ entry, viewerId, viewerRole }) {
   }
   if (uid && staff) {
     return (
-      <Link to="/admin/members" className="inline-flex hover:opacity-90" title="Member directory">
+      <Link to="/admin/members" className="inline-flex hover:opacity-90" title="Patroller directory">
         {inner}
       </Link>
     );

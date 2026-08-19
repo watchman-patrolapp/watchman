@@ -11,6 +11,8 @@ import toast from "react-hot-toast";
 import { FaTrash } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
+import { assignResidentToNeighborhood } from "../utils/residentVerification";
+import { displayWatchAreaName } from "../config/neighborhoodRegions";
 
 function InlineConfirm({ label, onConfirm, onCancel, disabled }) {
   return (
@@ -39,12 +41,15 @@ function InlineConfirm({ label, onConfirm, onCancel, disabled }) {
 export default function UserManagement() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const { activeOrganizationId, activeOrganization, organizations, isGlobalOperator } =
+    useActiveOrganization();
   const [users, setUsers] = useState([]);
   const [memberUserIds, setMemberUserIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [pendingDeleteUid, setPendingDeleteUid] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [busyUid, setBusyUid] = useState(null);
+  const [assignTargetByUid, setAssignTargetByUid] = useState({});
   const [sortBy, setSortBy] = useState("name");
 
   const currentRole = normalizeAppRole(currentUser?.role);
@@ -64,13 +69,12 @@ export default function UserManagement() {
     if (!activeOrganizationId) {
       return [];
     }
-    return users.filter(
-      (u) =>
-        !isGlobalAppRole(u.role) &&
-        !isResidentAppRole(u.role) &&
-        (u.organizationId === activeOrganizationId || memberUserIds.has(u.uid))
-    );
-  }, [users, activeOrganizationId, memberUserIds]);
+    return users.filter((u) => {
+      if (isGlobalAppRole(u.role) || isResidentAppRole(u.role)) return false;
+      if (u.organizationId === activeOrganizationId || memberUserIds.has(u.uid)) return true;
+      return Boolean(isGlobalOperator && !u.organizationId);
+    });
+  }, [users, activeOrganizationId, memberUserIds, isGlobalOperator]);
 
   const sortedUsers = useMemo(() => {
     const list = [...neighborhoodUsers];
@@ -171,10 +175,57 @@ export default function UserManagement() {
       setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
       if (isResidentAppRole(newRole)) {
         toast.success("Moved to Residents.");
+      } else if (activeOrganizationId) {
+        const { error: assignErr } = await assignResidentToNeighborhood(uid, activeOrganizationId);
+        if (!assignErr) {
+          setMemberUserIds((prev) => new Set(prev).add(uid));
+          setUsers((prev) =>
+            prev.map((u) => (u.uid === uid ? { ...u, role: newRole, organizationId: activeOrganizationId } : u))
+          );
+        }
       }
     } catch (err) {
       console.error("Error updating role:", err);
       alert("Failed to update role. Check console.");
+    }
+  };
+
+  const handleAssignToNeighborhood = async (uid, organizationId) => {
+    const orgId = organizationId || activeOrganizationId;
+    if (!orgId) {
+      toast.error("Select a neighborhood first.");
+      return;
+    }
+    setBusyUid(uid);
+    try {
+      const { data, error } = await assignResidentToNeighborhood(uid, orgId);
+      if (error) {
+        if (isRpcNotFoundError(error)) {
+          toast.error("Apply the move-to-suburb SQL on Supabase first.");
+          return;
+        }
+        throw error;
+      }
+      const linkedId = data?.organization_id || orgId;
+      const label =
+        displayWatchAreaName(data?.organization_name) ||
+        displayWatchAreaName(organizations.find((org) => org.id === linkedId)?.name) ||
+        "this neighborhood";
+      setMemberUserIds((prev) => {
+        const next = new Set(prev);
+        next.delete(uid);
+        if (linkedId === activeOrganizationId) next.add(uid);
+        return next;
+      });
+      setUsers((prev) =>
+        prev.map((row) => (row.uid === uid ? { ...row, organizationId: linkedId } : row))
+      );
+      toast.success(`Moved to ${label}.`);
+    } catch (err) {
+      console.error("Assign watch member failed:", err);
+      toast.error(err.message || "Could not move this user.");
+    } finally {
+      setBusyUid(null);
     }
   };
 
@@ -256,7 +307,9 @@ export default function UserManagement() {
         </div>
         <h1 className="text-2xl font-bold dark:text-white">User Management</h1>
         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Watch and operational accounts for this neighborhood. Registered residents are listed separately.
+          Watch and operational accounts for this neighborhood. To move someone later, pick their new suburb
+          under their name and choose Move. Create that neighborhood first under Organizations if it does not
+          exist yet.
         </p>
         <button
           type="button"
@@ -334,9 +387,78 @@ export default function UserManagement() {
                 </td>
               </tr>
             ) : null}
-            {sortedUsers.map(u => (
+            {sortedUsers.map(u => {
+              const linkedToArea =
+                u.organizationId === activeOrganizationId || memberUserIds.has(u.uid);
+              const moveTarget =
+                assignTargetByUid[u.uid] ||
+                (!linkedToArea ? activeOrganizationId : "") ||
+                "";
+              return (
               <tr key={u.uid} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-700">
-                <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">{u.fullName || "—"}</td>
+                <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">
+                  <p>{u.fullName || "—"}</p>
+                  {!linkedToArea ? (
+                    <p className="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                      Not linked to this neighborhood
+                    </p>
+                  ) : null}
+                  {isGlobalOperator ? (
+                    <div className="mt-1.5 space-y-1">
+                      <select
+                        value={moveTarget}
+                        onChange={(event) =>
+                          setAssignTargetByUid((prev) => ({
+                            ...prev,
+                            [u.uid]: event.target.value,
+                          }))
+                        }
+                        className="w-full max-w-[14rem] rounded border px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        aria-label={`Suburb for ${u.fullName || "user"}`}
+                      >
+                        <option value="">
+                          {linkedToArea ? "Move to suburb…" : "Assign to suburb…"}
+                        </option>
+                        {organizations.map((org) => (
+                          <option key={org.id} value={org.id}>
+                            {displayWatchAreaName(org.name)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void handleAssignToNeighborhood(u.uid, moveTarget)}
+                        disabled={
+                          busyUid === u.uid ||
+                          !moveTarget ||
+                          (linkedToArea && moveTarget === u.organizationId)
+                        }
+                        className="px-2 py-1 text-xs rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+                      >
+                        {busyUid === u.uid
+                          ? "Saving…"
+                          : linkedToArea
+                            ? `Move to ${displayWatchAreaName(
+                                organizations.find((org) => org.id === moveTarget)?.name
+                              ) || "suburb"}`
+                            : `Assign to ${displayWatchAreaName(
+                                organizations.find((org) => org.id === moveTarget)?.name
+                              ) || "suburb"}`}
+                      </button>
+                    </div>
+                  ) : !linkedToArea ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleAssignToNeighborhood(u.uid, activeOrganizationId)}
+                      disabled={busyUid === u.uid || !activeOrganizationId}
+                      className="mt-1.5 px-2 py-1 text-xs rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+                    >
+                      {busyUid === u.uid
+                        ? "Assigning…"
+                        : `Assign to ${displayWatchAreaName(activeOrganization?.name) || "this suburb"}`}
+                    </button>
+                  ) : null}
+                </td>
                 <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">{u.email}</td>
                 <td className="px-4 py-2 border dark:border-gray-600">
                   <span className={`px-2 py-1 rounded text-sm ${
@@ -400,7 +522,8 @@ export default function UserManagement() {
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -141,42 +141,48 @@ export function emptyRegisterForm() {
   };
 }
 
+function blank(value) {
+  return !String(value || "").trim();
+}
+
+function phoneDigitCount(value) {
+  return String(value || "").replace(/\D/g, "").length;
+}
+
 export function validateRegisterForm(track, form) {
   if (!track) return "Choose how you want to join.";
 
-  const firstName = form.firstName.trim();
-  const lastName = form.lastName.trim();
-  if (!firstName) return "Name is required.";
-  if (!lastName) return "Surname is required.";
+  if (blank(form.firstName)) return "Name is required.";
+  if (blank(form.lastName)) return "Surname is required.";
 
-  const phone = form.phone.trim();
-  if (!phone) return "Phone number is required.";
-  const phoneDigits = phone.replace(/\D/g, "");
-  if (phoneDigits.length < 10) return "Enter a valid phone number (at least 10 digits).";
+  if (blank(form.phone)) return "Phone number is required.";
+  if (phoneDigitCount(form.phone) < 10) return "Enter a valid phone number (at least 10 digits).";
 
-  const email = form.email.trim();
+  const email = String(form.email || "").trim();
   if (!email) return "Email address is required.";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Enter a valid email address.";
 
-  if (!form.password || form.password.length < 6) {
+  if (blank(form.password) || form.password.length < 6) {
     return "Password should be at least 6 characters";
   }
   if (form.password !== form.confirmPassword) {
     return "Passwords do not match.";
   }
 
-  if (track.requiresAddress && !form.address.trim()) {
+  if (track.requiresAddress && blank(form.address)) {
     return "Home address is required.";
   }
 
-  if (track.requiresNeighborhood && !form.neighborhoodOrganizationId) {
+  if (track.requiresNeighborhood && blank(form.neighborhoodOrganizationId)) {
     return "Please choose a suburb / neighborhood from the list.";
   }
 
-  if (track.showEmergencyContact && form.emergencyContactPhone.trim()) {
-    const emergencyDigits = form.emergencyContactPhone.replace(/\D/g, "");
-    if (emergencyDigits.length < 10) {
-      return "Enter a valid emergency contact number, or leave it blank.";
+  if (track.showEmergencyContact) {
+    if (blank(form.emergencyContactFirstName)) return "Emergency contact name is required.";
+    if (blank(form.emergencyContactLastName)) return "Emergency contact surname is required.";
+    if (blank(form.emergencyContactPhone)) return "Emergency contact phone is required.";
+    if (phoneDigitCount(form.emergencyContactPhone) < 10) {
+      return "Enter a valid emergency contact number (at least 10 digits).";
     }
   }
 

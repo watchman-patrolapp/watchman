@@ -90,7 +90,7 @@ export default function DashboardMobileDock({
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md pb-[env(safe-area-inset-bottom,0px)] motion-safe:transition-shadow"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-gray-200/80 dark:border-gray-700/80 bg-white dark:bg-gray-900 pb-[env(safe-area-inset-bottom,0px)] motion-safe:transition-shadow"
       aria-label="Primary navigation"
     >
       <ul className="flex justify-around items-stretch max-w-lg mx-auto px-1 pt-1">

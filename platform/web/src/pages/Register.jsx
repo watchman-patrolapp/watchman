@@ -286,6 +286,10 @@ function Register() {
         return;
       }
     }
+    if (track.requiresNeighborhood && !form.neighborhoodOrganizationId) {
+      setError("Please choose a suburb / neighborhood from the list.");
+      return;
+    }
     if (!acceptedAge18 || !acceptedPopia || !acceptedTerms) {
       setError("You must confirm you are 18 or older and accept POPIA and terms to register.");
       return;
@@ -749,8 +753,11 @@ function Register() {
         {track.showEmergencyContact ? (
           <section className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Emergency contact</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Used if staff cannot reach you. Required.
+            </p>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field id="reg-emergency-first-name" label="Contact name">
+              <Field id="reg-emergency-first-name" label="Contact name" required>
                 <input
                   id="reg-emergency-first-name"
                   name="emergencyContactFirstName"
@@ -759,9 +766,10 @@ function Register() {
                   value={form.emergencyContactFirstName}
                   onChange={handleChange}
                   className="input border w-full"
+                  required
                 />
               </Field>
-              <Field id="reg-emergency-last-name" label="Contact surname">
+              <Field id="reg-emergency-last-name" label="Contact surname" required>
                 <input
                   id="reg-emergency-last-name"
                   name="emergencyContactLastName"
@@ -770,10 +778,11 @@ function Register() {
                   value={form.emergencyContactLastName}
                   onChange={handleChange}
                   className="input border w-full"
+                  required
                 />
               </Field>
             </div>
-            <Field id="reg-emergency-phone" label="Contact phone">
+            <Field id="reg-emergency-phone" label="Contact phone" required>
               <input
                 id="reg-emergency-phone"
                 name="emergencyContactPhone"
@@ -782,6 +791,7 @@ function Register() {
                 value={form.emergencyContactPhone}
                 onChange={handleChange}
                 className="input border w-full"
+                required
               />
             </Field>
             <Field id="reg-emergency-relationship" label="Relationship">
@@ -900,7 +910,14 @@ function Register() {
           <p className="text-red-600 dark:text-red-400 text-sm text-center" role="alert">{error}</p>
         ) : null}
 
-        <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={
+            loading ||
+            (track.requiresNeighborhood && (signupOptionsLoading || areas.length === 0))
+          }
+          className="btn-primary w-full disabled:opacity-50"
+        >
           {loading ? "Registering…" : `Register as ${track.label}`}
         </button>
 

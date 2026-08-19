@@ -272,6 +272,13 @@ export function canStaffVerifyResident(role) {
   return RESIDENT_STAFF_VERIFY_ROLES.includes(normalizeAppRole(role));
 }
 
+/** Main admin, technical support, and NW admin review household → patroller requests. */
+export const PATROLLER_REQUEST_REVIEW_ROLES = ["admin", "technical_support", "nw_admin"];
+
+export function canReviewPatrollerRequests(role) {
+  return PATROLLER_REQUEST_REVIEW_ROLES.includes(normalizeAppRole(role));
+}
+
 export const SECURITY_DASHBOARD_ROLES = ["security_admin"];
 export const CITY_ADMIN_DASHBOARD_ROLES = ["city_admin", "admin", "technical_support"];
 

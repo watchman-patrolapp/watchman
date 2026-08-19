@@ -287,6 +287,8 @@ export default function ChatContainer() {
           return;
         }
         setTypingUsers((prev) => {
+          const existing = prev.find((u) => u.userId === uid);
+          if (existing && existing.user_name === uname) return prev;
           const rest = prev.filter((u) => u.userId !== uid);
           return [...rest, { userId: uid, user_name: uname }];
         });
@@ -325,8 +327,13 @@ export default function ChatContainer() {
     return '[Message]';
   }, []);
 
+  const lastTypingEmitRef = useRef(0);
   const onComposerTyping = useCallback(() => {
-    emitTyping(true);
+    const now = Date.now();
+    if (now - lastTypingEmitRef.current >= 400) {
+      lastTypingEmitRef.current = now;
+      emitTyping(true);
+    }
     if (typingIdleRef.current) clearTimeout(typingIdleRef.current);
     typingIdleRef.current = setTimeout(() => emitTyping(false), 2200);
   }, [emitTyping]);
@@ -1131,6 +1138,8 @@ export default function ChatContainer() {
     [summarizeMessageForReply]
   );
 
+  const onClearReply = useCallback(() => setReplyToMessage(null), []);
+
   const handleCompileReport = useCallback((message) => {
     const summary = summarizeMessageForReply(message);
     const when = localDateTimeParts();
@@ -1372,7 +1381,7 @@ export default function ChatContainer() {
             getLocationForTemplates={getLocation}
             onComposerTyping={onComposerTyping}
             replyToMessage={replyToMessage}
-            onClearReply={() => setReplyToMessage(null)}
+            onClearReply={onClearReply}
             composerPlaceholder={
               !isOnline
                 ? 'Offline…'

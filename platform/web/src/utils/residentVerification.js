@@ -63,6 +63,43 @@ export async function verifyResidentAsStaff(residentUserId) {
   return { data, error };
 }
 
+export async function assignResidentToNeighborhood(residentUserId, organizationId) {
+  const { data, error } = await supabase.rpc("assign_resident_to_neighborhood", {
+    p_resident_user_id: residentUserId,
+    p_organization_id: organizationId || null,
+  });
+  return { data, error };
+}
+
+export async function requestPatrollerRole() {
+  const { data, error } = await supabase.rpc("request_patroller_role");
+  return { data, error };
+}
+
+export async function withdrawPatrollerRoleRequest() {
+  const { data, error } = await supabase.rpc("withdraw_patroller_role_request");
+  return { data, error };
+}
+
+export async function reviewPatrollerRoleRequest(residentUserId, approve) {
+  const { data, error } = await supabase.rpc("review_patroller_role_request", {
+    p_resident_user_id: residentUserId,
+    p_approve: Boolean(approve),
+  });
+  return { data, error };
+}
+
+export async function countPendingPatrollerRequests() {
+  const { data, error } = await supabase.rpc("count_pending_patroller_requests");
+  if (error) {
+    if (!isRpcNotFoundError(error)) {
+      console.warn("count_pending_patroller_requests:", error.message);
+    }
+    return 0;
+  }
+  return Number(data) || 0;
+}
+
 export async function vouchForResident(residentUserId) {
   const { data, error } = await supabase.rpc("vouch_for_resident", {
     p_resident_user_id: residentUserId,

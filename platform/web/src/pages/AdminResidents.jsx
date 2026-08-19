@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { normalizeAppRole, canAccessAdminPanel } from "../auth/staffRoles";
-import { isGlobalAppRole, isResidentAppRole, canStaffVerifyResident } from "../auth/roleMatrix";
+import { isGlobalAppRole, isResidentAppRole, canStaffVerifyResident, canReviewPatrollerRequests } from "../auth/roleMatrix";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import AreaContextBar from "../components/layout/AreaContextBar";
 import { supabase } from "../supabase/client";
@@ -11,21 +11,25 @@ import {
   RESIDENT_VOUCH_THRESHOLD,
   fetchResidentVouchers,
   verifyResidentAsStaff,
+  assignResidentToNeighborhood,
   vouchSummaryForResident,
   verificationLabel,
   listResidentVerificationLogs,
   groupVerificationLogs,
   formatVerifiedBy,
+  listResidentNeighbours,
+  reviewPatrollerRoleRequest,
 } from "../utils/residentVerification";
 import {
   formatAwayRange,
   listHouseholdsAway,
 } from "../utils/residentAway";
 import toast from "react-hot-toast";
-import { FaSearch, FaTrash } from "react-icons/fa";
+import { FaEnvelope, FaPhone, FaSearch, FaSms, FaTrash } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { listNeighborhoodNextOfKin, resolveEmergencyContacts } from "../utils/emergencyContact";
+import { displayWatchAreaName } from "../config/neighborhoodRegions";
 
 function InlineConfirm({ label, onConfirm, onCancel, disabled }) {
   return (
@@ -89,19 +93,82 @@ function formatJoined(iso) {
   }
 }
 
+function telHref(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length < 10) return "";
+  if (digits.startsWith("0") && digits.length === 10) return `tel:+27${digits.slice(1)}`;
+  if (digits.startsWith("27") && digits.length >= 11) return `tel:+${digits}`;
+  return `tel:${digits}`;
+}
+
+function smsHref(phone) {
+  const href = telHref(phone);
+  return href ? href.replace(/^tel:/, "sms:") : "";
+}
+
+function StaffContactLinks({ email, phone }) {
+  const mail = String(email || "").trim();
+  const call = telHref(phone);
+  const sms = smsHref(phone);
+  const phoneLabel = String(phone || "").trim();
+  if (!mail && !call) {
+    return <span className="text-xs text-gray-500 dark:text-gray-400">No contact details on file</span>;
+  }
+  return (
+    <div className="space-y-1.5">
+      {mail ? (
+        <a
+          href={`mailto:${mail}`}
+          className="flex items-center gap-1.5 text-sm text-teal-700 hover:underline dark:text-teal-300"
+        >
+          <FaEnvelope className="h-3 w-3 shrink-0" aria-hidden />
+          {mail}
+        </a>
+      ) : (
+        <p className="text-xs text-gray-500 dark:text-gray-400">No email</p>
+      )}
+      {call ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={call}
+            className="inline-flex items-center gap-1.5 text-sm text-teal-700 hover:underline dark:text-teal-300"
+          >
+            <FaPhone className="h-3 w-3 shrink-0" aria-hidden />
+            {phoneLabel}
+          </a>
+          {sms ? (
+            <a
+              href={sms}
+              className="inline-flex items-center gap-1 text-xs font-medium text-teal-800 hover:underline dark:text-teal-200"
+            >
+              <FaSms className="h-3 w-3 shrink-0" aria-hidden />
+              SMS
+            </a>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500 dark:text-gray-400">No phone</p>
+      )}
+    </div>
+  );
+}
+
 export default function AdminResidents() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const { activeOrganizationId, activeOrganization } = useActiveOrganization();
+  const { activeOrganizationId, activeOrganization, organizations, isGlobalOperator } =
+    useActiveOrganization();
   const [users, setUsers] = useState([]);
   const [profilesByUser, setProfilesByUser] = useState({});
   const [vouchers, setVouchers] = useState([]);
   const [verificationLogs, setVerificationLogs] = useState({});
   const [memberUserIds, setMemberUserIds] = useState(() => new Set());
+  const [nearbyUserIds, setNearbyUserIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [pendingDeleteUid, setPendingDeleteUid] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [busyUid, setBusyUid] = useState(null);
+  const [assignTargetByUid, setAssignTargetByUid] = useState({});
   const [sortBy, setSortBy] = useState("name");
   const [search, setSearch] = useState("");
   const [awayByUser, setAwayByUser] = useState({});
@@ -110,17 +177,22 @@ export default function AdminResidents() {
   const canDeleteUsers = currentRole === "admin" || currentRole === "technical_support";
   const canPromote = canAccessAdminPanel(currentRole);
   const canVerify = canStaffVerifyResident(currentRole);
+  const canReviewPatroller = canReviewPatrollerRequests(currentRole);
   const backTo = canPromote ? "/admin" : "/dashboard";
   const backLabel = canPromote ? "← Back to Admin Dashboard" : "← Back to dashboard";
 
   const residents = useMemo(() => {
     if (!activeOrganizationId) return [];
-    return users.filter(
-      (u) =>
-        isResidentAppRole(u.role) &&
-        (u.organizationId === activeOrganizationId || memberUserIds.has(u.uid))
-    );
-  }, [users, activeOrganizationId, memberUserIds]);
+    const orgName = String(activeOrganization?.name || "").trim().toLowerCase();
+    return users.filter((u) => {
+      if (!isResidentAppRole(u.role)) return false;
+      if (u.organizationId === activeOrganizationId || memberUserIds.has(u.uid)) return true;
+      if (nearbyUserIds.has(u.uid)) return true;
+      if (!u.organizationId) return true;
+      const notes = String(profilesByUser[u.uid]?.notes || "").toLowerCase();
+      return Boolean(orgName && notes.includes(orgName));
+    });
+  }, [users, activeOrganizationId, activeOrganization?.name, memberUserIds, nearbyUserIds, profilesByUser]);
 
   const usersById = useMemo(() => Object.fromEntries(users.map((u) => [u.uid, u])), [users]);
 
@@ -151,7 +223,12 @@ export default function AdminResidents() {
   const sortedResidents = useMemo(() => {
     const list = [...visibleResidents];
     const tie = (a, b) => String(a.uid).localeCompare(String(b.uid));
+    const requestRank = (uid) =>
+      profilesByUser[uid]?.patroller_request_status === "pending" ? 0 : 1;
     list.sort((a, b) => {
+      const ra = requestRank(a.uid);
+      const rb = requestRank(b.uid);
+      if (ra !== rb) return ra - rb;
       if (sortBy === "joined_desc" || sortBy === "joined_asc") {
         const ta = new Date(a.createdAt || 0).getTime();
         const tb = new Date(b.createdAt || 0).getTime();
@@ -170,7 +247,13 @@ export default function AdminResidents() {
       return c !== 0 ? c : tie(a, b);
     });
     return list;
-  }, [visibleResidents, sortBy]);
+  }, [visibleResidents, sortBy, profilesByUser]);
+
+  const pendingPatrollerCount = useMemo(
+    () =>
+      residents.filter((u) => profilesByUser[u.uid]?.patroller_request_status === "pending").length,
+    [residents, profilesByUser]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -216,7 +299,11 @@ export default function AdminResidents() {
             u.emergency_contact_2_relationship || u.emergencyContact2Relationship || "",
         }));
 
-        const { data: kinRows } = await listNeighborhoodNextOfKin();
+        const [kinResult, neighbourRows] = await Promise.all([
+          listNeighborhoodNextOfKin(),
+          listResidentNeighbours(),
+        ]);
+        const { data: kinRows } = kinResult;
         if (Array.isArray(kinRows) && kinRows.length) {
           const kinById = Object.fromEntries(
             kinRows.map((row) => [
@@ -268,13 +355,24 @@ export default function AdminResidents() {
         if (residentIds.length > 0) {
           const { data: profileRows, error: profileErr } = await supabase
             .from("resident_profiles")
-            .select("user_id, home_address, verification_date, verification_method, verification_admin_id, notes")
+            .select(
+              "user_id, home_address, verification_date, verification_method, verification_admin_id, notes, patroller_request_status, patroller_request_at"
+            )
             .in("user_id", residentIds);
-          if (profileErr && !isRpcNotFoundError(profileErr)) {
+          if (profileErr && /patroller_request/i.test(profileErr.message || "")) {
+            const fallback = await supabase
+              .from("resident_profiles")
+              .select("user_id, home_address, verification_date, verification_method, verification_admin_id, notes")
+              .in("user_id", residentIds);
+            for (const row of fallback.data || []) {
+              profileMap[row.user_id] = row;
+            }
+          } else if (profileErr && !isRpcNotFoundError(profileErr)) {
             console.warn("AdminResidents: resident_profiles", profileErr.message);
-          }
-          for (const row of profileRows || []) {
-            profileMap[row.user_id] = row;
+          } else {
+            for (const row of profileRows || []) {
+              profileMap[row.user_id] = row;
+            }
           }
         }
 
@@ -295,6 +393,9 @@ export default function AdminResidents() {
           setVouchers(voucherRows);
           setVerificationLogs(groupVerificationLogs(logRows));
           setMemberUserIds(new Set((memberRows || []).map((row) => row.user_id)));
+          setNearbyUserIds(
+            new Set((neighbourRows || []).map((row) => row.user_id).filter(Boolean))
+          );
           setAwayByUser(awayMap);
         }
       } catch (err) {
@@ -308,6 +409,52 @@ export default function AdminResidents() {
       cancelled = true;
     };
   }, [activeOrganizationId]);
+
+  const markLinkedToOrg = (uid, organizationId) => {
+    setMemberUserIds((prev) => {
+      const next = new Set(prev);
+      next.delete(uid);
+      if (organizationId === activeOrganizationId) next.add(uid);
+      return next;
+    });
+    setUsers((prev) =>
+      prev.map((row) => (row.uid === uid ? { ...row, organizationId } : row))
+    );
+  };
+
+  const handleAssignToNeighborhood = async (uid, organizationId) => {
+    const orgId = organizationId || activeOrganizationId;
+    if (!orgId) {
+      toast.error("Select a neighborhood at the top first.");
+      return;
+    }
+    setBusyUid(uid);
+    try {
+      const { data, error } = await assignResidentToNeighborhood(uid, orgId);
+      if (error) {
+        if (isRpcNotFoundError(error)) {
+          toast.error("Apply the assign-resident SQL on Supabase first.");
+          return;
+        }
+        throw error;
+      }
+      const previousOrgId = users.find((row) => row.uid === uid)?.organizationId || null;
+      const linkedId = data?.organization_id || orgId;
+      markLinkedToOrg(uid, linkedId);
+      const label =
+        displayWatchAreaName(data?.organization_name) ||
+        displayWatchAreaName(organizations.find((org) => org.id === linkedId)?.name) ||
+        "this neighborhood";
+      toast.success(
+        previousOrgId && previousOrgId !== linkedId ? `Moved to ${label}.` : `Assigned to ${label}.`
+      );
+    } catch (err) {
+      console.error("Assign resident failed:", err);
+      toast.error(err.message || "Could not assign this household.");
+    } finally {
+      setBusyUid(null);
+    }
+  };
 
   const handleVerify = async (uid) => {
     setBusyUid(uid);
@@ -330,9 +477,52 @@ export default function AdminResidents() {
         },
       }));
       toast.success(data?.already_verified ? "Already verified." : "Resident verified.");
+      if (activeOrganizationId) {
+        const { data: assigned, error: assignErr } = await assignResidentToNeighborhood(
+          uid,
+          activeOrganizationId
+        );
+        if (assignErr) {
+          console.warn("AdminResidents: link after verify", assignErr.message);
+        } else {
+          markLinkedToOrg(uid, assigned?.organization_id || activeOrganizationId);
+        }
+      }
     } catch (err) {
       console.error("Verify resident failed:", err);
       toast.error(err.message || "Failed to verify resident. Apply the latest SQL if this persists.");
+    } finally {
+      setBusyUid(null);
+    }
+  };
+
+  const handleReviewPatroller = async (uid, approve) => {
+    setBusyUid(uid);
+    try {
+      const { error } = await reviewPatrollerRoleRequest(uid, approve);
+      if (error) {
+        if (isRpcNotFoundError(error)) {
+          toast.error("Apply the patroller-request SQL on Supabase first.");
+          return;
+        }
+        throw error;
+      }
+      if (approve) {
+        setUsers((prev) => prev.filter((row) => row.uid !== uid));
+        toast.success("Approved — moved to patrollers.");
+      } else {
+        setProfilesByUser((prev) => ({
+          ...prev,
+          [uid]: {
+            ...(prev[uid] || { user_id: uid }),
+            patroller_request_status: "rejected",
+          },
+        }));
+        toast.success("Request declined.");
+      }
+    } catch (err) {
+      console.error("Patroller request review failed:", err);
+      toast.error(err.message || "Could not review this request.");
     } finally {
       setBusyUid(null);
     }
@@ -343,12 +533,29 @@ export default function AdminResidents() {
       toast.error("Main admin and technical support are global and cannot be assigned here.");
       return;
     }
+    if (newRole === "patroller" && canReviewPatroller) {
+      await handleReviewPatroller(uid, true);
+      return;
+    }
+    const orgId = assignTargetByUid[uid] || activeOrganizationId;
     try {
+      if (!isResidentAppRole(newRole) && orgId) {
+        const { error: assignErr } = await assignResidentToNeighborhood(uid, orgId);
+        if (assignErr && !isRpcNotFoundError(assignErr)) {
+          console.warn("AdminResidents: link before promote", assignErr.message);
+        } else if (!assignErr) {
+          markLinkedToOrg(uid, orgId);
+        }
+      }
       const { error } = await supabase.from("users").update({ role: newRole }).eq("id", uid);
       if (error) throw error;
       setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role: newRole } : u)));
       if (!isResidentAppRole(newRole)) {
-        toast.success("Moved to User Management.");
+        if (orgId) {
+          const { error: syncErr } = await assignResidentToNeighborhood(uid, orgId);
+          if (!syncErr) markLinkedToOrg(uid, orgId);
+        }
+        toast.success("Moved to User Management for this neighborhood.");
       }
     } catch (err) {
       console.error("Error updating role:", err);
@@ -432,11 +639,23 @@ export default function AdminResidents() {
         </div>
         <h1 className="text-2xl font-bold dark:text-white">Residents</h1>
         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Household accounts for this neighborhood. The <span className="font-medium">Verified</span> badge appears after
+          Household accounts for this neighborhood, plus unlinked signups and nearby households
+          from Verify neighbours. Unlinked rows can be assigned to a suburb with{" "}
+          <span className="font-medium">Assign to…</span> — that places them on the watch, it does
+          not verify them. Call, SMS, or email from the Contact column.
+          The <span className="font-medium">Verified</span> badge appears after
           an admin, NW admin, or patroller verifies them, or after two already-verified neighbours vouch.
           The Away column is for patrol — households that marked dates they will be gone.
           Search by resident name to see next of kin — primary, then backup if they added one.
+          Verified households can request to become patrollers from Profile; Approve or Reject
+          appears on those rows.
         </p>
+        {pendingPatrollerCount > 0 ? (
+          <p className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-medium text-cyan-950 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-100">
+            {pendingPatrollerCount} resident{pendingPatrollerCount === 1 ? "" : "s"} asked to become
+            a patroller. Those rows are listed first.
+          </p>
+        ) : null}
         {canPromote ? (
           <button
             type="button"
@@ -502,6 +721,8 @@ export default function AdminResidents() {
             {sortedResidents.map((u) => {
               const profile = profilesByUser[u.uid];
               const address = (profile?.home_address || u.address || "").trim();
+              const linkedToArea =
+                u.organizationId === activeOrganizationId || memberUserIds.has(u.uid);
               const { primary, backup } = resolveEmergencyContacts(u, usersById);
               const verified = Boolean(profile?.verification_date) || Boolean(u.verified);
               const statusProfile = {
@@ -517,10 +738,104 @@ export default function AdminResidents() {
                   <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">
                     <p>{u.fullName || "—"}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Joined {formatJoined(u.createdAt)}</p>
+                    {!linkedToArea ? (
+                      <div className="mt-2 space-y-1.5">
+                        <p className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                          Not linked to this neighborhood
+                        </p>
+                        {canVerify ? (
+                          <>
+                            {isGlobalOperator && organizations.length > 1 ? (
+                              <select
+                                value={assignTargetByUid[u.uid] || activeOrganizationId || ""}
+                                onChange={(event) =>
+                                  setAssignTargetByUid((prev) => ({
+                                    ...prev,
+                                    [u.uid]: event.target.value,
+                                  }))
+                                }
+                                className="w-full max-w-[14rem] rounded border px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                aria-label={`Suburb for ${u.fullName || "resident"}`}
+                              >
+                                {organizations.map((org) => (
+                                  <option key={org.id} value={org.id}>
+                                    {displayWatchAreaName(org.name)}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleAssignToNeighborhood(
+                                  u.uid,
+                                  assignTargetByUid[u.uid] || activeOrganizationId
+                                )
+                              }
+                              disabled={
+                                busyUid === u.uid ||
+                                !(assignTargetByUid[u.uid] || activeOrganizationId)
+                              }
+                              className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+                            >
+                              {busyUid === u.uid
+                                ? "Assigning…"
+                                : `Assign to ${
+                                    displayWatchAreaName(
+                                      organizations.find(
+                                        (org) =>
+                                          org.id ===
+                                          (assignTargetByUid[u.uid] || activeOrganizationId)
+                                      )?.name
+                                    ) || "suburb"
+                                  }`}
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : isGlobalOperator && organizations.length > 1 ? (
+                      <div className="mt-2 space-y-1.5">
+                        <select
+                          value={assignTargetByUid[u.uid] || ""}
+                          onChange={(event) =>
+                            setAssignTargetByUid((prev) => ({
+                              ...prev,
+                              [u.uid]: event.target.value,
+                            }))
+                          }
+                          className="w-full max-w-[14rem] rounded border px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                          aria-label={`Move ${u.fullName || "resident"} to suburb`}
+                        >
+                          <option value="">Move to suburb…</option>
+                          {organizations.map((org) => (
+                            <option key={org.id} value={org.id}>
+                              {displayWatchAreaName(org.name)}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => void handleAssignToNeighborhood(u.uid, assignTargetByUid[u.uid])}
+                          disabled={
+                            busyUid === u.uid ||
+                            !assignTargetByUid[u.uid] ||
+                            assignTargetByUid[u.uid] === u.organizationId
+                          }
+                          className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+                        >
+                          {busyUid === u.uid
+                            ? "Saving…"
+                            : `Move to ${
+                                displayWatchAreaName(
+                                  organizations.find((org) => org.id === assignTargetByUid[u.uid])?.name
+                                ) || "suburb"
+                              }`}
+                        </button>
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">
-                    <p>{u.email || "—"}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{u.phone?.trim() || "No phone"}</p>
+                    <StaffContactLinks email={u.email} phone={u.phone} />
                   </td>
                   <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300 text-sm">
                     {address || "—"}
@@ -559,6 +874,15 @@ export default function AdminResidents() {
                     >
                       {verified ? verificationLabel(statusProfile) : "Pending"}
                     </span>
+                    {profile?.patroller_request_status === "pending" ? (
+                      <p className="mt-1 text-xs font-medium text-cyan-800 dark:text-cyan-200">
+                        Wants to become a patroller
+                      </p>
+                    ) : profile?.patroller_request_status === "rejected" ? (
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Patroller request declined
+                      </p>
+                    ) : null}
                     {verified && verificationLogs[u.uid]?.length ? (
                       <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                         {formatVerifiedBy(verificationLogs[u.uid])}
@@ -594,6 +918,26 @@ export default function AdminResidents() {
                   ) : null}
                   {canPromote ? (
                     <td className="px-4 py-2 border dark:border-gray-600">
+                    {canReviewPatroller && profile?.patroller_request_status === "pending" ? (
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => void handleReviewPatroller(u.uid, true)}
+                          disabled={busyUid === u.uid}
+                          className="rounded-lg bg-cyan-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-800 disabled:opacity-50"
+                        >
+                          {busyUid === u.uid ? "Saving…" : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleReviewPatroller(u.uid, false)}
+                          disabled={busyUid === u.uid}
+                          className="rounded-lg bg-gray-200 px-2.5 py-1 text-xs font-medium text-gray-800 hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ) : null}
                     <select
                       value="resident"
                       onChange={(e) => handleRoleChange(u.uid, e.target.value)}
