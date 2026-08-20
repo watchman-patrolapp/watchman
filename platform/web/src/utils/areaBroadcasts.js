@@ -1,10 +1,12 @@
 import { supabase } from "../supabase/client";
+import { parsePatrolTime } from "./watchTime";
 
 export const NOTICE_PIN_MS = 12 * 60 * 60 * 1000;
 export const NOTICE_LIFE_MS = 24 * 60 * 60 * 1000;
 
 function timeMs(value) {
-  const ms = Date.parse(value);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const ms = parsePatrolTime(value)?.getTime();
   return Number.isFinite(ms) ? ms : 0;
 }
 
@@ -31,7 +33,11 @@ export function isActivityAreaBroadcast(row, now = Date.now()) {
 export function formatClockTime(value) {
   const ms = typeof value === "number" ? value : timeMs(value);
   if (!ms) return "";
-  return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return new Date(ms).toLocaleTimeString("en-ZA", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Africa/Johannesburg",
+  });
 }
 
 export function formatNoticeRemaining(untilMs, now = Date.now()) {

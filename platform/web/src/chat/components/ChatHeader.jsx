@@ -7,12 +7,30 @@ import { useAuth } from '../../auth/useAuth';
 import { homePathForRole } from '../../auth/roleMatrix';
 import { CHAT_CHANNEL_PATROL, CHAT_CHANNEL_RESIDENT } from '../utils/chatChannels';
 
+function RoomUnreadPill({ count, tone }) {
+  if (!count || count <= 0) return null;
+  const label = count > 99 ? '99+' : String(count);
+  const toneClass =
+    tone === 'ops'
+      ? 'bg-amber-500 text-white ring-amber-200/80 dark:ring-amber-900/60'
+      : 'bg-teal-600 text-white ring-teal-200/80 dark:ring-teal-900/60';
+  return (
+    <span
+      className={`ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none shadow-sm ring-2 ring-offset-0 ${toneClass}`}
+      aria-label={`${label} unread`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export const ChatHeader = React.memo(function ChatHeader({
   isOnline,
   messageCount,
   isEmergencyMode,
   channel = CHAT_CHANNEL_PATROL,
   canSwitchChannels = false,
+  patrolUnread = 0,
   neighbourUnread = 0,
   onChannelChange,
 }) {
@@ -27,14 +45,14 @@ export const ChatHeader = React.memo(function ChatHeader({
     : 'Chat with patrol';
   const subtitle = canSwitchChannels
     ? onPatrol
-      ? 'Patrol ops only — residents cannot see this room'
-      : 'Residents and patrol — replies stay here'
+      ? 'Watch-only room — residents cannot see these messages'
+      : 'Shared with residents — keep replies in this room'
     : 'Patrol in your neighborhood can see this room';
   const titleColor = isEmergencyMode
     ? 'text-red-600 dark:text-red-400 animate-pulse'
     : onPatrol && canSwitchChannels
-      ? 'text-amber-700 dark:text-amber-300'
-      : 'text-teal-700 dark:text-teal-300';
+      ? 'text-amber-800 dark:text-amber-200'
+      : 'text-teal-800 dark:text-teal-200';
 
   return (
     <div className="mb-3 flex-shrink-0 sm:mb-4">
@@ -64,42 +82,49 @@ export const ChatHeader = React.memo(function ChatHeader({
       {canSwitchChannels ? (
         <div className="mt-3 flex justify-center">
           <div
-            className="inline-flex w-full max-w-md rounded-xl border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-900/70"
+            className="inline-flex w-full max-w-lg rounded-2xl border border-black/5 bg-gradient-to-b from-white to-gray-50 p-1 shadow-sm dark:border-white/10 dark:from-gray-900 dark:to-gray-950"
             role="tablist"
-            aria-label="Chat rooms"
+            aria-label="Chat rooms — Patrol ops and Neighbours are separate"
           >
             <button
               type="button"
               role="tab"
               aria-selected={onPatrol}
+              aria-label={
+                patrolUnread > 0
+                  ? `Patrol ops, ${patrolUnread} unread`
+                  : 'Patrol ops'
+              }
               onClick={() => onChannelChange?.(CHAT_CHANNEL_PATROL)}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
                 onPatrol
-                  ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30 dark:bg-amber-500'
-                  : 'text-amber-800/70 hover:bg-amber-50 hover:text-amber-900 dark:text-amber-200/70 dark:hover:bg-amber-950/40 dark:hover:text-amber-100'
+                  ? 'bg-amber-500 text-white shadow-md shadow-amber-500/25'
+                  : 'text-amber-900/65 hover:bg-amber-500/10 hover:text-amber-950 dark:text-amber-100/70 dark:hover:bg-amber-400/10 dark:hover:text-amber-50'
               }`}
             >
-              <FaShieldAlt className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              Patrol ops
+              <FaShieldAlt className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+              <span>Patrol ops</span>
+              <RoomUnreadPill count={onPatrol ? 0 : patrolUnread} tone="ops" />
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={!onPatrol}
+              aria-label={
+                neighbourUnread > 0
+                  ? `Neighbours, ${neighbourUnread} unread`
+                  : 'Neighbours'
+              }
               onClick={() => onChannelChange?.(CHAT_CHANNEL_RESIDENT)}
-              className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
                 !onPatrol
-                  ? 'bg-teal-600 text-white shadow-sm shadow-teal-600/30 dark:bg-teal-600'
-                  : 'text-teal-800/70 hover:bg-teal-50 hover:text-teal-900 dark:text-teal-200/70 dark:hover:bg-teal-950/40 dark:hover:text-teal-100'
+                  ? 'bg-teal-600 text-white shadow-md shadow-teal-600/25'
+                  : 'text-teal-900/65 hover:bg-teal-600/10 hover:text-teal-950 dark:text-teal-100/70 dark:hover:bg-teal-400/10 dark:hover:text-teal-50'
               }`}
             >
-              <FaUserFriends className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              Neighbours
-              {neighbourUnread > 0 ? (
-                <span className="absolute -right-0.5 -top-1 inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white ring-2 ring-white dark:ring-gray-900">
-                  {neighbourUnread > 99 ? '99+' : neighbourUnread}
-                </span>
-              ) : null}
+              <FaUserFriends className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+              <span>Neighbours</span>
+              <RoomUnreadPill count={!onPatrol ? 0 : neighbourUnread} tone="neighbours" />
             </button>
           </div>
         </div>

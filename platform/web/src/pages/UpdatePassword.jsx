@@ -37,6 +37,7 @@ export default function UpdatePassword() {
       setError('Passwords do not match.');
       return;
     }
+    if (loading) return;
     setLoading(true);
     try {
       const { error: updErr } = await supabase.auth.updateUser({ password });

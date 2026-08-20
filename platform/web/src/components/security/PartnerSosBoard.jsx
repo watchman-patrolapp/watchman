@@ -7,6 +7,7 @@ import { markChatVisited } from "../../chat/utils/markChatVisited";
 import { formatRelativeTime } from "../../utils/formatRelativeTime";
 import {
   formatSosPlace,
+  formatSosTimestamp,
   isActiveSos,
   listSecurityPartnerSosAlerts,
   updateSecurityPartnerSos,
@@ -84,19 +85,23 @@ export function usePartnerSosAlerts() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const warnedRef = useRef(false);
+  const loadGen = useRef(0);
 
   const load = useCallback(async () => {
+    const gen = ++loadGen.current;
     try {
       const rows = await listSecurityPartnerSosAlerts();
+      if (gen !== loadGen.current) return;
       setAlerts(rows);
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error(err);
       if (!warnedRef.current) {
         warnedRef.current = true;
         toast.error(err.message || "Could not load the command SOS board.");
       }
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, []);
 
@@ -118,6 +123,7 @@ export function usePartnerSosAlerts() {
   }, [load]);
 
   const respond = async (alert) => {
+    if (!alert?.id || busyId) return;
     setBusyId(alert.id);
     try {
       await updateSecurityPartnerSos(alert.id, "respond");
@@ -131,6 +137,7 @@ export function usePartnerSosAlerts() {
   };
 
   const resolveAlert = async (alert) => {
+    if (!alert?.id || busyId) return;
     setBusyId(alert.id);
     try {
       await updateSecurityPartnerSos(alert.id, "resolve");
@@ -250,7 +257,7 @@ export function PartnerSosDetailCard({ alert, busy, onRespond, onResolve, onChat
           <div className="min-w-0">
             <p className="text-base font-semibold text-gray-900 dark:text-white">{alert.fullName}</p>
             <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-              {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : ""}
+              {alert.createdAt ? formatSosTimestamp(alert.createdAt) : ""}
               {alert.organizationName ? ` · ${alert.organizationName}` : ""}
             </p>
           </div>
@@ -305,13 +312,13 @@ export function PartnerSosDetailCard({ alert, busy, onRespond, onResolve, onChat
         <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">
           Acknowledged
           {alert.acknowledgedByName ? ` by ${alert.acknowledgedByName}` : ""} ·{" "}
-          {new Date(alert.acknowledgedAt).toLocaleString()}
+          {formatSosTimestamp(alert.acknowledgedAt)}
         </p>
       ) : null}
       {alert.resolvedAt ? (
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           Resolved
-          {alert.resolvedByName ? ` by ${alert.resolvedByName}` : ""} · {new Date(alert.resolvedAt).toLocaleString()}
+          {alert.resolvedByName ? ` by ${alert.resolvedByName}` : ""} · {formatSosTimestamp(alert.resolvedAt)}
         </p>
       ) : null}
 

@@ -1,4 +1,6 @@
 /** Must match components/evidence/StructuredEvidenceList.jsx (avoid circular imports). */
+import { parsePatrolTime } from '../utils/watchTime';
+
 const EVIDENCE_CATEGORY_ORDER = [
   'scene_photos',
   'suspects',
@@ -114,7 +116,11 @@ export function groupIncidentSectionUpdatesByKey(rows) {
     out[k].push(row);
   }
   for (const k of Object.keys(out)) {
-    out[k].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    out[k].sort((a, b) => {
+      const ta = parsePatrolTime(a.created_at)?.getTime() || 0;
+      const tb = parsePatrolTime(b.created_at)?.getTime() || 0;
+      return ta - tb;
+    });
   }
   return out;
 }

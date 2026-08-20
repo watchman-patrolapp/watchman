@@ -1,4 +1,5 @@
 import { resolveSecurityCardColors } from "../../utils/securityCompanyBranding";
+import { formatWatchDate } from "../../utils/watchTime";
 
 function statusLabel(status) {
   if (status === "verified") return "Verified client";
@@ -49,7 +50,7 @@ export default function SecurityMembershipCard({ membership }) {
         <p>
           Last updated:{" "}
           <span className="font-medium">
-            {membership.updated_at ? new Date(membership.updated_at).toLocaleDateString() : "Unknown"}
+            {membership.updated_at ? formatWatchDate(membership.updated_at) || "Unknown" : "Unknown"}
           </span>
         </p>
       </div>

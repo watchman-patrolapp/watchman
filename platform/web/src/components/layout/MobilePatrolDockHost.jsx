@@ -1,8 +1,13 @@
 import { useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
 import { useUnreadCount } from '../../chat';
-import { defaultChatChannel } from '../../chat/utils/chatChannels';
+import {
+  CHAT_CHANNEL_PATROL,
+  CHAT_CHANNEL_RESIDENT,
+  canAccessPatrolOpsChat,
+  defaultChatChannel,
+} from '../../chat/utils/chatChannels';
 import { usePendingIncidentsCount } from '../../hooks/usePendingIncidentsCount';
 import { usePendingFeedbackCount } from '../../hooks/usePendingFeedbackCount';
 import { canReviewFeedback, isStaffForModerationAlerts } from '../../auth/staffRoles';
@@ -24,7 +29,22 @@ function shouldShowDock(pathname, hasUser) {
 export default function MobilePatrolDockHost() {
   const { user } = useAuth();
   const location = useLocation();
-  const { count: unreadCount } = useUnreadCount(user?.id, defaultChatChannel(user?.role));
+  const navigate = useNavigate();
+  const isOpsChat = canAccessPatrolOpsChat(user?.role);
+
+  const { count: patrolUnread } = useUnreadCount(
+    isOpsChat ? user?.id : null,
+    CHAT_CHANNEL_PATROL
+  );
+  const { count: neighbourUnread } = useUnreadCount(
+    isOpsChat ? user?.id : null,
+    CHAT_CHANNEL_RESIDENT
+  );
+  const { count: singleUnread } = useUnreadCount(
+    !isOpsChat ? user?.id : null,
+    defaultChatChannel(user?.role)
+  );
+
   const staffAlerts = isStaffForModerationAlerts(user?.role);
   const pendingIncidentsCount = usePendingIncidentsCount(!!user?.id && staffAlerts);
   const pendingFeedbackCount = usePendingFeedbackCount(!!user?.id && canReviewFeedback(user?.role));
@@ -48,9 +68,25 @@ export default function MobilePatrolDockHost() {
 
   if (!show) return null;
 
+  const goChat = () => {
+    if (isOpsChat && neighbourUnread > 0 && patrolUnread === 0) {
+      navigate('/chat?room=resident');
+    } else if (isOpsChat) {
+      navigate('/chat?room=patrol');
+    } else {
+      navigate('/chat');
+    }
+  };
+
   return (
     <DashboardMobileDock
-      unreadCount={unreadCount}
+      unreadCount={isOpsChat ? patrolUnread + neighbourUnread : singleUnread}
+      chatBadgeSplit={
+        isOpsChat
+          ? { patrolUnread, neighbourUnread }
+          : null
+      }
+      onChatNavigate={goChat}
       pendingIncidentsCount={pendingIncidentsCount}
       pendingFeedbackCount={pendingFeedbackCount}
     />

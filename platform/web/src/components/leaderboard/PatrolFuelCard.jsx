@@ -10,27 +10,13 @@ import {
   PETROL_PRICE_MIN,
   summarizeGpsMileage,
 } from "../../utils/patrolFuelEstimate";
+import { periodStartDate } from "../../utils/watchTime";
 
 const FUEL_PERIODS = [
   { id: "week", label: "This week" },
   { id: "month", label: "This month" },
   { id: "all", label: "All time" },
 ];
-
-function fuelPeriodStart(periodId) {
-  const now = new Date();
-  if (periodId === "week") {
-    const d = new Date(now);
-    const day = d.getDay();
-    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }
-  if (periodId === "month") {
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  }
-  return null;
-}
 
 function manualStorageKey(userId) {
   return `watchman_fuel_manual_v1:${userId || "local"}`;
@@ -119,19 +105,24 @@ export default function PatrolFuelCard({
   priceZarPerLitre,
   onPriceChange,
   onSaveArea,
+  defaultPeriod = "all",
   canSaveArea = false,
   saving = false,
   isSelf = true,
   name,
   userId = null,
 }) {
-  const [period, setPeriod] = useState("all");
+  const [period, setPeriod] = useState(defaultPeriod);
   const [mode, setMode] = useState("auto");
   const [manualKm, setManualKm] = useState("");
   const [manualLPer100, setManualLPer100] = useState("");
   const [manualPrice, setManualPrice] = useState("");
-  const since = useMemo(() => fuelPeriodStart(period), [period]);
+  const since = useMemo(() => periodStartDate(period), [period]);
   const when = FUEL_PERIODS.find((p) => p.id === period)?.label || "All time";
+
+  useEffect(() => {
+    setPeriod(defaultPeriod);
+  }, [defaultPeriod]);
 
   const mileage = useMemo(
     () => summarizeGpsMileage(logs, routeRows, since, locationPoints),

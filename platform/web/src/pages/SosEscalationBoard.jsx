@@ -15,7 +15,7 @@ import { supabase } from "../supabase/client";
 import PageHeader from "../components/layout/PageHeader";
 import { useScopedOrganization } from "../utils/organizationScope";
 import { markChatVisited } from "../chat/utils/markChatVisited";
-import { listSosBoardAlerts, isActiveSos, formatSosPlace, deleteSosBoardAlert } from "../utils/residentSos";
+import { listSosBoardAlerts, isActiveSos, formatSosPlace, deleteSosBoardAlert, formatSosTimestamp } from "../utils/residentSos";
 
 function initialsFrom(name, email) {
   const raw = String(name || "").trim();
@@ -135,6 +135,7 @@ export default function SosEscalationBoard() {
   const closedAlerts = useMemo(() => alerts.filter((row) => !isActiveSos(row)), [alerts]);
 
   const acknowledge = async (alert) => {
+    if (busyId) return;
     setBusyId(alert.id);
     try {
       const { error } = await supabase
@@ -158,6 +159,7 @@ export default function SosEscalationBoard() {
   };
 
   const resolveAlert = async (alert) => {
+    if (busyId) return;
     setBusyId(alert.id);
     try {
       const { error } = await supabase
@@ -179,6 +181,7 @@ export default function SosEscalationBoard() {
   };
 
   const escalate = async (alert) => {
+    if (busyId) return;
     const nextLevel = Math.min(3, Number(alert.escalationLevel || 0) + 1);
     setBusyId(alert.id);
     try {
@@ -201,6 +204,7 @@ export default function SosEscalationBoard() {
   };
 
   const deleteAlert = async (alert) => {
+    if (busyId) return;
     const who = alert.fullName || "this resident";
     if (
       !window.confirm(
@@ -237,7 +241,7 @@ export default function SosEscalationBoard() {
           <div>
             <p className="font-medium text-gray-900 dark:text-white">SOS · {alert.fullName}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {new Date(alert.createdAt).toLocaleString()}
+              {formatSosTimestamp(alert.createdAt)}
             </p>
           </div>
           <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-200">
@@ -252,14 +256,14 @@ export default function SosEscalationBoard() {
           <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
             Acknowledged
             {alert.acknowledgedByName ? ` by ${alert.acknowledgedByName}` : ""} ·{" "}
-            {new Date(alert.acknowledgedAt).toLocaleString()}
+            {formatSosTimestamp(alert.acknowledgedAt)}
           </p>
         ) : null}
         {alert.resolvedAt ? (
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             Resolved
             {alert.resolvedByName ? ` by ${alert.resolvedByName}` : ""} ·{" "}
-            {new Date(alert.resolvedAt).toLocaleString()}
+            {formatSosTimestamp(alert.resolvedAt)}
           </p>
         ) : null}
         <div className="mt-3 flex flex-wrap gap-2">

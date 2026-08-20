@@ -122,8 +122,13 @@ export default function OrganizationOnboarding() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (saving) return;
     if (!form.name.trim()) {
       toast.error("Organization name is required.");
+      return;
+    }
+    if (!parentCity?.id && !editingOrg) {
+      toast.error("City data is still loading. Wait a moment and try again.");
       return;
     }
     setSaving(true);
@@ -136,7 +141,7 @@ export default function OrganizationOnboarding() {
         status: form.status,
         annual_fee_zar: parseListPriceZar(form.annual_fee_zar),
       };
-      if (parentCity.id) payload.city_id = parentCity.id;
+      if (parentCity?.id) payload.city_id = parentCity.id;
 
       if (editingOrg) {
         const { data: updated, error: updateErr } = await supabase

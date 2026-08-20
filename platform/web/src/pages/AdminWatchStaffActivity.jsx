@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaHistory, FaSearch } from "react-icons/fa";
 import toast from "react-hot-toast";
@@ -9,20 +9,19 @@ import AreaContextBar from "../components/layout/AreaContextBar";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
+import { formatWatchDateTime } from "../utils/watchTime";
 
 function formatWhen(iso) {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
+  return (
+    formatWatchDateTime(iso, {
       day: "numeric",
       month: "short",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
+    }) || "—"
+  );
 }
 
 function roleLabel(role) {
@@ -79,14 +78,18 @@ export default function AdminWatchStaffActivity() {
   const [roleFilter, setRoleFilter] = useState("");
   const [search, setSearch] = useState("");
   const [scopeAllAreas, setScopeAllAreas] = useState(false);
+  const loadGen = useRef(0);
 
   const load = useCallback(async () => {
+    const gen = ++loadGen.current;
     setLoading(true);
     try {
       const { data, error } = await supabase.rpc("list_watch_staff_activity", {
         p_limit: 250,
         p_role: roleFilter || null,
+        p_all_areas: scopeAllAreas,
       });
+      if (gen !== loadGen.current) return;
       if (error) {
         if (isRpcNotFoundError(error)) {
           toast.error("Apply the watch staff activity SQL on Supabase first.");
@@ -97,13 +100,14 @@ export default function AdminWatchStaffActivity() {
       }
       setRows(Array.isArray(data) ? data : []);
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error("Watch staff activity:", err);
       toast.error(err.message || "Could not load activity.");
       setRows([]);
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
-  }, [roleFilter]);
+  }, [roleFilter, scopeAllAreas]);
 
   useEffect(() => {
     void load();

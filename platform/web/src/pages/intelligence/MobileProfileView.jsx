@@ -26,6 +26,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useCriminalProfile, useProfileIncidents } from '../../hooks/useCriminalIntelligence';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
+import { formatRelativeTime } from '../../utils/formatRelativeTime';
+import { formatWatchDate } from '../../utils/watchTime';
 import { 
   FaArrowLeft, FaUser, FaExclamationTriangle, FaMapMarkerAlt, FaPhone, FaEye, FaHistory,
   FaFingerprint, FaClock, FaCalendarAlt, FaCar, FaWalking, FaBicycle, FaExclamation
@@ -71,18 +73,9 @@ const MobileProfileView = () => {
 
   const formatLastSeen = (dateString) => {
     if (!dateString) return 'Unknown';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minutes ago`;
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
+    const relative = formatRelativeTime(dateString);
+    if (relative) return relative;
+    return formatWatchDate(dateString) || 'Unknown';
   };
 
   if (profileLoading) {
@@ -270,7 +263,7 @@ const MobileProfileView = () => {
                 <div className="mt-2 text-xs text-gray-500">
                   <span className="font-medium text-teal-400">{connectionTypeLabel(link.connection_type)}</span>
                   {' • '}
-                  {new Date(link.linked_at || link.created_at).toLocaleDateString()}
+                  {formatWatchDate(link.linked_at || link.created_at) || '—'}
                 </div>
               </div>
             ))}

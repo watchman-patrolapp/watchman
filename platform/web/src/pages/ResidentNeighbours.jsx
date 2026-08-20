@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { FaCheck, FaLock, FaSearch, FaUser } from "react-icons/fa";
 import { supabase } from "../supabase/client";
@@ -49,18 +49,22 @@ export default function ResidentNeighbours() {
   const [tab, setTab] = useState("unverified");
   const [vouchBusyId, setVouchBusyId] = useState(null);
   const [canVouch, setCanVouch] = useState(Boolean(user?.isVerifiedResident));
+  const loadGen = useRef(0);
 
   const load = async () => {
     if (!user?.id) return;
+    const gen = ++loadGen.current;
     setLoading(true);
     const { data: profile } = await supabase
       .from("resident_profiles")
       .select("verification_date")
       .eq("user_id", user.id)
       .maybeSingle();
+    if (gen !== loadGen.current) return;
     const verified = Boolean(profile?.verification_date || user?.isVerifiedResident);
     setCanVouch(verified);
     const neighbours = await listResidentNeighbours();
+    if (gen !== loadGen.current) return;
     setRows((neighbours || []).filter((row) => !row.is_self));
     setLoading(false);
   };
@@ -83,6 +87,7 @@ export default function ResidentNeighbours() {
   const visible = tab === "verified" ? verifiedRows : unverified;
 
   const handleVouch = async (neighbourId) => {
+    if (vouchBusyId) return;
     setVouchBusyId(neighbourId);
     try {
       const { data, error } = await vouchForResident(neighbourId);
@@ -241,7 +246,7 @@ export default function ResidentNeighbours() {
                       <button
                         type="button"
                         onClick={() => handleVouch(row.user_id)}
-                        disabled={!canVouch || row.vouched_by_me || vouchBusyId === row.user_id}
+                        disabled={!canVouch || row.vouched_by_me || Boolean(vouchBusyId)}
                         className="w-full rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {!canVouch

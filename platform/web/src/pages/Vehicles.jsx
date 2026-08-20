@@ -1,5 +1,5 @@
 // src/pages/Vehicles.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { supabase } from '../supabase/client';
@@ -124,17 +124,26 @@ export default function Vehicles() {
   const [deletingId, setDeletingId]   = useState(null);
   const [confirmId, setConfirmId]     = useState(null);
   const [settingPrimary, setSettingPrimary] = useState(null);
+  const loadGen = useRef(0);
 
   // ---------------------------------------------------------------------------
   // Load vehicles
   // ---------------------------------------------------------------------------
 
   const loadVehicles = useCallback(async () => {
+    if (!user?.id) {
+      setVehicles([]);
+      setLoading(false);
+      return [];
+    }
+    const gen = ++loadGen.current;
     const { data, error } = await supabase
       .from('user_vehicles')
       .select('*')
       .eq('user_id', user.id)
       .order('is_primary', { ascending: false });
+
+    if (gen !== loadGen.current) return data || [];
 
     const list = data || [];
     if (error) {
@@ -144,17 +153,18 @@ export default function Vehicles() {
     }
     setLoading(false);
     return list;
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
-    loadVehicles();
-  }, [loadVehicles, user]);
+    void loadVehicles();
+  }, [loadVehicles]);
 
   // ---------------------------------------------------------------------------
   // Add vehicle
   // ---------------------------------------------------------------------------
 
   const handleAdd = async () => {
+    if (!user?.id || saving) return;
     let payload = {
       user_id: user.id,
       vehicle_type: form.vehicle_type,
@@ -195,7 +205,7 @@ export default function Vehicles() {
     setSaving(false);
 
     if (error) {
-      toast.error('Failed to add vehicle');
+      toast.error('Failed to add vehicle: ' + (error.message || 'unknown error'));
     } else {
       toast.success('Vehicle added');
       setShowForm(false);
@@ -211,16 +221,23 @@ export default function Vehicles() {
   // ---------------------------------------------------------------------------
 
   const handleDelete = async (id) => {
+    if (!user?.id || deletingId) return;
+    const wasPrimary = vehicles.some((v) => v.id === id && v.is_primary);
     setDeletingId(id);
     const { error } = await supabase.from('user_vehicles').delete().eq('id', id);
     setDeletingId(null);
     setConfirmId(null);
 
     if (error) {
-      toast.error('Delete failed');
+      toast.error('Delete failed: ' + (error.message || 'unknown error'));
     } else {
       toast.success('Vehicle removed');
-      const list = await loadVehicles();
+      let list = await loadVehicles();
+      if (wasPrimary && list.length > 0 && !list.some((v) => v.is_primary)) {
+        const promoteId = list[0].id;
+        await supabase.from('user_vehicles').update({ is_primary: true }).eq('id', promoteId);
+        list = await loadVehicles();
+      }
       refreshUser?.();
       await syncActivePatrolVehicleFromVehicleList(supabase, user.id, list);
     }
@@ -231,28 +248,31 @@ export default function Vehicles() {
   // ---------------------------------------------------------------------------
 
   const handleSetPrimary = async (id) => {
+    if (!user?.id || settingPrimary) return;
     setSettingPrimary(id);
     try {
-      const { error: clearErr } = await supabase
-        .from('user_vehicles')
-        .update({ is_primary: false })
-        .eq('user_id', user.id);
-
-      if (clearErr) throw clearErr;
-
       const { error: setErr } = await supabase
         .from('user_vehicles')
         .update({ is_primary: true })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (setErr) throw setErr;
+
+      const { error: clearErr } = await supabase
+        .from('user_vehicles')
+        .update({ is_primary: false })
+        .eq('user_id', user.id)
+        .neq('id', id);
+
+      if (clearErr) throw clearErr;
 
       toast.success('Primary vehicle updated');
       const list = await loadVehicles();
       refreshUser?.();
       await syncActivePatrolVehicleFromVehicleList(supabase, user.id, list);
-    } catch {
-      toast.error('Failed to update primary vehicle');
+    } catch (err) {
+      toast.error('Failed to update primary vehicle' + (err?.message ? `: ${err.message}` : ''));
       await loadVehicles();
     } finally {
       setSettingPrimary(null);

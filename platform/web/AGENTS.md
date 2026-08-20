@@ -23,6 +23,7 @@ These defaults are optimized for AI coding agents (and humans) working on apps t
 - For durable agent loops or untrusted code: use Workflow (pause/resume/state) + Sandbox; use Vercel MCP for secure infra access
 <!-- VERCEL BEST PRACTICES END -->
 
+
 # Vercel Deployment Guide
 
 ## Production Deployment Process
@@ -30,7 +31,7 @@ These defaults are optimized for AI coding agents (and humans) working on apps t
 ### Prerequisites
 - Vercel CLI installed: `npm i -g vercel`
 - Logged in: `vercel login`
-- Project linked: `vercel link` (select `watchman-eight`)
+- Project linked: `vercel link` (select **watchman**)
 
 ### Deployment Steps
 
@@ -62,7 +63,7 @@ These defaults are optimized for AI coding agents (and humans) working on apps t
 
 ### Environment Variables Setup
 
-Create a `.env.production` file in the `web/` directory with the following variables:
+Create a `.env.production` file in **`platform/web/`** with the following variables:
 
 ```env
 # Supabase Configuration
@@ -151,6 +152,13 @@ If deployment issues occur:
    - Select previous successful deployment
    - Promote to Production
 
-## Repository layout (canonical frontend)
+## Repository layout (canonical)
 
-The deployable React app lives under **`web/`** (`web/src`, `web/vite.config.js`). A duplicate **`src/`** at the repository root is not the build entrypoint—edit **`web/src`** only unless you are intentionally syncing a mirror.
+| Path | Role |
+|------|------|
+| `platform/web` | Vite + React app (`src/`, `vite.config.js`). Edit here. |
+| `platform/supabase` | Migrations + Edge Functions. Run CLI from this folder. |
+| `platform/android` | Capacitor Android shell. |
+
+Vercel **Root Directory** must be `platform/web`. Do not treat `platform/web/supabase` as canonical (deprecated pointer only).
+

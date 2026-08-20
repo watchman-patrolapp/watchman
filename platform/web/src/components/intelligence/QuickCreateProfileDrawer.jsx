@@ -170,6 +170,11 @@ export default function QuickCreateProfileDrawer({
       toast.error('Primary name is required');
       return;
     }
+    const orgId = activeOrganizationId || user?.organizationId || null;
+    if (!orgId) {
+      toast.error('Select a neighbourhood before creating a profile.');
+      return;
+    }
     if (photos.some((p) => p.uploading)) {
       toast.error('Wait for photos to finish uploading');
       return;
@@ -223,7 +228,7 @@ export default function QuickCreateProfileDrawer({
           photo_urls,
           created_by: authUid,
           first_identified_at: new Date().toISOString(),
-          organization_id: activeOrganizationId || user?.organizationId || null,
+          organization_id: orgId,
         })
         .select('id, primary_name, risk_level')
         .single();

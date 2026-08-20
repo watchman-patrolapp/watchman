@@ -1,6 +1,8 @@
+import { parsePatrolTime } from "./watchTime";
+
 export function formatRelativeTime(value) {
   if (!value) return "";
-  const then = new Date(value).getTime();
+  const then = parsePatrolTime(value)?.getTime();
   if (!Number.isFinite(then)) return "";
   const minutes = Math.max(0, Math.round((Date.now() - then) / 60000));
   if (minutes < 1) return "Just now";

@@ -42,6 +42,7 @@ import { formatAwayRange, getMyAway, isAwayNow } from "../utils/residentAway";
 import { getMyHouseholdCivic, pingResidentPresence } from "../utils/householdCivic";
 import { ensureMyHouseholdProfile } from "../utils/householdProfile";
 import { hasHomePin } from "../utils/homePin";
+import { parsePatrolTime } from "../utils/watchTime";
 import {
   HOUSEHOLD_MODE_INTRO,
   householdIntroWasSeen,
@@ -208,7 +209,7 @@ export default function ResidentDashboard() {
       ignore = true;
       clearInterval(refresh);
     };
-  }, [user?.id, user?.role, user?.address, householdUser, staffPreview, watchHousehold]);
+  }, [user?.id, user?.role, user?.address, householdUser, staffPreview, watchHousehold, activeOrganizationId]);
 
   useEffect(() => {
     if (!user?.id) return undefined;
@@ -235,12 +236,17 @@ export default function ResidentDashboard() {
   };
 
   const handleSos = async () => {
-    if (!user?.id) return;
+    if (!user?.id || sosBusy) return;
+    const organizationId = activeOrganizationId || user.organizationId;
+    if (!organizationId) {
+      toast.error("Select or join a neighbourhood before sending an SOS.");
+      return;
+    }
     setSosBusy(true);
     try {
       await triggerResidentSos({
         user,
-        organizationId: activeOrganizationId || user.organizationId,
+        organizationId,
         triggerType: "hold",
       });
       toast.success("SOS sent. Patrol has been notified with your location.");
@@ -580,7 +586,7 @@ export default function ResidentDashboard() {
           <span>
             Neighbourhood Watch Platform
             {user?.createdAt
-              ? ` • Member since ${new Date(user.createdAt).toLocaleDateString()}`
+              ? ` • Member since ${parsePatrolTime(user.createdAt)?.toLocaleDateString("en-ZA") || ""}`
               : ""}
           </span>
           <button

@@ -61,6 +61,7 @@ const ReportSightingModal = ({ isOpen, onClose, profileId, profileName }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {

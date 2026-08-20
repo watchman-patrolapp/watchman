@@ -10,20 +10,13 @@ import {
   isAwayNow,
   setResidentAway,
 } from "../../utils/residentAway";
-
-function todayIso() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+import { watchDayStamp } from "../../utils/watchTime";
 
 export default function ResidentAwayForm() {
   const { user } = useAuth();
   const [row, setRow] = useState(null);
-  const [startsOn, setStartsOn] = useState(todayIso());
-  const [endsOn, setEndsOn] = useState(todayIso());
+  const [startsOn, setStartsOn] = useState(() => watchDayStamp());
+  const [endsOn, setEndsOn] = useState(() => watchDayStamp());
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 

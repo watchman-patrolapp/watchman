@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaBell, FaMapMarkerAlt } from "react-icons/fa";
 import { useAuth } from "../../auth/useAuth";
@@ -14,19 +14,23 @@ export default function ActiveSosBanner() {
   const { user } = useAuth();
   const { activeOrganizationId, includeUnscoped } = useScopedOrganization();
   const [alerts, setAlerts] = useState([]);
+  const loadGen = useRef(0);
 
   const load = useCallback(async () => {
+    const gen = ++loadGen.current;
     try {
       const rows = await listSosBoardAlerts({
         organizationId: activeOrganizationId || user?.organizationId,
         includeUnscoped,
         selfUserId: user?.id,
       });
+      if (gen !== loadGen.current) return;
       setAlerts(rows.filter(isActiveSos));
     } catch {
+      if (gen !== loadGen.current) return;
       setAlerts([]);
     }
-  }, [activeOrganizationId, includeUnscoped, user?.organizationId]);
+  }, [activeOrganizationId, includeUnscoped, user?.organizationId, user?.id]);
 
   useEffect(() => {
     void load();

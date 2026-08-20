@@ -8,6 +8,12 @@ import {
 } from '../../utils/criminalProfileSightings';
 import { loadPatrollerDirectoryMembers } from '../../utils/patrollerDirectory';
 import BrandedLoader from '../layout/BrandedLoader';
+import {
+  combineWatchDateTime,
+  watchDateInputValue,
+  watchDayStamp,
+  watchTimeInputValue,
+} from '../../utils/watchTime';
 
 const STAFF_ROLES = new Set(['admin', 'committee', 'technical_support']);
 
@@ -218,21 +224,15 @@ export default function SightingsLogEditor({
                 type="date"
                 disabled={disabled}
                 className={dateInputClass}
-                value={
-                  entry.seen_at
-                    ? new Date(entry.seen_at).toISOString().split('T')[0]
-                    : ''
-                }
+                value={watchDateInputValue(entry.seen_at)}
                 onChange={(e) => {
                   const d = e.target.value;
                   if (!d) {
                     updateEntry(index, { seen_at: null });
                     return;
                   }
-                  const t = entry.seen_at
-                    ? new Date(entry.seen_at).toTimeString().slice(0, 5)
-                    : '00:00';
-                  updateEntry(index, { seen_at: new Date(`${d}T${t}`).toISOString() });
+                  const t = watchTimeInputValue(entry.seen_at) || '00:00';
+                  updateEntry(index, { seen_at: combineWatchDateTime(d, t) });
                 }}
               />
             </div>
@@ -242,15 +242,11 @@ export default function SightingsLogEditor({
                 type="time"
                 disabled={disabled}
                 className={dateInputClass}
-                value={
-                  entry.seen_at ? new Date(entry.seen_at).toTimeString().slice(0, 5) : ''
-                }
+                value={watchTimeInputValue(entry.seen_at)}
                 onChange={(e) => {
-                  const date = entry.seen_at
-                    ? new Date(entry.seen_at).toISOString().split('T')[0]
-                    : new Date().toISOString().split('T')[0];
+                  const date = watchDateInputValue(entry.seen_at) || watchDayStamp();
                   updateEntry(index, {
-                    seen_at: new Date(`${date}T${e.target.value || '00:00'}`).toISOString(),
+                    seen_at: combineWatchDateTime(date, e.target.value || '00:00'),
                   });
                 }}
               />

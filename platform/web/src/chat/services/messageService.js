@@ -17,6 +17,13 @@ function isChatReadDuplicateError(error) {
   return blob.includes('duplicate') || blob.includes('unique constraint');
 }
 
+function isUniqueViolation(error) {
+  if (!error) return false;
+  if (String(error.code) === '23505') return true;
+  const blob = `${error.message || ''} ${error.details || ''}`.toLowerCase();
+  return blob.includes('duplicate') || blob.includes('unique constraint');
+}
+
 function isMissingVisibilityColumn(error) {
   if (!error) return false;
   if (String(error.code) === '42501') return false;
@@ -30,13 +37,62 @@ function isMissingVisibilityColumn(error) {
   );
 }
 
-async function insertChatMessage(row) {
-  let { data, error } = await supabase.from('chat_messages').insert(row).select().single();
-  if (error && row.visibility && isMissingVisibilityColumn(error)) {
-    const fallback = { ...row };
-    delete fallback.visibility;
-    ({ data, error } = await supabase.from('chat_messages').insert(fallback).select().single());
+function isMissingClientMessageIdColumn(error) {
+  if (!error) return false;
+  if (String(error.code) === '42501') return false;
+  const blob = `${error.code || ''} ${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
+  if (blob.includes('row-level security')) return false;
+  return (
+    String(error.code) === '42703' ||
+    blob.includes('schema cache') ||
+    (blob.includes('client_message_id') &&
+      (blob.includes('does not exist') || blob.includes('could not find') || blob.includes('schema cache')))
+  );
+}
+
+/** Refuse null-org inserts — ops RLS can otherwise expose messages across neighbourhoods. */
+function requireOrganizationId() {
+  const id = getWorkingOrganizationId();
+  if (!id) {
+    throw new Error('Select a neighbourhood before sending chat messages.');
   }
+  return id;
+}
+
+async function fetchExistingByClientMessageId(senderId, clientMessageId) {
+  if (!senderId || !clientMessageId) return null;
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('sender_id', senderId)
+    .eq('client_message_id', clientMessageId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+/**
+ * Insert chat row. Retries without optional columns when schema lags.
+ * On unique(sender_id, client_message_id), returns the existing row (idempotent retry).
+ */
+async function insertChatMessage(row) {
+  let attempt = { ...row };
+  let { data, error } = await supabase.from('chat_messages').insert(attempt).select().single();
+
+  if (error && attempt.client_message_id && isMissingClientMessageIdColumn(error)) {
+    delete attempt.client_message_id;
+    ({ data, error } = await supabase.from('chat_messages').insert(attempt).select().single());
+  }
+  if (error && attempt.visibility && isMissingVisibilityColumn(error)) {
+    delete attempt.visibility;
+    ({ data, error } = await supabase.from('chat_messages').insert(attempt).select().single());
+  }
+
+  if (error && row.client_message_id && isUniqueViolation(error)) {
+    const existing = await fetchExistingByClientMessageId(row.sender_id, row.client_message_id);
+    if (existing) return existing;
+  }
+
   if (error) throw error;
   return data;
 }
@@ -128,7 +184,8 @@ class MessageService {
         supabase.from('chat_messages').select('*')
       )
         .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: true })
+        // Newest first so limit keeps recent traffic; reverse for UI ascending order.
+        .order('created_at', { ascending: false })
         .limit(limit);
       if (filterVisibility) query = query.eq('visibility', filterVisibility);
       return query;
@@ -138,11 +195,14 @@ class MessageService {
     if (error && visibility && isMissingVisibilityColumn(error)) {
       ({ data, error } = await build(null));
       if (!error) {
-        return (data || []).filter((row) => messageMatchesChannel(row, visibility));
+        return (data || [])
+          .filter((row) => messageMatchesChannel(row, visibility))
+          .slice()
+          .reverse();
       }
     }
     if (error) throw error;
-    return data || [];
+    return (data || []).slice().reverse();
   }
 
   async fetchReactions(messageIds = []) {
@@ -156,7 +216,17 @@ class MessageService {
     return data || [];
   }
 
-  async sendText({ text, senderId, senderName, senderAvatar, isCritical, replyToMessageId = null, replyPreviewText = null, visibility = null }) {
+  async sendText({
+    text,
+    senderId,
+    senderName,
+    senderAvatar,
+    isCritical,
+    replyToMessageId = null,
+    replyPreviewText = null,
+    visibility = null,
+    clientMessageId = null,
+  }) {
     await this.#ensureSession();
 
     return insertChatMessage({
@@ -169,12 +239,24 @@ class MessageService {
       reply_to_message_id: replyToMessageId,
       reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      organization_id: getWorkingOrganizationId(),
+      organization_id: requireOrganizationId(),
       ...(visibility ? { visibility } : {}),
+      ...(clientMessageId ? { client_message_id: String(clientMessageId) } : {}),
     });
   }
 
-  async sendImage({ fileUrl, senderId, senderName, senderAvatar, width, height, replyToMessageId = null, replyPreviewText = null, visibility = null }) {
+  async sendImage({
+    fileUrl,
+    senderId,
+    senderName,
+    senderAvatar,
+    width,
+    height,
+    replyToMessageId = null,
+    replyPreviewText = null,
+    visibility = null,
+    clientMessageId = null,
+  }) {
     await this.#ensureSession();
 
     return insertChatMessage({
@@ -190,12 +272,23 @@ class MessageService {
       reply_to_message_id: replyToMessageId,
       reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      organization_id: getWorkingOrganizationId(),
+      organization_id: requireOrganizationId(),
       ...(visibility ? { visibility } : {}),
+      ...(clientMessageId ? { client_message_id: String(clientMessageId) } : {}),
     });
   }
 
-  async sendVoice({ fileUrl, duration, senderId, senderName, senderAvatar, replyToMessageId = null, replyPreviewText = null, visibility = null }) {
+  async sendVoice({
+    fileUrl,
+    duration,
+    senderId,
+    senderName,
+    senderAvatar,
+    replyToMessageId = null,
+    replyPreviewText = null,
+    visibility = null,
+    clientMessageId = null,
+  }) {
     await this.#ensureSession();
 
     return insertChatMessage({
@@ -210,12 +303,26 @@ class MessageService {
       reply_to_message_id: replyToMessageId,
       reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      organization_id: getWorkingOrganizationId(),
+      organization_id: requireOrganizationId(),
       ...(visibility ? { visibility } : {}),
+      ...(clientMessageId ? { client_message_id: String(clientMessageId) } : {}),
     });
   }
 
-  async sendLocation({ lat, lng, address, text, senderId, senderName, senderAvatar, isCritical = false, replyToMessageId = null, replyPreviewText = null, visibility = null }) {
+  async sendLocation({
+    lat,
+    lng,
+    address,
+    text,
+    senderId,
+    senderName,
+    senderAvatar,
+    isCritical = false,
+    replyToMessageId = null,
+    replyPreviewText = null,
+    visibility = null,
+    clientMessageId = null,
+  }) {
     await this.#ensureSession();
 
     const latNum = Number(lat);
@@ -237,8 +344,9 @@ class MessageService {
       reply_to_message_id: replyToMessageId,
       reply_preview_text: replyPreviewText ? sanitizeInput(replyPreviewText).slice(0, 180) : null,
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      organization_id: getWorkingOrganizationId(),
+      organization_id: requireOrganizationId(),
       ...(visibility ? { visibility } : {}),
+      ...(clientMessageId ? { client_message_id: String(clientMessageId) } : {}),
     });
   }
 

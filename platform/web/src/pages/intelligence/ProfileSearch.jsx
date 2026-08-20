@@ -43,6 +43,14 @@ function normalizeProfileSearchRow(row) {
   };
 }
 
+/** Strip PostgREST filter metacharacters from free-text search. */
+function sanitizeSearchToken(raw) {
+  return String(raw || '')
+    .replace(/[%_,.(){}\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export default function ProfileSearch() {
   const navigate = useNavigate();
   const { activeOrganizationId, activeOrganization } = useActiveOrganization();
@@ -102,7 +110,10 @@ export default function ProfileSearch() {
         );
 
         if (q.length > 2) {
-          query = query.or(`primary_name.ilike.%${q}%,known_aliases.cs.{${q}}`);
+          const safe = sanitizeSearchToken(q);
+          if (safe.length > 2) {
+            query = query.or(`primary_name.ilike.%${safe}%,known_aliases.cs.{${safe}}`);
+          }
         }
 
         if (filters.risk_level) {

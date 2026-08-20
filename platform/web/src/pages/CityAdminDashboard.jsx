@@ -29,7 +29,7 @@ const LINKS = [
   {
     to: "/intelligence",
     title: "Intelligence",
-    description: "Criminal profiles, search, and match queue.",
+    description: "Criminal profiles, search, and hotspots.",
     icon: FaUserSecret,
     color: "bg-slate-800",
   },

@@ -3,35 +3,22 @@ import toast from 'react-hot-toast';
 import HotspotPinPicker from './HotspotPinPicker';
 import { HOTSPOT_KINDS } from '../../utils/hotspotKinds';
 import { insertHotspotEvent, updateHotspotEvent } from '../../utils/hotspotService';
-
-function toDateInput(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function toTimeInput(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function combineOccurredAt(dateStr, timeStr, timeKnown) {
-  const t = timeKnown && timeStr ? timeStr : '12:00';
-  const local = new Date(`${dateStr}T${t}`);
-  return local.toISOString();
-}
+import {
+  combineWatchDateTime,
+  watchDateInputValue,
+  watchDayStamp,
+  watchTimeInputValue,
+} from '../../utils/watchTime';
 
 export default function HotspotEventForm({ userId, initial, onClose, onSaved }) {
   const [kind, setKind] = useState(initial?.kind || 'break_in');
   const [address, setAddress] = useState(initial?.address || '');
-  const [date, setDate] = useState(toDateInput(initial?.occurred_at) || toDateInput(new Date().toISOString()));
-  const [time, setTime] = useState(initial?.time_known === false ? '' : toTimeInput(initial?.occurred_at));
+  const [date, setDate] = useState(
+    watchDateInputValue(initial?.occurred_at) || watchDayStamp()
+  );
+  const [time, setTime] = useState(
+    initial?.time_known === false ? '' : watchTimeInputValue(initial?.occurred_at)
+  );
   const [timeKnown, setTimeKnown] = useState(initial ? Boolean(initial.time_known) : true);
   const [notes, setNotes] = useState(initial?.notes || '');
   const [pin, setPin] = useState(
@@ -45,8 +32,8 @@ export default function HotspotEventForm({ userId, initial, onClose, onSaved }) 
     if (!initial) return;
     setKind(initial.kind || 'break_in');
     setAddress(initial.address || '');
-    setDate(toDateInput(initial.occurred_at));
-    setTime(initial.time_known === false ? '' : toTimeInput(initial.occurred_at));
+    setDate(watchDateInputValue(initial.occurred_at) || watchDayStamp());
+    setTime(initial.time_known === false ? '' : watchTimeInputValue(initial.occurred_at));
     setTimeKnown(Boolean(initial.time_known));
     setNotes(initial.notes || '');
     if (initial.latitude != null) setPin({ lat: initial.latitude, lng: initial.longitude });
@@ -79,14 +66,20 @@ export default function HotspotEventForm({ userId, initial, onClose, onSaved }) 
       toast.error('Enter the time, or uncheck “Time is known”.');
       return;
     }
+    if (saving) return;
     setSaving(true);
     try {
+      const occurredAt = combineWatchDateTime(date, timeKnown && time ? time : '12:00');
+      if (!occurredAt) {
+        toast.error('Invalid date or time.');
+        return;
+      }
       const row = {
         kind,
         address: address.trim(),
         latitude: pin.lat,
         longitude: pin.lng,
-        occurred_at: combineOccurredAt(date, time, timeKnown),
+        occurred_at: occurredAt,
         time_known: timeKnown,
         notes: notes.trim() || null,
       };

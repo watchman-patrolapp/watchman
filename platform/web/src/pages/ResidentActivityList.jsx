@@ -5,6 +5,7 @@ import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
 import PageHeader from "../components/layout/PageHeader";
 import { useScopedOrganization } from "../utils/organizationScope";
+import { formatWatchDateTime } from "../utils/watchTime";
 
 function activityTypeStyle(type) {
   const raw = String(type || "Activity").trim();
@@ -120,9 +121,9 @@ export default function ResidentActivityList() {
   const [loading, setLoading] = useState(true);
   const [eventsByIncidentId, setEventsByIncidentId] = useState({});
 
-  const hydrateEvents = async (incidentIds) => {
+  const hydrateEvents = async (incidentIds, stillValid = () => true) => {
     if (!incidentIds.length) {
-      setEventsByIncidentId({});
+      if (stillValid()) setEventsByIncidentId({});
       return;
     }
     const { data: eventRows, error: eventErr } = await supabase
@@ -130,6 +131,7 @@ export default function ResidentActivityList() {
       .select("id, incident_id, event_type, title, details, created_at")
       .in("incident_id", incidentIds)
       .order("created_at", { ascending: true });
+    if (!stillValid()) return;
     if (eventErr) {
       console.warn("resident_report_events:", eventErr.message);
       setEventsByIncidentId({});
@@ -172,7 +174,10 @@ export default function ResidentActivityList() {
         );
         if (!ignore) {
           setRows(nextRows);
-          await hydrateEvents(nextRows.map((row) => row.id));
+          await hydrateEvents(
+            nextRows.map((row) => row.id),
+            () => !ignore
+          );
         }
       } catch (err) {
         console.error(err);
@@ -263,7 +268,7 @@ export default function ResidentActivityList() {
                       {typeStyle.label}
                     </span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(row.incident_date || row.submitted_at).toLocaleString()}
+                      {formatWatchDateTime(row.incident_date || row.submitted_at) || "—"}
                     </span>
                     <span
                       className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-[0.14em] ${status.className}`}
@@ -287,7 +292,7 @@ export default function ResidentActivityList() {
                         <li key={timelineEvent.id}>
                           <span className="font-medium text-gray-700 dark:text-gray-300">
                             {timelineEvent.created_at
-                              ? `${new Date(timelineEvent.created_at).toLocaleString()}:`
+                              ? `${formatWatchDateTime(timelineEvent.created_at) || "—"}:`
                               : ""}
                           </span>{" "}
                           {timelineEvent.title}

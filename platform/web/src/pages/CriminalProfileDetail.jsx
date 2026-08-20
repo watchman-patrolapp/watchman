@@ -34,6 +34,7 @@ import {
 import { connectionTypeLabel } from '../data/profileIncidentLinkTaxonomy';
 import { fetchAssociatesBidirectional } from '../utils/profileAssociates';
 import SightingsLogEditor from '../components/intelligence/SightingsLogEditor';
+import { formatWatchDate } from '../utils/watchTime';
 import {
   initialSightingsLogForForm,
   sanitizeSightingsLogForDb,
@@ -143,6 +144,7 @@ export default function CriminalProfileDetail() {
   const [associateSearchLoading, setAssociateSearchLoading] = useState(false);
   const [photoLightbox, setPhotoLightbox] = useState(null);
   const [auditUserLabels, setAuditUserLabels] = useState({});
+  const loadGen = useRef(0);
 
   // Check if we're in edit mode from URL query param
   useEffect(() => {
@@ -222,6 +224,7 @@ export default function CriminalProfileDetail() {
   }, [id, activeOrganizationId, includeUnscoped]);
 
   const fetchProfile = async () => {
+    const gen = ++loadGen.current;
     try {
       setLoading(true);
       const { data, error } = await scopeToOrganization(
@@ -232,6 +235,7 @@ export default function CriminalProfileDetail() {
         .eq('id', id)
         .maybeSingle();
 
+      if (gen !== loadGen.current) return;
       if (error) throw error;
       if (!data || !belongsToActiveOrganization(data, activeOrganizationId, includeUnscoped)) {
         setProfile(null);
@@ -245,6 +249,7 @@ export default function CriminalProfileDetail() {
 
       const auditIds = collectUserIdsFromProfiles([data]);
       const labelMap = await fetchUserLabelMap(supabase, auditIds);
+      if (gen !== loadGen.current) return;
       setAuditUserLabels(labelMap);
 
       let associatesData = [];
@@ -253,6 +258,7 @@ export default function CriminalProfileDetail() {
       } catch (assocErr) {
         console.error('Associates fetch:', assocErr);
       }
+      if (gen !== loadGen.current) return;
       setAssociates(associatesData || []);
 
       // Fetch linked incidents
@@ -261,17 +267,20 @@ export default function CriminalProfileDetail() {
         .select('*, incidents(*)')
         .eq('profile_id', id)
         .order('linked_at', { ascending: false });
+      if (gen !== loadGen.current) return;
       setIncidents(incidentsData || []);
 
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error('Error fetching profile:', err);
       toast.error('Failed to load profile');
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (photoUploadsPending > 0) {
       toast.error('Please wait for photo uploads to finish');
       return;
@@ -1024,7 +1033,7 @@ export default function CriminalProfileDetail() {
                 ) : (
                   <p className="font-medium dark:text-gray-100">
                     {displayData.date_of_birth 
-                      ? new Date(displayData.date_of_birth).toLocaleDateString() 
+                      ? formatWatchDate(displayData.date_of_birth) || String(displayData.date_of_birth).slice(0, 10)
                       : '-'}
                   </p>
                 )}
@@ -1437,7 +1446,7 @@ export default function CriminalProfileDetail() {
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                      Linked: {new Date(link.linked_at).toLocaleDateString()}
+                      Linked: {formatWatchDate(link.linked_at) || '—'}
                     </p>
                   </div>
                 ))}

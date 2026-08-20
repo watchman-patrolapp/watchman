@@ -271,6 +271,7 @@ function Register() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (loading) return;
     setError("");
     if (!track) return;
 

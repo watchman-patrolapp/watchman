@@ -79,16 +79,16 @@ Internal document for **Kyzn / operators** and **legal counsel**. Update when th
 
 | Item | What was added |
 |------|----------------|
-| Chat 6-month purge | Migration `supabase/migrations/20260401141000_chat_messages_retention_purge.sql` defines `public.run_chat_messages_retention_purge()`. |
-| Schedule chat purge | Run `supabase/sql/schedule_chat_retention_cron.sql` once in the **SQL Editor** after enabling **pg_cron** (Dashboard → Database → Extensions), or call the function from an external cron. |
-| Patrol schema / RLS | Migration `20260401142000_patrol_locations_consolidated.sql` (canonical chain). Old copies under `web/supabase/migrations/*.sql` were **removed**; see `web/supabase/migrations/README.txt`. |
-| `location-cleanup` Edge Function | If env **`CRON_SECRET`** is set, callers must send header **`x-cron-secret: <same value>`**. Register in `supabase/config.toml` as `[functions.location-cleanup]`. |
+| Chat 6-month purge | Migration `platform/supabase/migrations/20260401141000_chat_messages_retention_purge.sql` defines `public.run_chat_messages_retention_purge()`. |
+| Schedule chat purge | Run `platform/supabase/sql/schedule_chat_retention_cron.sql` once in the **SQL Editor** after enabling **pg_cron** (Dashboard → Database → Extensions), or call the function from an external cron. |
+| Patrol schema / RLS | Migration `platform/supabase/migrations/20260401142000_patrol_locations_consolidated.sql` (canonical chain). |
+| `location-cleanup` Edge Function | If env **`CRON_SECRET`** is set, callers must send header **`x-cron-secret: <same value>`**. Register in `platform/supabase/config.toml` as `[functions.location-cleanup]`. |
 
 ## 9. What you still do manually (operations / legal)
 
-- **`supabase db push`** (or Dashboard SQL) on **production** to apply new migrations.
+- **`supabase db push`** from **`platform/supabase`** (or Dashboard SQL) on **production** to apply new migrations.
 - **Chat:** Enable **pg_cron** and run `schedule_chat_retention_cron.sql`, *or* schedule `SELECT public.run_chat_messages_retention_purge();` another way.
-- **`location-cleanup`:** Deploy `supabase functions deploy location-cleanup`, set **`CRON_SECRET`** in function secrets, add a **scheduled invocation** (Supabase **Scheduled Functions** / external cron) with the secret header.
+- **`location-cleanup`:** From `platform/supabase`, deploy `supabase functions deploy location-cleanup`, set **`CRON_SECRET`** in function secrets, add a **scheduled invocation** (Supabase **Scheduled Functions** / external cron) with the secret header.
 - **Sentry:** Create project, set **`VITE_SENTRY_DSN`** on Vercel, sign DPA, list Sentry in the privacy policy.
 - **Supabase region:** Screenshot **Dashboard → Infrastructure** for Ireland / your region (compliance file).
 - **Legal:** Information Officer, lawyer review, publish privacy/terms URL, DPAs, POI annual review process, storage purge policy.

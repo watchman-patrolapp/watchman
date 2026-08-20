@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
 import { matchQueueConfidenceToScore } from '../../utils/intelligenceConfidence';
@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import BrandedLoader from '../../components/layout/BrandedLoader';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { belongsToActiveOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
+import { formatWatchDateTime } from '../../utils/watchTime';
 
 function formatSourceType(sourceType) {
   if (!sourceType) return 'Unknown';
@@ -29,8 +30,10 @@ export default function MatchQueue() {
   const [loading, setLoading] = useState(true);
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const fetchGen = useRef(0);
 
   const fetchMatches = useCallback(async () => {
+    const gen = ++fetchGen.current;
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -56,6 +59,7 @@ export default function MatchQueue() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      if (gen !== fetchGen.current) return;
       setMatches(
         (data || []).filter((row) =>
           belongsToActiveOrganization(row.profile, activeOrganizationId, includeUnscoped)
@@ -63,9 +67,10 @@ export default function MatchQueue() {
       );
     } catch (error) {
       console.error('Error fetching matches:', error);
+      if (gen !== fetchGen.current) return;
       toast.error('Failed to load match queue');
     } finally {
-      setLoading(false);
+      if (gen === fetchGen.current) setLoading(false);
     }
   }, [activeOrganizationId, includeUnscoped]);
 
@@ -74,6 +79,7 @@ export default function MatchQueue() {
   }, [fetchMatches]);
 
   const handleMatchAction = async (matchId, action) => {
+    if (actionLoading) return;
     setActionLoading(true);
     try {
       const { data: row, error: fetchErr } = await supabase
@@ -153,13 +159,15 @@ export default function MatchQueue() {
 
   const formatIncidentDate = (dateStr) => {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-ZA', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return (
+      formatWatchDateTime(dateStr, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }) || '—'
+    );
   };
 
   const selectedPct = selectedMatch ? matchQueueConfidenceToScore(selectedMatch.match_confidence) : null;
@@ -312,7 +320,7 @@ export default function MatchQueue() {
                     <div>
                       <span className="font-medium">Last Seen:</span>{' '}
                       {selectedMatch.profile?.last_seen_at
-                        ? new Date(selectedMatch.profile.last_seen_at).toLocaleString()
+                        ? formatWatchDateTime(selectedMatch.profile.last_seen_at) || 'Unknown'
                         : 'Unknown'}
                     </div>
                   </div>
@@ -368,7 +376,7 @@ export default function MatchQueue() {
                       </span>
                     </div>
                     <div>
-                      <span className="font-medium">Queued:</span> {new Date(selectedMatch.created_at).toLocaleString()}
+                      <span className="font-medium">Queued:</span> {formatWatchDateTime(selectedMatch.created_at) || '—'}
                     </div>
                   </div>
                 </div>

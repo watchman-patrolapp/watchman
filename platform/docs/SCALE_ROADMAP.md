@@ -287,6 +287,7 @@ Priority is top-down.
 
 ### 1. Isolation proof (highest)
 - [ ] Two-org test matrix: user in Org A must never read/write Org B **incidents, patrols, chat, intelligence, admin lists, SOS**. City Hub published posts and Hotspots **should** be visible in both. SOS board is already working-area scoped in code (`56000`); still prove it with Lorraine.
+  - Apply on live: `20260820060000_org_isolation_hardening.sql` (approve/reject org+role, chat RLS, garage/sightings RPCs, staff lists, SOS insert, patrol resolve). Redeploy `notify-chat-message` + `auto-end-patrols`.
 - [ ] Finish leftover `DEFAULT_PATROL_ZONE` / Theescombe header fallbacks (`neighborhoodRegions.js`, Dashboard, PatrolSchedule, Leaderboard).
 - [ ] City/suburb create UI on Organizations (today suburbs often need SQL seed).
 - [ ] Invite/join a neighborhood from the app (residents/patrollers currently wait for staff assignment).
@@ -356,6 +357,16 @@ Priority is top-down.
 - [ ] Retention jobs for SOS, memberships, city hub artifacts (chat only so far).
 - [ ] Tenant-isolation regression checklist before every production deploy.
 
+### 8b. Deferred live smoke-check (Aug 2026 audit hardening)
+
+SQL + `auto-end-patrols` edge were applied on Watchman (`pfjcxewlsqmfajrogvdo`). App has been in production use for months; **do not block other work** — re-check over a few days of normal use, then tick:
+
+- [ ] **Continue / auto-end (2.5h)** — patrol Continue resets window; idle patrols end via client + `auto-end-patrols` (cutoff 2.5h); `end_patrol(..., p_auto_closed)` / `patrol_logs.auto_closed` look correct.
+- [ ] **Unique schedule signup** — double-tap / race cannot create two `patrol_slots` for the same org+date+start+volunteer (`patrol_slots_org_date_start_volunteer_uidx`).
+- [ ] **Approve / reject incident RPCs** — moderation uses `approve_incident` / `reject_incident` (pending-only); columns `approved_*` / `rejected_*` populate as expected.
+
+Migrations: `20260820020000_dashboard_patrol_hardening`, `20260820030000_patrol_slots_unique_signup`, `20260820040000_approve_reject_incident_rpcs` (+ related `20260820010000` org backfill if used).
+
 ### 9. Role-specific dashboards
 Each of these should land on its own home, not a trimmed copy of the patroller dashboard.
 - [x] **Security company dashboard** (`/security`) — assigned registered watch areas, live patrols (map when GPS exists) + patroller details, view-only roster, residents, approved incidents, **multi-area SOS** (`/security/sos`), hotspots, company profile. Apply `20260815038000` plus `58000`–`73000`.
@@ -386,7 +397,7 @@ Still later:
 - Smart resident sectors (8–10 households from geocoded address + street heading; no paid AI).
 - Operational runbooks (false SOS, support, new-NW checklist).
 - iOS Capacitor spike (Android APK is the current native path).
-- Duplicate-root cleanup if any leftover `src/` / `web/` trees still confuse deploys.
+- Duplicate-root cleanup if any leftover trees outside `platform/` still confuse deploys.
 
 ---
 

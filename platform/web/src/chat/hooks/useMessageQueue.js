@@ -33,6 +33,10 @@ export const useMessageQueue = (isOnline) => {
   const addToQueue = useCallback((message) => {
     void (async () => {
       try {
+        if (!message?.localId) {
+          console.warn('[chat] addToQueue skipped: missing localId');
+          return;
+        }
         const serial = stripForStorage(message);
         if (message.file && message.localId) {
           serial._mediaKey = message.localId;
@@ -46,7 +50,10 @@ export const useMessageQueue = (isOnline) => {
           const ab = await message.blob.arrayBuffer();
           await queueMediaPut(message.localId, ab);
         }
-        setQueue((prev) => [...prev, { ...serial, queuedAt: Date.now() }]);
+        setQueue((prev) => {
+          if (prev.some((m) => m.localId === serial.localId)) return prev;
+          return [...prev, { ...serial, queuedAt: Date.now() }];
+        });
       } catch (e) {
         console.error('[chat] addToQueue failed', e);
       }
@@ -71,6 +78,7 @@ export const useMessageQueue = (isOnline) => {
     if (!isOnline || queue.length === 0) return undefined;
 
     let cancelled = false;
+    const inFlightLocalIds = new Set();
 
     const tick = async () => {
       if (cancelled || flushInProgressRef.current || queue.length === 0) return;
@@ -80,13 +88,19 @@ export const useMessageQueue = (isOnline) => {
         if (!a.is_emergency && b.is_emergency) return 1;
         return (a.queuedAt || 0) - (b.queuedAt || 0);
       });
-      const item = sorted[0];
+      const item = sorted.find((m) => m.localId && !inFlightLocalIds.has(m.localId)) || sorted[0];
+      if (!item?.localId) {
+        flushInProgressRef.current = false;
+        return;
+      }
+      inFlightLocalIds.add(item.localId);
       try {
         const { ok } = await flushChatQueueItem(item);
         if (ok && !cancelled) {
           removeFromQueue(item.localId);
         }
       } finally {
+        inFlightLocalIds.delete(item.localId);
         flushInProgressRef.current = false;
       }
     };

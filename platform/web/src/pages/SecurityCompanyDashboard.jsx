@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -41,6 +41,7 @@ import {
   slotDateValue,
   toLocalDateStr,
 } from "../utils/patrolScheduleSlots";
+import { formatWatchDateTime, parsePatrolTime, watchDayStamp, watchZonedParts } from "../utils/watchTime";
 
 const HOT_ZONE_ID = "hot-zones";
 const PATROL_ROLES = new Set([
@@ -177,15 +178,17 @@ function initials(name) {
 
 function parseHour(value) {
   if (value == null || value === "") return null;
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.getHours() + value.getMinutes() / 60;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const p = watchZonedParts(value);
+    return p ? p.hour + p.minute / 60 : null;
+  }
   const text = String(value);
   const match = text.match(/(\d{1,2}):(\d{2})/);
-  if (!match) {
-    const asDate = new Date(text);
-    if (!Number.isNaN(asDate.getTime())) return asDate.getHours() + asDate.getMinutes() / 60;
-    return null;
-  }
-  return Number(match[1]) + Number(match[2]) / 60;
+  if (match) return Number(match[1]) + Number(match[2]) / 60;
+  const asDate = parsePatrolTime(text);
+  if (!asDate) return null;
+  const p = watchZonedParts(asDate);
+  return p ? p.hour + p.minute / 60 : null;
 }
 
 function isSosRow(row) {
@@ -388,7 +391,7 @@ function slotBlocksForArea(area, todaySlots) {
 }
 
 function CoverageTimeline({ areas, slots }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = watchDayStamp();
   const todaySlots = slots.filter((slot) => String(slot.slot_date || "").slice(0, 10) === today);
 
   if (areas.length === 0) {
@@ -561,6 +564,9 @@ export default function SecurityCompanyDashboard() {
   const [selectedPatrol, setSelectedPatrol] = useState(null);
   const [companyName, setCompanyName] = useState(cachedBrand.name);
   const [companyLogoUrl, setCompanyLogoUrl] = useState(cachedBrand.logoUrl);
+  const loadGen = useRef(0);
+  const liveGen = useRef(0);
+  const boardGen = useRef(0);
 
   const applyLivePatrols = useCallback((rows) => {
     const next = rows || [];
@@ -592,7 +598,9 @@ export default function SecurityCompanyDashboard() {
   }, [user?.id, user?.organizationId]);
 
   const refreshLivePatrols = useCallback(async () => {
+    const gen = ++liveGen.current;
     const { data, error } = await supabase.rpc("security_partner_live_patrols");
+    if (gen !== liveGen.current) return;
     if (error) {
       if (!isRpcNotFoundError(error)) {
         console.warn("security_partner_live_patrols:", error.message);
@@ -603,6 +611,7 @@ export default function SecurityCompanyDashboard() {
   }, [applyLivePatrols]);
 
   const refreshBoard = useCallback(async () => {
+    const gen = ++boardGen.current;
     const [slotRes, incidentRes, hotspotRows, pendingClaimRes, historyClaimRes] = await Promise.all([
       supabase.rpc("security_partner_scheduled_patrols", { p_suburb_id: null }),
       supabase.rpc("security_partner_incidents"),
@@ -610,6 +619,7 @@ export default function SecurityCompanyDashboard() {
       listSecurityMembershipClaims("pending", true),
       listSecurityMembershipClaims("history", true),
     ]);
+    if (gen !== boardGen.current) return;
     if (slotRes.error && !isRpcNotFoundError(slotRes.error)) {
       console.warn("security_partner_scheduled_patrols:", slotRes.error.message);
     } else if (!slotRes.error) {
@@ -630,6 +640,7 @@ export default function SecurityCompanyDashboard() {
 
   const load = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
+    const gen = ++loadGen.current;
     if (!silent) setLoading(true);
     try {
       const [areaRes, residentRes, patrolRes, slotRes, incidentRes, hotspotRows, resolvedCompanyName, countRes, branding, pendingClaimRes, historyClaimRes] = await Promise.all([
@@ -647,6 +658,8 @@ export default function SecurityCompanyDashboard() {
         listSecurityMembershipClaims("pending", true),
         listSecurityMembershipClaims("history", true),
       ]);
+
+      if (gen !== loadGen.current) return;
 
       const firstError = [areaRes, residentRes, patrolRes, slotRes].find((r) => r.error)?.error;
       if (firstError && !isRpcNotFoundError(firstError)) throw firstError;
@@ -678,10 +691,11 @@ export default function SecurityCompanyDashboard() {
       setCompanyLogoUrl(nextLogo);
       writeSecurityCompanyBrand(user?.id, { name: nextName, logoUrl: nextLogo });
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error(err);
       if (!silent) toast.error(err.message || "Could not load the security dashboard.");
     } finally {
-      if (!silent) setLoading(false);
+      if (gen === loadGen.current && !silent) setLoading(false);
     }
   }, [applyLivePatrols, loadCompanyName, user?.id]);
 
@@ -862,7 +876,7 @@ export default function SecurityCompanyDashboard() {
 
   const reportsByArea = useMemo(() => {
     const sourceAreas = selectedArea ? [selectedArea] : uniqueAreas;
-    return sourceAreas.map((area, index) => ({
+    return sourceAreas.map((area) => ({
       id: areaId(area),
       label: area.organization_name || area.suburb_name,
       code: area.suburb_name,
@@ -1104,7 +1118,12 @@ export default function SecurityCompanyDashboard() {
                             <p className="truncate text-xs text-gray-500">{patrol.organization_name || patrol.zone || "Area"}</p>
                           </div>
                           <span className="font-mono text-[10px] text-teal-700 dark:text-teal-300">
-                            {patrol.start_time ? new Date(patrol.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Live"}
+                            {patrol.start_time
+                              ? formatWatchDateTime(patrol.start_time, {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }) || "Live"
+                              : "Live"}
                           </span>
                         </button>
                       ))
@@ -1417,7 +1436,10 @@ export default function SecurityCompanyDashboard() {
                         .filter(Boolean)
                         .join(" · ") || "—"
                     : selectedPatrol.start_time
-                      ? new Date(selectedPatrol.start_time).toLocaleTimeString()
+                      ? formatWatchDateTime(selectedPatrol.start_time, {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }) || "—"
                       : "—"}
                 </span>
               </div>

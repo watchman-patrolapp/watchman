@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { formatWatchDate } from "./watchTime";
 
 export const CITY_HUB_SHARE_POST_TYPES = [
   { value: "suspect_alert", label: "Suspect Alert" },
@@ -13,13 +14,7 @@ const MAX_DESCRIPTION_CHARS = 480;
 function formatShareDate(value) {
   const raw = value || null;
   if (!raw) return "Date unknown";
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return "Date unknown";
-  return d.toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatWatchDate(raw) || "Date unknown";
 }
 
 function sanitizeDescription(text) {

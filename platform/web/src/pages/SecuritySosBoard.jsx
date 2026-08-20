@@ -14,6 +14,7 @@ import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import { isActiveSos } from "../utils/residentSos";
+import { parsePatrolTime } from "../utils/watchTime";
 
 const PAST_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -26,7 +27,7 @@ function chipClass(on, tone = "slate") {
 }
 
 function msAgo(iso, now) {
-  const t = new Date(iso || "").getTime();
+  const t = parsePatrolTime(iso)?.getTime();
   if (!Number.isFinite(t)) return Number.POSITIVE_INFINITY;
   return now - t;
 }

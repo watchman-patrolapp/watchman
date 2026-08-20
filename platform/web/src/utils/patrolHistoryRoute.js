@@ -1,4 +1,5 @@
 import { distanceMeters } from './dataSaverProfile.js';
+import { logOverlapsSince, parsePatrolTime, durationMinutesFromLog } from './watchTime.js';
 
 /** Ignore GPS crumbs shorter than a driveway shuffle. */
 export const MIN_ROUTE_KM = 0.05;
@@ -41,14 +42,15 @@ export function distanceKmFromLatLngPoints(points) {
  */
 export function matchRouteRowToLog(log, routeRows) {
   if (!routeRows?.length) return null;
-  const end = new Date(log.end_time).getTime();
+  const end = parsePatrolTime(log.end_time)?.getTime();
   if (!Number.isFinite(end)) return null;
   let best = null;
   let bestDelta = Infinity;
   for (const row of routeRows) {
     if (log.user_id && row.user_id && row.user_id !== log.user_id) continue;
     if (!row.created_at) continue;
-    const c = new Date(row.created_at).getTime();
+    const c = parsePatrolTime(row.created_at)?.getTime();
+    if (!Number.isFinite(c)) continue;
     const d = Math.abs(c - end);
     if (d < bestDelta && d < 8 * 60 * 1000) {
       bestDelta = d;
@@ -57,14 +59,14 @@ export function matchRouteRowToLog(log, routeRows) {
   }
   if (best) return best;
 
-  const start = new Date(log.start_time).getTime();
+  const start = parsePatrolTime(log.start_time)?.getTime();
   const looseEnd = end + 45 * 60 * 1000;
   const looseStart = Number.isFinite(start) ? start - 15 * 60 * 1000 : end - 4 * 60 * 60 * 1000;
   bestDelta = Infinity;
   for (const row of routeRows) {
     if (log.user_id && row.user_id && row.user_id !== log.user_id) continue;
     if (!row.created_at) continue;
-    const c = new Date(row.created_at).getTime();
+    const c = parsePatrolTime(row.created_at)?.getTime();
     if (!Number.isFinite(c) || c < looseStart || c > looseEnd) continue;
     const d = Math.abs(c - end);
     if (d < bestDelta) {
@@ -106,9 +108,9 @@ function lineCoordsToLatLngs(coords) {
 }
 
 function pointTimeMs(row) {
-  const t = new Date(row?.timestamp).getTime();
+  const t = parsePatrolTime(row?.timestamp)?.getTime();
   if (Number.isFinite(t)) return t;
-  const c = new Date(row?.created_at).getTime();
+  const c = parsePatrolTime(row?.created_at)?.getTime();
   return Number.isFinite(c) ? c : NaN;
 }
 
@@ -121,8 +123,8 @@ function asLatLng(row) {
 }
 
 function locationKmForLog(log, locationPoints) {
-  const start = new Date(log?.start_time).getTime();
-  const end = new Date(log?.end_time).getTime();
+  const start = parsePatrolTime(log?.start_time)?.getTime();
+  const end = parsePatrolTime(log?.end_time)?.getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
   const from = start - 15 * 60 * 1000;
   const to = end + 2 * 60 * 60 * 1000;
@@ -173,8 +175,7 @@ export function routeRowDistanceKm(row) {
 export function summarizeGpsMileage(logs, routeRows, since = null, locationPoints = []) {
   const inPeriodLogs = (Array.isArray(logs) ? logs : []).filter((log) => {
     if (!since) return true;
-    const t = new Date(log.start_time);
-    return !Number.isNaN(t.getTime()) && t >= since;
+    return logOverlapsSince(log, since);
   });
 
   const counted = new Set();
@@ -196,7 +197,8 @@ export function summarizeGpsMileage(logs, routeRows, since = null, locationPoint
     if (!key || counted.has(key)) continue;
     if (since) {
       if (!row?.created_at) continue;
-      if (new Date(row.created_at) < since) continue;
+      const created = parsePatrolTime(row.created_at);
+      if (!created || created < since) continue;
     }
     const d = routeRowDistanceKm(row);
     if (d >= MIN_ROUTE_KM) {
@@ -210,7 +212,7 @@ export function summarizeGpsMileage(logs, routeRows, since = null, locationPoint
     km,
     tracks,
     patrols: inPeriodLogs.length,
-    minutes: inPeriodLogs.reduce((sum, log) => sum + (Number(log.duration_minutes) || 0), 0),
+    minutes: inPeriodLogs.reduce((sum, log) => sum + durationMinutesFromLog(log), 0),
   };
 }
 
@@ -244,8 +246,8 @@ export async function fetchPatrolLocationPoints(client, { userId, logs, limit = 
   if (!client || !userId || !Array.isArray(logs) || logs.length === 0) return [];
   const times = [];
   for (const log of logs) {
-    const start = new Date(log.start_time).getTime();
-    const end = new Date(log.end_time).getTime();
+    const start = parsePatrolTime(log.start_time)?.getTime();
+    const end = parsePatrolTime(log.end_time)?.getTime();
     if (Number.isFinite(start)) times.push(start - 15 * 60 * 1000);
     if (Number.isFinite(end)) times.push(end + 2 * 60 * 60 * 1000);
   }

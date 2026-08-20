@@ -1,0 +1,12 @@
+{
+  "name": "neighborhood-watch-platform",
+  "private": true,
+  "description": "Convenience scripts only. Real app lives in platform/web.",
+  "scripts": {
+    "dev": "npm run dev --prefix platform/web",
+    "build": "npm run build --prefix platform/web",
+    "lint": "npm run lint --prefix platform/web",
+    "preview": "npm run preview --prefix platform/web",
+    "android:sync": "npm run android:sync --prefix platform/web"
+  }
+}

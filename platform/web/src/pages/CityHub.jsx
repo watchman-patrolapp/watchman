@@ -28,6 +28,7 @@ import {
   fetchCityHubAuthorProfiles,
 } from "../utils/cityHubAuthors";
 import { parseCityHubContent } from "../utils/cityHubContent";
+import { formatWatchDateTime } from "../utils/watchTime";
 
 const POST_TYPES = [
   { value: "suspect_alert", label: "Suspect Alert" },
@@ -551,12 +552,18 @@ export default function CityHub() {
       toast.error("Title and content are required.");
       return;
     }
+    const authorOrgId = activeOrganizationId || user.organizationId;
+    if (!authorOrgId) {
+      toast.error("Select a neighbourhood before publishing.");
+      return;
+    }
+    if (saving) return;
     setSaving(true);
     try {
       const { data: inserted, error } = await supabase
         .from("city_hub_posts")
         .insert({
-          author_organization_id: activeOrganizationId || user.organizationId,
+          author_organization_id: authorOrgId,
           type: form.type,
           title: form.title.trim(),
           content: form.content.trim(),
@@ -622,7 +629,7 @@ export default function CityHub() {
   };
 
   const saveEdit = async ({ type, title, content }) => {
-    if (!editingPost) return;
+    if (!editingPost || busyId) return;
     setBusyId(editingPost.id);
     try {
       const { error } = await supabase.rpc("update_city_hub_post", {
@@ -644,6 +651,7 @@ export default function CityHub() {
   };
 
   const archivePost = async (post) => {
+    if (busyId) return;
     if (!window.confirm("Archive this post? It will leave the city-wide feed. Shared incidents can be posted again.")) {
       return;
     }
@@ -662,6 +670,7 @@ export default function CityHub() {
   };
 
   const deletePost = async (post) => {
+    if (busyId) return;
     if (!window.confirm("Permanently delete this post? This cannot be undone.")) {
       return;
     }
@@ -879,7 +888,7 @@ export default function CityHub() {
                           </button>
                         ) : null}
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {new Date(post.created_at).toLocaleString()}
+                          {formatWatchDateTime(post.created_at) || "—"}
                         </span>
                         <span className="px-2 py-0.5 rounded bg-gray-100 text-[11px] capitalize text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                           {post.status}

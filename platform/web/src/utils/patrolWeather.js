@@ -1,4 +1,5 @@
 import { isFogCode, isRainCode, isStormCode, toJohannesburgHourKey } from "./areaWeather";
+import { parsePatrolTime } from "./watchTime";
 
 /** Coastal Gqeberha: 28°C is properly hot; berg winds can run higher. */
 export const HEAT_C = 28;
@@ -33,8 +34,8 @@ export function patrolDateSpan(logs, { maxDays = 400, now = new Date() } = {}) {
   let min = null;
   let max = null;
   for (const log of logs || []) {
-    const t = new Date(log?.start_time);
-    if (Number.isNaN(t.getTime())) continue;
+    const t = parsePatrolTime(log?.start_time);
+    if (!t) continue;
     if (!min || t < min) min = t;
     if (!max || t > max) max = t;
   }
@@ -64,8 +65,8 @@ export function summarizePatrolWeather(patrols, hourlyLookup) {
     const fog = isFogCode(snap.code);
     const storm = isStormCode(snap.code);
     const temp = snap.temperatureC;
-    const start = new Date(log.start_time);
-    const weekend = !Number.isNaN(start.getTime()) && (start.getDay() === 0 || start.getDay() === 6);
+    const start = parsePatrolTime(log.start_time);
+    const weekend = start && (start.getDay() === 0 || start.getDay() === 6);
 
     if (night && rain) summary.rainyNight += 1;
     if (night && fog) summary.foggyNight += 1;

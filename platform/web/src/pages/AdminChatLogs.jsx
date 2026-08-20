@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
 import { canAccessAdminPanel } from "../auth/staffRoles";
-import { markChatVisited } from "../chat/utils/markChatVisited";
 import { supabase } from "../supabase/client";
 import ExcelJS from 'exceljs';
 import toast from "react-hot-toast";
@@ -11,6 +10,7 @@ import { FaArrowLeft, FaFileExcel, FaFilter, FaTimes } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { useScopedOrganization } from "../utils/organizationScope";
+import { formatWatchDateTime, watchDayStamp } from "../utils/watchTime";
 
 const PAGE_SIZE = 50;
 
@@ -108,13 +108,6 @@ export default function AdminChatLogs() {
     }
   }, [user, navigate]);
 
-  useEffect(() => {
-    void markChatVisited(null);
-    return () => {
-      void markChatVisited(null);
-    };
-  }, []);
-
   const [messages, setMessages] = useState([]);
   const [filter, setFilter] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -124,11 +117,13 @@ export default function AdminChatLogs() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const loadGen = useRef(0);
 
   // ---------------------------------------------------------------------------
   // Fetch — useCallback with explicit deps so the effect stays stable
   // ---------------------------------------------------------------------------
   const fetchMessages = useCallback(async (currentPage = 0, currentFilter = filter, currentStart = startDate, currentEnd = endDate) => {
+    const gen = ++loadGen.current;
     setLoading(true);
     try {
       const from = currentPage * PAGE_SIZE;
@@ -153,15 +148,17 @@ export default function AdminChatLogs() {
 
       const { data, error, count } = await query;
       if (error) throw error;
+      if (gen !== loadGen.current) return;
 
       setMessages(data || []);
       setTotalCount(count || 0);
       setHasMore((count || 0) > (currentPage + 1) * PAGE_SIZE);
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error("Error fetching chat logs:", err);
       toast.error("Failed to load chat logs.");
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, [filter, startDate, endDate, scope]);
 
@@ -254,8 +251,8 @@ export default function AdminChatLogs() {
           type: messageTypeLabel(t),
           message: m.text || '',
           extra,
-          time: new Date(m.created_at).toLocaleString(),
-          expires: m.expires_at ? new Date(m.expires_at).toLocaleString() : '—',
+          time: formatWatchDateTime(m.created_at) || '—',
+          expires: m.expires_at ? formatWatchDateTime(m.expires_at) || '—' : '—',
           critical: m.is_critical ? 'Yes' : 'No',
         });
       });
@@ -269,7 +266,7 @@ export default function AdminChatLogs() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `chat_logs_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.download = `chat_logs_${watchDayStamp()}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -395,10 +392,10 @@ export default function AdminChatLogs() {
                           <LogMessageCell m={m} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                          {new Date(m.created_at).toLocaleString()}
+                          {formatWatchDateTime(m.created_at) || '—'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                          {m.expires_at ? new Date(m.expires_at).toLocaleString() : '—'}
+                          {m.expires_at ? formatWatchDateTime(m.expires_at) || '—' : '—'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
                           {m.is_critical

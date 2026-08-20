@@ -67,7 +67,7 @@ const EMPTY_FORM = {
   banner_url: "",
 };
 
-function CivicCard({ row, canManage, onEdit, onToggleActive }) {
+function CivicCard({ row, canManage, onEdit, onToggleActive, toggleBusy }) {
   const meta = KIND_META[row.kind] || KIND_META.other;
   const Icon = meta.icon;
   return (
@@ -129,7 +129,8 @@ function CivicCard({ row, canManage, onEdit, onToggleActive }) {
             <button
               type="button"
               onClick={() => onToggleActive(row)}
-              className="rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              disabled={toggleBusy}
+              className="rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
             >
               {row.active === false ? "Show on directory" : "Hide from directory"}
             </button>
@@ -347,25 +348,30 @@ export default function EmergencyContacts() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState(null);
+  const [togglingId, setTogglingId] = useState(null);
+  const loadGen = useRef(0);
 
   const load = async () => {
+    const gen = ++loadGen.current;
     setLoading(true);
     try {
       const [civicRows, companyRows] = await Promise.all([
         listEmergencyDirectory(),
         listDirectorySecurityCompanies(),
       ]);
+      if (gen !== loadGen.current) return;
       setCivic(canManage ? civicRows : civicRows.filter((row) => row.active !== false));
       setCompanies(companyRows);
     } catch (err) {
       console.error(err);
+      if (gen !== loadGen.current) return;
       toast.error(
         isRpcNotFoundError(err)
           ? "Run the emergency directory SQL in Supabase to load contacts."
           : err.message || "Could not load contacts."
       );
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   };
 
@@ -392,6 +398,7 @@ export default function EmergencyContacts() {
 
   const saveForm = async (event) => {
     event.preventDefault();
+    if (saving) return;
     if (!form?.name?.trim()) {
       toast.error("Name is required.");
       return;
@@ -414,6 +421,8 @@ export default function EmergencyContacts() {
   };
 
   const toggleActive = async (row) => {
+    if (!row?.id || togglingId) return;
+    setTogglingId(row.id);
     try {
       await setEmergencyDirectoryActive(row.id, row.active === false);
       toast.success(row.active === false ? "Contact is visible again." : "Contact hidden from the directory.");
@@ -424,6 +433,8 @@ export default function EmergencyContacts() {
           ? "Run the latest emergency directory SQL in Supabase first."
           : err.message || "Could not update contact."
       );
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -494,6 +505,7 @@ export default function EmergencyContacts() {
                       <button
                         type="button"
                         onClick={() => toggleActive(row)}
+                        disabled={togglingId === row.id}
                         className="rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
                       >
                         {row.active === false ? "Show on directory" : "Hide from directory"}
@@ -522,6 +534,7 @@ export default function EmergencyContacts() {
                       canManage={canManage}
                       onEdit={(item) => setForm({ ...EMPTY_FORM, ...item })}
                       onToggleActive={toggleActive}
+                      toggleBusy={Boolean(togglingId)}
                     />
                   );
                 })}

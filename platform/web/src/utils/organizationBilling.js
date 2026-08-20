@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { parsePatrolTime } from "./watchTime";
 
 /** Fallback defaults when the admin catalog has not been loaded yet. */
 export const TRIAL_MONTHS = 2;
@@ -97,10 +98,13 @@ export function annualFeeScheduleCopy(orgType = "nw_group", catalog = DEFAULT_BI
 }
 
 export function getTrialEndsAt(createdAt, trialMonths = TRIAL_MONTHS) {
-  const start = createdAt instanceof Date ? new Date(createdAt) : new Date(createdAt);
-  if (Number.isNaN(start.getTime())) return null;
+  const start =
+    createdAt instanceof Date
+      ? createdAt
+      : parsePatrolTime(createdAt) || new Date(createdAt);
+  if (!start || Number.isNaN(start.getTime())) return null;
   const months = Math.max(0, Number(trialMonths) || TRIAL_MONTHS);
-  const end = new Date(start);
+  const end = new Date(start.getTime());
   end.setMonth(end.getMonth() + months);
   return end;
 }

@@ -28,11 +28,14 @@ export default function SecurityBranding() {
   const [contactPhone, setContactPhone] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPersonName, setContactPersonName] = useState("");
+  const loadGen = useRef(0);
 
   const load = async () => {
+    const gen = ++loadGen.current;
     setLoading(true);
     try {
       const row = await getMySecurityBranding();
+      if (gen !== loadGen.current) return;
       if (!row) {
         toast.error("No security company is linked to this account.");
         return;
@@ -49,6 +52,7 @@ export default function SecurityBranding() {
         logoUrl: row.logo_url || "",
       });
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error(err);
       toast.error(
         isRpcNotFoundError(err)
@@ -56,7 +60,7 @@ export default function SecurityBranding() {
           : err.message || "Could not load branding."
       );
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   };
 
@@ -64,29 +68,62 @@ export default function SecurityBranding() {
     void load();
   }, []);
 
-  const upload = async (kind, file) => {
+  const brandingRef = useRef({
+    logoUrl: "",
+    bannerUrl: "",
+    contactPhone: "",
+    contactEmail: "",
+    contactPersonName: "",
+  });
+  const uploadChain = useRef(Promise.resolve());
+  const uploadPending = useRef(0);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    brandingRef.current = {
+      logoUrl,
+      bannerUrl,
+      contactPhone,
+      contactEmail,
+      contactPersonName,
+    };
+  }, [logoUrl, bannerUrl, contactPhone, contactEmail, contactPersonName]);
+
+  const upload = (kind, file) => {
     if (!file || !companyId) return;
-    try {
-      const url = await uploadSecurityBrandingImage(companyId, kind, file);
-      const nextLogo = kind === "logo" ? url : logoUrl;
-      const nextBanner = kind === "banner" ? url : bannerUrl;
-      if (kind === "logo") setLogoUrl(url);
-      else setBannerUrl(url);
-      await saveMySecurityBranding({
-        logoUrl: nextLogo,
-        bannerUrl: nextBanner,
-        contactPhone,
-        contactEmail,
-        contactPersonName,
+    uploadPending.current += 1;
+    setUploading(true);
+    uploadChain.current = uploadChain.current
+      .catch(() => {})
+      .then(async () => {
+        const url = await uploadSecurityBrandingImage(companyId, kind, file);
+        const prev = brandingRef.current;
+        const nextLogo = kind === "logo" ? url : prev.logoUrl;
+        const nextBanner = kind === "banner" ? url : prev.bannerUrl;
+        if (kind === "logo") setLogoUrl(url);
+        else setBannerUrl(url);
+        brandingRef.current = { ...prev, logoUrl: nextLogo, bannerUrl: nextBanner };
+        await saveMySecurityBranding({
+          logoUrl: nextLogo,
+          bannerUrl: nextBanner,
+          contactPhone: prev.contactPhone,
+          contactEmail: prev.contactEmail,
+          contactPersonName: prev.contactPersonName,
+        });
+        writeSecurityCompanyBrand(user?.id, { name: companyName, logoUrl: nextLogo });
+        toast.success(kind === "logo" ? "Logo updated." : "Cover photo updated.");
+      })
+      .catch((err) => {
+        toast.error(err.message || "Could not upload image.");
+      })
+      .finally(() => {
+        uploadPending.current = Math.max(0, uploadPending.current - 1);
+        if (uploadPending.current === 0) setUploading(false);
       });
-      writeSecurityCompanyBrand(user?.id, { name: companyName, logoUrl: nextLogo });
-      toast.success(kind === "logo" ? "Logo updated." : "Cover photo updated.");
-    } catch (err) {
-      toast.error(err.message || "Could not upload image.");
-    }
   };
 
   const save = async () => {
+    if (saving || uploading || loading) return;
     setSaving(true);
     try {
       await saveMySecurityBranding({
@@ -161,14 +198,16 @@ export default function SecurityBranding() {
                 <button
                   type="button"
                   onClick={() => bannerInputRef.current?.click()}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-3 py-2.5 text-sm font-semibold text-white dark:bg-slate-200 dark:text-slate-900"
+                  disabled={uploading || saving || loading}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900"
                 >
                   <FaImage /> Update cover
                 </button>
                 <button
                   type="button"
                   onClick={() => logoInputRef.current?.click()}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-3 py-2.5 text-sm font-semibold text-white"
+                  disabled={uploading || saving || loading}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   <FaUpload /> Update logo
                 </button>

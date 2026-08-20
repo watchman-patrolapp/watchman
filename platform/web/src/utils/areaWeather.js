@@ -1,6 +1,7 @@
 import { SEARCH_BIAS } from "./nominatimLookup";
 import { supabase } from "../supabase/client";
 import { displayWatchAreaName, watchAreaCenterFromName } from "../config/neighborhoodRegions";
+import { parsePatrolTime } from "./watchTime";
 
 const WEATHER_TTL_MS = 20 * 60 * 1000;
 const CITY_FALLBACK = { lat: -33.9608, lng: 25.6022 };
@@ -70,8 +71,8 @@ function writeCache(key, data, ttlMs = WEATHER_TTL_MS) {
 const HOURLY_TTL_MS = 2 * 60 * 60 * 1000;
 
 export function toJohannesburgHourKey(iso) {
-  const d = iso instanceof Date ? iso : new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
+  const d = iso instanceof Date ? iso : parsePatrolTime(iso);
+  if (!d || Number.isNaN(d.getTime())) return "";
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Africa/Johannesburg",
     year: "numeric",

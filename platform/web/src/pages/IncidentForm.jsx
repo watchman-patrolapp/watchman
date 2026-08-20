@@ -18,6 +18,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { canStaffManageIncidents } from "../auth/staffRoles";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
+import { watchDayStamp, parsePatrolTime } from "../utils/watchTime";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,6 +43,14 @@ const EMPTY_EVIDENCE = () => ({
   documentation: [],
   contextual_intel: [],
 });
+
+function incidentDateInputValue(raw) {
+  if (!raw) return watchDayStamp();
+  const s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = parsePatrolTime(s);
+  return d ? watchDayStamp(d) : watchDayStamp();
+}
 
 /** Rebuild form evidence state from incident_evidence rows (admin edit / hydration). */
 function mapDbEvidenceToFormState(rows) {
@@ -77,8 +86,8 @@ function mapDbEvidenceToFormState(rows) {
       logical.set(key, row);
       continue;
     }
-    const tRow = new Date(row.created_at || 0);
-    const tPrev = new Date(prev.created_at || 0);
+    const tRow = parsePatrolTime(row.created_at)?.getTime() || 0;
+    const tPrev = parsePatrolTime(prev.created_at)?.getTime() || 0;
     const primary = tRow >= tPrev ? row : prev;
     const secondary = tRow >= tPrev ? prev : row;
     const mergedUrls = [
@@ -96,7 +105,7 @@ function mapDbEvidenceToFormState(rows) {
   }
 
   const collapsed = [...logical.values()].sort(
-    (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0)
+    (a, b) => (parsePatrolTime(a.created_at)?.getTime() || 0) - (parsePatrolTime(b.created_at)?.getTime() || 0)
   );
 
   for (const row of collapsed) {
@@ -164,7 +173,7 @@ const EVIDENCE_CATEGORIES = [
 ];
 
 const INITIAL_FORM = {
-  incidentDate: new Date().toISOString().split('T')[0],
+  incidentDate: watchDayStamp(),
   location: "",
   type: "",
   description: "",
@@ -294,6 +303,7 @@ export default function IncidentForm() {
   const [editLoading, setEditLoading] = useState(isEditMode);
   const [editLoadError, setEditLoadError] = useState(null);
   const lastCreatedProfileToastId = useRef(null);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     if (isEditMode) {
@@ -383,14 +393,9 @@ export default function IncidentForm() {
           .order("created_at", { ascending: true });
         if (eErr) throw eErr;
         if (cancelled) return;
-        const d =
-          typeof inc.incident_date === "string"
-            ? inc.incident_date.split("T")[0]
-            : inc.incident_date
-              ? new Date(inc.incident_date).toISOString().split("T")[0]
-              : INITIAL_FORM.incidentDate;
+        const d = incidentDateInputValue(inc.incident_date);
         setForm({
-          incidentDate: d || INITIAL_FORM.incidentDate,
+          incidentDate: d,
           location: inc.location || "",
           type: inc.type || "",
           description: inc.description || "",
@@ -511,14 +516,22 @@ export default function IncidentForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current || isSubmitting) return;
+    submitLockRef.current = true;
     setError("");
     setIsSubmitting(true);
 
     try {
       let incidentId;
       let incidentDataForMatch = null;
+      const orgId = activeOrganizationId || user.organizationId || null;
+      if (!orgId) {
+        throw new Error("Select a neighbourhood before submitting an incident.");
+      }
 
       let oldSuspectLinkedProfileIds = new Set();
+      let oldEvidenceIds = [];
+      let oldSuspectIds = [];
       if (isEditMode) {
         const { error: uErr } = await supabase
           .from("incidents")
@@ -540,7 +553,7 @@ export default function IncidentForm() {
 
         const { data: oldSuspectRows } = await supabase
           .from("incident_evidence")
-          .select("metadata")
+          .select("id, metadata")
           .eq("incident_id", editIncidentId)
           .eq("category", "suspects");
         for (const r of oldSuspectRows || []) {
@@ -548,11 +561,19 @@ export default function IncidentForm() {
           if (pid) oldSuspectLinkedProfileIds.add(pid);
         }
 
-        const { error: delEv } = await supabase.from("incident_evidence").delete().eq("incident_id", editIncidentId);
-        if (delEv) throw delEv;
-        const { error: delSus } = await supabase.from("incident_suspects").delete().eq("incident_id", editIncidentId);
-        if (delSus) throw delSus;
+        const { data: oldEvAll } = await supabase
+          .from("incident_evidence")
+          .select("id")
+          .eq("incident_id", editIncidentId);
+        oldEvidenceIds = (oldEvAll || []).map((r) => r.id).filter(Boolean);
 
+        const { data: oldSusAll } = await supabase
+          .from("incident_suspects")
+          .select("id")
+          .eq("incident_id", editIncidentId);
+        oldSuspectIds = (oldSusAll || []).map((r) => r.id).filter(Boolean);
+
+        // Do not delete evidence yet — wipe only after new rows insert successfully.
         incidentId = editIncidentId;
       } else {
         incidentDataForMatch = {
@@ -568,12 +589,13 @@ export default function IncidentForm() {
           witness_name: form.witnessName?.trim() || null,
           witness_user_id: form.witnessUserId || null,
           submitted_by: user.id,
-          submitted_by_name: user.user_metadata?.full_name || user.email,
-          submitted_by_car: user.user_metadata?.car_type || null,
-          submitted_by_reg: user.user_metadata?.registration_number || null,
+          reporter_id: user.id,
+          submitted_by_name: user.fullName || user.user_metadata?.full_name || user.email,
+          submitted_by_car: user.carType || user.user_metadata?.car_type || null,
+          submitted_by_reg: user.registrationNumber || user.user_metadata?.registration_number || null,
           status: "pending",
           submitted_at: new Date().toISOString(),
-          organization_id: activeOrganizationId || user.organizationId || null,
+          organization_id: orgId,
         };
 
         const { data: incident, error: insertError } = await supabase
@@ -721,6 +743,33 @@ export default function IncidentForm() {
         if (suspectError) console.error("Suspect insert error:", suspectError);
       }
 
+      // Edit mode: remove previous evidence/suspects only after new rows are written.
+      if (isEditMode) {
+        const keepEvidenceIds = insertedEvidenceRows.map((r) => r.id).filter(Boolean);
+        const staleEvidence = oldEvidenceIds.filter((id) => !keepEvidenceIds.includes(id));
+        if (staleEvidence.length > 0) {
+          const { error: delEv } = await supabase
+            .from("incident_evidence")
+            .delete()
+            .in("id", staleEvidence);
+          if (delEv) throw delEv;
+        } else if (oldEvidenceIds.length > 0 && evidenceEntries.length === 0) {
+          const { error: delEv } = await supabase
+            .from("incident_evidence")
+            .delete()
+            .eq("incident_id", incidentId);
+          if (delEv) throw delEv;
+        }
+
+        if (oldSuspectIds.length > 0) {
+          const { error: delSus } = await supabase
+            .from("incident_suspects")
+            .delete()
+            .in("id", oldSuspectIds);
+          if (delSus) throw delSus;
+        }
+      }
+
       const linkByProfileId = new Map();
       for (const s of suspectEntries) {
         if (!s.linked_profile_id) continue;
@@ -840,6 +889,7 @@ export default function IncidentForm() {
       toast.error("Failed to submit: " + err.message);
       setError(err.message);
     } finally {
+      submitLockRef.current = false;
       setIsSubmitting(false);
     }
   };

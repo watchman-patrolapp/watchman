@@ -19,6 +19,7 @@ import { formatLastGpsForMap } from '../utils/formatPatrolClock';
 import PatrollerPhotoPreview from './patrol/PatrollerPhotoPreview';
 import BrandedLoader from './layout/BrandedLoader';
 import { useScopedOrganization } from '../utils/organizationScope';
+import { parsePatrolTime } from '../utils/watchTime';
 
 let garageRpcTriedAndMissing = false;
 
@@ -31,15 +32,15 @@ function isPatrolLocationActive(location) {
   if (!location) return false;
   const raw = location.displayTime ?? location.timestamp;
   if (raw == null) return false;
-  const ms = new Date(raw).getTime();
-  return !Number.isNaN(ms) && Date.now() - ms < ACTIVE_GPS_MAX_AGE_MS;
+  const ms = parsePatrolTime(raw)?.getTime();
+  return Number.isFinite(ms) && Date.now() - ms < ACTIVE_GPS_MAX_AGE_MS;
 }
 
 function isPatrolActiveNow(patrol, location) {
   if (isPatrolLocationActive(location)) return true;
-  const startMs = patrol?.start_time ? new Date(patrol.start_time).getTime() : NaN;
+  const startMs = parsePatrolTime(patrol?.start_time)?.getTime();
   // Grace period: immediately after check-in, GPS permission/acquire can lag.
-  return !Number.isNaN(startMs) && Date.now() - startMs < ACTIVE_GPS_MAX_AGE_MS;
+  return Number.isFinite(startMs) && Date.now() - startMs < ACTIVE_GPS_MAX_AGE_MS;
 }
 /** If consecutive fixes jump farther than this, treat as a new session (legacy rows mixed under user_id). */
 const MAX_SEGMENT_METERS = 120_000;
@@ -57,10 +58,9 @@ function computeLowerBoundIso() {
 /** Millis for the latest known instant (client `timestamp` vs server `created_at`). */
 function latestInstantMs(row) {
   if (!row) return NaN;
-  const ts = row.timestamp != null ? new Date(row.timestamp).getTime() : NaN;
-  const caRaw = row.created_at ?? row.createdAt;
-  const ca = caRaw != null ? new Date(caRaw).getTime() : NaN;
-  const vals = [ts, ca].filter((n) => !Number.isNaN(n));
+  const ts = parsePatrolTime(row.timestamp)?.getTime() ?? NaN;
+  const ca = parsePatrolTime(row.created_at ?? row.createdAt)?.getTime() ?? NaN;
+  const vals = [ts, ca].filter((n) => Number.isFinite(n));
   if (!vals.length) return NaN;
   return Math.max(...vals);
 }

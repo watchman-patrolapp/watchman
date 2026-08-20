@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
@@ -14,6 +14,7 @@ import {
   parseListPriceZar,
   suggestedAnnualFeeZar,
 } from "../utils/organizationBilling";
+import { formatWatchDate } from "../utils/watchTime";
 
 export default function BillingDashboard() {
   const { user } = useAuth();
@@ -34,9 +35,11 @@ export default function BillingDashboard() {
     payment_status: "pending",
     notes: "",
   });
+  const subsGen = useRef(0);
 
   const loadSubscriptions = async () => {
     if (!selectedOrgId) return;
+    const gen = ++subsGen.current;
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -44,13 +47,15 @@ export default function BillingDashboard() {
         .select("*")
         .eq("organization_id", selectedOrgId)
         .order("started_at", { ascending: false });
+      if (gen !== subsGen.current) return;
       if (error) throw error;
       setSubscriptions(data || []);
     } catch (err) {
+      if (gen !== subsGen.current) return;
       console.error(err);
       toast.error("Could not load subscriptions.");
     } finally {
-      setLoading(false);
+      if (gen === subsGen.current) setLoading(false);
     }
   };
 
@@ -147,6 +152,7 @@ export default function BillingDashboard() {
 
   const createOrUpdateSubscription = async (event) => {
     event.preventDefault();
+    if (saving) return;
     if (!selectedOrgId) {
       toast.error("Select an organization first.");
       return;
@@ -212,6 +218,7 @@ export default function BillingDashboard() {
 
   const saveCatalog = async (event) => {
     event.preventDefault();
+    if (savingCatalog) return;
     setSavingCatalog(true);
     try {
       const payload = {
@@ -248,6 +255,7 @@ export default function BillingDashboard() {
 
   const saveListPrice = async (event) => {
     event.preventDefault();
+    if (savingPrice) return;
     if (!selectedOrgId) {
       toast.error("Select an organization first.");
       return;
@@ -474,8 +482,8 @@ export default function BillingDashboard() {
                     {sub.tier} · R{sub.amount_zar}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(sub.started_at).toLocaleDateString()} -{" "}
-                    {sub.expires_at ? new Date(sub.expires_at).toLocaleDateString() : "No expiry"} ·{" "}
+                    {formatWatchDate(sub.started_at) || "—"} -{" "}
+                    {sub.expires_at ? formatWatchDate(sub.expires_at) || "—" : "No expiry"} ·{" "}
                     {sub.payment_status}
                   </p>
                   {sub.notes ? (

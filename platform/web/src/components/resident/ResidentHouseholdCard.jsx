@@ -1,17 +1,10 @@
 import { FaCalendarAlt, FaCheck, FaMapMarkerAlt } from "react-icons/fa";
 import { initialsFromName } from "../../utils/residentVerification";
+import { formatWatchDate } from "../../utils/watchTime";
 
 function formatJoined(iso) {
   if (!iso) return null;
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  } catch {
-    return null;
-  }
+  return formatWatchDate(iso) || null;
 }
 
 /**

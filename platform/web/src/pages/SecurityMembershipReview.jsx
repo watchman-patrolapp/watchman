@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import toast from "react-hot-toast";
 import PageHeader from "../components/layout/PageHeader";
 import {
@@ -8,6 +8,7 @@ import {
   membershipRpcMessage,
   reviewSecurityMembership,
 } from "../utils/securityMembershipActions";
+import { formatWatchDateTime } from "../utils/watchTime";
 
 function statusClass(status) {
   const s = String(status || "").toLowerCase();
@@ -27,8 +28,10 @@ export default function SecurityMembershipReview() {
   const [busyId, setBusyId] = useState("");
   const [rejectingId, setRejectingId] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  const loadGen = useRef(0);
 
   const loadRows = async () => {
+    const gen = ++loadGen.current;
     setLoading(true);
     try {
       const [pendingRes, historyRes, eventsRes] = await Promise.all([
@@ -36,16 +39,18 @@ export default function SecurityMembershipReview() {
         listSecurityMembershipClaims("history", false),
         listSecurityMembershipEvents(false),
       ]);
+      if (gen !== loadGen.current) return;
       if (pendingRes.error) throw pendingRes.error;
       if (historyRes.error) throw historyRes.error;
       setPending(pendingRes.data || []);
       setHistory(historyRes.data || []);
       setEvents(eventsRes.error ? [] : eventsRes.data || []);
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error(err);
       toast.error(membershipRpcMessage(err) || "Could not load membership queue.");
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   };
 
@@ -54,6 +59,7 @@ export default function SecurityMembershipReview() {
   }, []);
 
   const runReview = async (row, status) => {
+    if (busyId) return;
     if (status === "rejected") {
       if (rejectingId !== row.id) {
         setRejectingId(row.id);
@@ -87,6 +93,7 @@ export default function SecurityMembershipReview() {
   };
 
   const runDelete = async (row) => {
+    if (busyId) return;
     if (!window.confirm(`Delete the ${row.security_company_name || "company"} claim for ${row.full_name || "this resident"}? This is for mistaken extra companies only.`)) {
       return;
     }
@@ -155,7 +162,7 @@ export default function SecurityMembershipReview() {
                     </p>
                   </div>
                   <span className="text-xs text-gray-400">
-                    {event.created_at ? new Date(event.created_at).toLocaleString() : ""}
+                    {event.created_at ? formatWatchDateTime(event.created_at) || "" : ""}
                   </span>
                 </li>
               ))}
@@ -188,7 +195,7 @@ export default function SecurityMembershipReview() {
                     <>
                       <button
                         type="button"
-                        disabled={busyId === row.id}
+                        disabled={Boolean(busyId)}
                         onClick={() => runReview(row, "verified")}
                         className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
                       >
@@ -206,7 +213,7 @@ export default function SecurityMembershipReview() {
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
-                              disabled={busyId === row.id}
+                              disabled={Boolean(busyId)}
                               onClick={() => runReview(row, "rejected")}
                               className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
                             >
@@ -227,7 +234,7 @@ export default function SecurityMembershipReview() {
                       ) : (
                         <button
                           type="button"
-                          disabled={busyId === row.id}
+                          disabled={Boolean(busyId)}
                           onClick={() => runReview(row, "rejected")}
                           className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
                         >
@@ -236,7 +243,7 @@ export default function SecurityMembershipReview() {
                       )}
                       <button
                         type="button"
-                        disabled={busyId === row.id}
+                        disabled={Boolean(busyId)}
                         onClick={() => runReview(row, "withdrawn")}
                         className="rounded-lg bg-gray-600 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50"
                       >
@@ -247,7 +254,7 @@ export default function SecurityMembershipReview() {
                   {row.membership_status === "verified" ? (
                     <button
                       type="button"
-                      disabled={busyId === row.id}
+                      disabled={Boolean(busyId)}
                       onClick={() => runReview(row, "expired")}
                       className="rounded-lg bg-gray-600 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-50"
                     >
@@ -256,7 +263,7 @@ export default function SecurityMembershipReview() {
                   ) : (
                     <button
                       type="button"
-                      disabled={busyId === row.id}
+                      disabled={Boolean(busyId)}
                       onClick={() => runDelete(row)}
                       className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40 disabled:opacity-50"
                     >

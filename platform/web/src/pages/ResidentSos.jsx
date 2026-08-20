@@ -16,11 +16,17 @@ export default function ResidentSos() {
 
   const triggerSos = async () => {
     if (!user?.id) return;
+    if (loading) return;
+    const organizationId = activeOrganizationId || user.organizationId;
+    if (!organizationId) {
+      toast.error("Select or join a neighbourhood before sending an SOS.");
+      return;
+    }
     setLoading(true);
     try {
       await triggerResidentSos({
         user,
-        organizationId: activeOrganizationId || user.organizationId,
+        organizationId,
         notes,
         triggerType: "hold",
       });

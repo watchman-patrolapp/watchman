@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { FaPrint, FaFilePdf } from 'react-icons/fa';
 import { supabase } from '../supabase/client';
 import { downloadDomAsPdf } from '../utils/downloadDomAsPdf';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { useScopedOrganization } from '../utils/organizationScope';
+import { formatWatchDate, watchDayStamp } from '../utils/watchTime';
 
 export default function PrintIncidents() {
   const navigate = useNavigate();
@@ -34,7 +34,7 @@ export default function PrintIncidents() {
     try {
       await downloadDomAsPdf(
         el,
-        `approved-incidents-${format(new Date(), 'yyyy-MM-dd')}.pdf`,
+        `approved-incidents-${watchDayStamp()}.pdf`,
         { waitForImages: false }
       );
       toast.success('PDF saved', { id: 'pdf-bulk-incidents' });
@@ -63,12 +63,14 @@ export default function PrintIncidents() {
   }, [loading, pdfIntent, handleDownloadPdf, setSearchParams]);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchIncidents() {
       const { data, error } = await scope(
         supabase.from('incidents').select('*')
       )
         .eq('status', 'approved')
         .order('submitted_at', { ascending: false });
+      if (cancelled) return;
       if (error) {
         console.error('Error fetching incidents:', error);
         setIncidents([]);
@@ -83,6 +85,7 @@ export default function PrintIncidents() {
             .from('incident_section_updates')
             .select('incident_id')
             .in('incident_id', ids);
+          if (cancelled) return;
           if (!suErr && suRows) {
             for (const r of suRows) {
               counts[r.incident_id] = (counts[r.incident_id] || 0) + 1;
@@ -94,6 +97,9 @@ export default function PrintIncidents() {
       setLoading(false);
     }
     fetchIncidents();
+    return () => {
+      cancelled = true;
+    };
   }, [scope]);
 
   if (loading) {
@@ -143,7 +149,7 @@ export default function PrintIncidents() {
         >
           <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Approved Incident Reports</h1>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            Generated on {new Date().toLocaleString()}
+            Generated on {formatWatchDate(new Date()) || watchDayStamp()}
           </p>
 
           {incidents.length === 0 ? (
@@ -177,7 +183,7 @@ export default function PrintIncidents() {
                   {incidents.map((inc) => (
                     <tr key={inc.id} className="print:break-inside-avoid">
                       <td className="border px-4 py-2 text-sm text-gray-900 dark:text-gray-200">
-                        {new Date(inc.incident_date).toLocaleDateString()}
+                        {formatWatchDate(inc.incident_date) || '—'}
                       </td>
                       <td className="border px-4 py-2 text-sm text-gray-900 dark:text-gray-200">{inc.location}</td>
                       <td className="border px-4 py-2 text-sm text-gray-900 dark:text-gray-200">{inc.type}</td>

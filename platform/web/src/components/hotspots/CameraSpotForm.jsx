@@ -45,6 +45,7 @@ export default function CameraSpotForm({ userId, initial, onClose, onSaved }) {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (saving) return;
     if (!name.trim()) {
       toast.error('Name this camera (e.g. Lot 12 garage).');
       return;

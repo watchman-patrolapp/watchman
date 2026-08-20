@@ -1,5 +1,6 @@
 // src/chat/components/ChatContainer.jsx
 import React, { useState, useCallback, useEffect, useRef, useReducer } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
 import { MapContainer, TileLayer, CircleMarker, useMap, useMapEvents, ZoomControl } from 'react-leaflet';
 import { useAuth } from '../../auth/useAuth';
@@ -28,7 +29,9 @@ import { requestNotificationPermission } from '../services/fcmRegistration';
 import BrandedLoader from '../../components/layout/BrandedLoader';
 import { ChatIncomingOverlay } from './ChatIncomingOverlay';
 import { getIncomingPreviewText, reduceIncomingOverlayEnqueue } from '../utils/inAppUrgency';
+import { formatWatchDateTime, parsePatrolTime } from '../../utils/watchTime';
 import { getWorkingOrganizationId } from '../../utils/organizationScope';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { parseChatForegroundPayload } from '../utils/fcmForegroundChat';
 import { closeServiceWorkerNotifications } from '../utils/clearForegroundNotifications';
 import { shouldShowInAppMessageOverlay } from '../../utils/inAppOverlayEligibility';
@@ -161,6 +164,16 @@ function findExistingMessageIndexForRealtime(prev, newMessage) {
   const byId = prev.findIndex((m) => m.id != null && newMessage.id != null && m.id === newMessage.id);
   if (byId !== -1) return byId;
 
+  if (newMessage.client_message_id) {
+    const byClient = prev.findIndex(
+      (m) =>
+        m.localId &&
+        String(m.localId) === String(newMessage.client_message_id) &&
+        String(m.sender_id) === String(newMessage.sender_id)
+    );
+    if (byClient !== -1) return byClient;
+  }
+
   return prev.findIndex((m) => {
     if (!m.localId) return false;
     if (m.id != null) return false;
@@ -177,16 +190,29 @@ function findExistingMessageIndexForRealtime(prev, newMessage) {
       if (Number.isFinite(dLat) && Number.isFinite(dLng) && dLat < 1e-5 && dLng < 1e-5) {
         return true;
       }
+      return false;
     }
 
-    const t1 = new Date(m.localTimestamp || 0).getTime();
-    const t2 = new Date(newMessage.created_at || 0).getTime();
+    if (m.type === MessageType.TEXT) {
+      if (String(m.text || '') !== String(newMessage.text || '')) return false;
+    } else if (
+      (m.type === MessageType.IMAGE || m.type === MessageType.VOICE) &&
+      m.media_url &&
+      newMessage.media_url
+    ) {
+      if (String(m.media_url) !== String(newMessage.media_url)) return false;
+    }
+
+    const t1 = parsePatrolTime(m.localTimestamp)?.getTime() || Number(m.localTimestamp) || 0;
+    const t2 = parsePatrolTime(newMessage.created_at)?.getTime() || 0;
     return Number.isFinite(t1) && Number.isFinite(t2) && Math.abs(t1 - t2) < 120_000;
   });
 }
 
 export default function ChatContainer() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { activeOrganizationId } = useActiveOrganization();
   const { isOnline } = useNetworkStatus();
   const { addToQueue, queueLength } = useMessageQueue(isOnline);
   const isOpsChat = canAccessPatrolOpsChat(user?.role);
@@ -227,6 +253,11 @@ export default function ChatContainer() {
   const isOpsChatRef = useRef(isOpsChat);
   isOpsChatRef.current = isOpsChat;
 
+  const { count: patrolUnread } = useUnreadCount(
+    isOpsChat ? user?.id : null,
+    CHAT_CHANNEL_PATROL,
+    { pauseIncrements: chatChannel === CHAT_CHANNEL_PATROL }
+  );
   const { count: neighbourUnread } = useUnreadCount(
     isOpsChat ? user?.id : null,
     CHAT_CHANNEL_RESIDENT,
@@ -234,8 +265,13 @@ export default function ChatContainer() {
   );
 
   useEffect(() => {
+    const room = searchParams.get('room');
+    if (isOpsChat && (room === CHAT_CHANNEL_PATROL || room === CHAT_CHANNEL_RESIDENT)) {
+      setChatChannel(room);
+      return;
+    }
     setChatChannel(defaultChatChannel(user?.role));
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.role, isOpsChat, searchParams]);
 
   // Cleanup mounted ref on unmount
   useEffect(() => {
@@ -357,11 +393,12 @@ export default function ChatContainer() {
     }
   }, []);
 
-  // Load messages for the active room
+  // Load messages for the active room (reload on channel or neighbourhood change)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       if (isMountedRef.current) {
+        setIsLoading(true);
         setMessages([]);
       }
       try {
@@ -379,7 +416,7 @@ export default function ChatContainer() {
     return () => {
       cancelled = true;
     };
-  }, [chatChannel]);
+  }, [chatChannel, activeOrganizationId]);
 
   useEffect(() => {
     const serverIds = messages.map((m) => m.id).filter(Boolean);
@@ -690,6 +727,7 @@ export default function ChatContainer() {
             visibility: chatChannelRef.current,
             replyToMessageId: replyToMessage?.id || null,
             replyPreviewText,
+            clientMessageId: localId,
           });
         } else {
           sent = await messageService.sendText({
@@ -701,6 +739,7 @@ export default function ChatContainer() {
             visibility: chatChannelRef.current,
             replyToMessageId: replyToMessage?.id || null,
             replyPreviewText,
+            clientMessageId: localId,
           });
         }
 
@@ -781,6 +820,7 @@ export default function ChatContainer() {
         visibility: chatChannelRef.current,
         replyToMessageId,
         replyPreviewText,
+        clientMessageId: localId,
       });
 
       if (isMountedRef.current) {
@@ -896,6 +936,7 @@ export default function ChatContainer() {
         replyToMessageId: replyToMessage?.id || null,
         replyPreviewText:
           replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
+        clientMessageId: localId,
       });
 
       objectUrlManager.revoke(localId);
@@ -963,6 +1004,7 @@ export default function ChatContainer() {
         replyToMessageId: replyToMessage?.id || null,
         replyPreviewText:
           replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
+        clientMessageId: localId,
       });
 
       console.log('Message saved to DB:', sent);
@@ -1098,6 +1140,7 @@ export default function ChatContainer() {
           replyToMessageId: replyToMessage?.id || null,
           replyPreviewText:
             replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
+          clientMessageId: localId,
         });
 
         if (isMountedRef.current) {
@@ -1148,7 +1191,7 @@ export default function ChatContainer() {
       type: 'Suspicious Activity',
       location: message?.location_address || '',
       description:
-        `Compiled from emergency chat (${new Date(message?.created_at || Date.now()).toLocaleString()}):\n` +
+        `Compiled from emergency chat (${formatWatchDateTime(message?.created_at) || formatWatchDateTime(new Date()) || 'now'}):\n` +
         `Initial message by: ${message?.sender_name || 'Unknown'}\n` +
         `Compiled into report by: ${user?.fullName || user?.email || 'Unknown'}\n` +
         `${summary}`,
@@ -1326,6 +1369,7 @@ export default function ChatContainer() {
           isEmergencyMode={isEmergencyMode}
           channel={chatChannel}
           canSwitchChannels={isOpsChat}
+          patrolUnread={patrolUnread}
           neighbourUnread={neighbourUnread}
           onChannelChange={handleChannelChange}
         />

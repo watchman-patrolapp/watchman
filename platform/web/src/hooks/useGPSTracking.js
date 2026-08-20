@@ -41,6 +41,7 @@ const globalGPS = {
   lastTrackLng: null,
   /** Last options used for watch — needed when resuming after tab visibility / pauseWatch */
   lastWatchOptions: null,
+  _autoStopClear: null,
 
   subscribe(listener) {
     this.listeners.add(listener);
@@ -289,29 +290,39 @@ const globalGPS = {
 
   stop() {
     this.pauseWatch();
+    if (this._autoStopClear) {
+      this._autoStopClear();
+      this._autoStopClear = null;
+    }
     this.currentPatrolId = null;
     this.userId = null;
     this.lastWatchOptions = null;
     this.lastTrackUploadAt = 0;
     this.lastTrackLat = null;
     this.lastTrackLng = null;
-    this.notify({ isActive: false });
+    // New patrol sessions must not inherit prior route distance / trail.
+    this.history = [];
+    this.location = null;
+    this.notify({ isActive: false, history: [], location: null });
   },
 
-  setupAutoStopTimer(durationMinutes = 480) {
+  setupAutoStopTimer(durationMinutes = 150) {
+    if (this._autoStopClear) {
+      this._autoStopClear();
+      this._autoStopClear = null;
+    }
     const durationMs = durationMinutes * 60 * 1000;
-
     devLog(`Auto-stop timer set for ${durationMinutes} minutes`);
-
     const timer = setTimeout(() => {
-      devLog('Auto-stop timer triggered — ending patrol');
+      devLog('Auto-stop timer triggered — stopping GPS watch only');
+      this._autoStopClear = null;
       this.stop();
     }, durationMs);
-
-    return () => {
+    this._autoStopClear = () => {
       clearTimeout(timer);
       devLog('Auto-stop timer cleared');
     };
+    return this._autoStopClear;
   }
 };
 
@@ -362,7 +373,7 @@ export function useGPSTracking(options = {}) {
     const unsubscribe = globalGPS.subscribe((newState) => {
       setState(newState);
     });
-    globalGPS.start(optionsRef.current);
+    // Do not start geolocation until startTracking() — avoids idle battery drain.
     return () => {
       unsubscribe();
     };

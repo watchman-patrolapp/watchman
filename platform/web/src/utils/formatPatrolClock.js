@@ -1,9 +1,12 @@
 import { formatDistanceToNow } from 'date-fns';
+import { parsePatrolTime } from './watchTime';
 
 function parseValidDate(isoOrDate) {
   if (isoOrDate == null) return null;
-  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (isoOrDate instanceof Date) {
+    return Number.isNaN(isoOrDate.getTime()) ? null : isoOrDate;
+  }
+  return parsePatrolTime(isoOrDate);
 }
 
 /** e.g. "SAST", "GMT+2" — viewer browser locale/TZ */

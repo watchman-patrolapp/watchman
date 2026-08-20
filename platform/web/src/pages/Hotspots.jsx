@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft,
@@ -28,6 +28,7 @@ import HotspotsMap from '../components/hotspots/HotspotsMap';
 import HotspotEventForm from '../components/hotspots/HotspotEventForm';
 import CameraSpotForm from '../components/hotspots/CameraSpotForm';
 import CameraSuggestionsPanel from '../components/hotspots/CameraSuggestionsPanel';
+import { formatWatchDateTime, parsePatrolTime } from '../utils/watchTime';
 import '../styles/hotspots-map.css';
 
 const RANGE_OPTIONS = [
@@ -39,17 +40,31 @@ const RANGE_OPTIONS = [
 
 function whenLabel(ev) {
   if (!ev.occurred_at) return 'Date unknown';
-  const d = new Date(ev.occurred_at);
-  if (Number.isNaN(d.getTime())) return 'Date unknown';
-  const date = d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-  if (!ev.time_known) return date;
-  return `${date} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  const formatted = formatWatchDateTime(ev.occurred_at, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  if (!formatted) return 'Date unknown';
+  if (!ev.time_known) {
+    return formatWatchDateTime(ev.occurred_at, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }) || 'Date unknown';
+  }
+  return formatted;
 }
 
 function filterByRange(events, days) {
   if (!days) return events;
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  return events.filter((e) => new Date(e.occurred_at).getTime() >= cutoff);
+  return events.filter((e) => {
+    const t = parsePatrolTime(e.occurred_at)?.getTime();
+    return Number.isFinite(t) && t >= cutoff;
+  });
 }
 
 export default function Hotspots() {
@@ -76,18 +91,24 @@ export default function Hotspots() {
   const [panel, setPanel] = useState(null);
   const [editingEvent, setEditingEvent] = useState(null);
   const [editingCamera, setEditingCamera] = useState(null);
+  const loadGen = useRef(0);
+  const checksGen = useRef(0);
+  const [deleteBusyId, setDeleteBusyId] = useState(null);
 
   const load = useCallback(async () => {
+    const gen = ++loadGen.current;
     try {
       const [ev, cam] = await Promise.all([fetchHotspotEvents(), fetchCameraSpots()]);
+      if (gen !== loadGen.current) return;
       setEvents(ev);
       setCameras(cam);
       setSelectedEvent((prev) => (prev ? ev.find((x) => x.id === prev.id) || null : null));
       setSelectedCamera((prev) => (prev ? cam.find((x) => x.id === prev.id) || null : null));
     } catch (err) {
+      if (gen !== loadGen.current) return;
       toast.error(err.message || 'Could not load hotspots.');
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, []);
 
@@ -96,13 +117,17 @@ export default function Hotspots() {
   }, [load]);
 
   const loadChecks = useCallback(async (eventId) => {
+    const gen = ++checksGen.current;
     if (!eventId) {
       setChecks([]);
       return;
     }
     try {
-      setChecks(await fetchHotspotCameraChecks(eventId));
+      const rows = await fetchHotspotCameraChecks(eventId);
+      if (gen !== checksGen.current) return;
+      setChecks(rows);
     } catch {
+      if (gen !== checksGen.current) return;
       setChecks([]);
     }
   }, []);
@@ -143,7 +168,9 @@ export default function Hotspots() {
   };
 
   const removeEvent = async (ev) => {
+    if (deleteBusyId) return;
     if (!window.confirm(`Remove pin at ${ev.address}?`)) return;
+    setDeleteBusyId(ev.id);
     try {
       await deleteHotspotEvent(ev.id);
       if (selectedEvent?.id === ev.id) setSelectedEvent(null);
@@ -151,11 +178,15 @@ export default function Hotspots() {
       await load();
     } catch (err) {
       toast.error(err.message || 'Could not delete.');
+    } finally {
+      setDeleteBusyId(null);
     }
   };
 
   const removeCamera = async (cam) => {
+    if (deleteBusyId) return;
     if (!window.confirm(`Remove camera “${cam.name}”?`)) return;
+    setDeleteBusyId(cam.id);
     try {
       await deleteCameraSpot(cam.id);
       if (selectedCamera?.id === cam.id) setSelectedCamera(null);
@@ -163,6 +194,8 @@ export default function Hotspots() {
       await load();
     } catch (err) {
       toast.error(err.message || 'Could not delete.');
+    } finally {
+      setDeleteBusyId(null);
     }
   };
 

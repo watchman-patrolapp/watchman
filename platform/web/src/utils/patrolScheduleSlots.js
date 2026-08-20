@@ -1,3 +1,5 @@
+import { watchDayStamp, addCalendarDays } from "./watchTime.js";
+
 /** Shared 2-hour patrol windows used by Theescombe and every other watch area. */
 export const PATROL_TIME_SLOTS = [
   { label: "19:00–21:00", start: "19:00", end: "21:00" },
@@ -16,31 +18,32 @@ export const PATROL_TIME_SLOTS = [
 
 export const PATROL_SCHEDULE_DAYS = 7;
 
+/** @deprecated Prefer watchDayStamp — kept for callers that pass a Date. */
 export function toLocalDateStr(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return watchDayStamp(date);
 }
 
-export function getScheduleWindowDates(startOffset = 0, days = PATROL_SCHEDULE_DAYS) {
+export function getScheduleWindowDates(startOffset = 0, days = PATROL_SCHEDULE_DAYS, now = new Date()) {
+  const today = watchDayStamp(now);
   const dates = [];
-  const today = new Date();
   for (let i = 0; i < days; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + startOffset + i);
-    dates.push(toLocalDateStr(d));
+    dates.push(addCalendarDays(today, startOffset + i));
   }
   return dates;
 }
 
 export function formatScheduleDateHeader(dateStr) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  return d.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
+  const d = new Date(`${dateStr}T12:00:00+02:00`);
+  return d.toLocaleDateString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Africa/Johannesburg",
+  });
 }
 
-export function isLocalDateToday(dateStr) {
-  return toLocalDateStr(new Date()) === dateStr;
+export function isLocalDateToday(dateStr, now = new Date()) {
+  return watchDayStamp(now) === String(dateStr || "").slice(0, 10);
 }
 
 export function normalizeSlotClock(value) {
@@ -55,4 +58,12 @@ export function shortVolunteerName(fullName) {
   if (!fullName) return "?";
   const first = String(fullName).split(" ")[0];
   return first.length > 10 ? `${first.substring(0, 9)}…` : first;
+}
+
+export function slotsMatchWindow(slot, date, start, end) {
+  return (
+    slotDateValue(slot) === String(date || "").slice(0, 10) &&
+    normalizeSlotClock(slot?.start_time) === normalizeSlotClock(start) &&
+    normalizeSlotClock(slot?.end_time) === normalizeSlotClock(end)
+  );
 }

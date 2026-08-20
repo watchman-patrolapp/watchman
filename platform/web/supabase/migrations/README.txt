@@ -1,8 +1,6 @@
-Deprecated folder: database migrations live in the repo root at:
+Canonical migrations live in:
 
-  supabase/migrations/
+  platform/supabase/migrations/
 
-Use `supabase db push` / `supabase migration up` from the project root (Neighborhood Watch Platform), not from web/supabase.
-
-Patrol GPS + RLS pieces were merged into:
-  supabase/migrations/20260401142000_patrol_locations_consolidated.sql
+Run Supabase CLI from platform/supabase (or the repo root with --workdir platform).
+Do not add migrations under platform/web/supabase — that tree is deprecated.

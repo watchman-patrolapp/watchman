@@ -9,6 +9,7 @@ export default function QuickSightingButton({ profileId, profileName }) {
   const [loading, setLoading] = useState(false);
 
   const reportSighting = async () => {
+    if (loading) return;
     if (!navigator.geolocation) {
       toast.error('Geolocation not available');
       return;

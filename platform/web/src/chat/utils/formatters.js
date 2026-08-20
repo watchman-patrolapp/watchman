@@ -1,5 +1,7 @@
 // src/chat/utils/formatters.js
 
+import { parsePatrolTime } from '../../utils/watchTime';
+
 /**
  * Format duration in seconds to MM:SS
  */
@@ -25,9 +27,9 @@ export const formatFileSize = (bytes) => {
  * Format timestamp to relative time
  */
 export const formatRelativeTime = (date) => {
-  const now = new Date();
-  const then = new Date(date);
-  const diff = Math.floor((now - then) / 1000);
+  const then = date instanceof Date ? date : parsePatrolTime(date);
+  if (!then || Number.isNaN(then.getTime())) return '';
+  const diff = Math.floor((Date.now() - then.getTime()) / 1000);
 
   if (diff < 60) return 'Just now';
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
@@ -48,7 +50,8 @@ export const truncateText = (text, maxLength = 50) => {
  */
 export const formatMessageTime = (date) => {
   if (!date) return '';
-  const d = new Date(date);
+  const d = date instanceof Date ? date : parsePatrolTime(date);
+  if (!d || Number.isNaN(d.getTime())) return '';
   const hours = d.getHours().toString().padStart(2, '0');
   const minutes = d.getMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;

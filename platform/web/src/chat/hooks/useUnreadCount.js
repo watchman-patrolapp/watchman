@@ -8,6 +8,7 @@ import {
   getWorkingOrganizationId,
   messageBelongsToWorkingOrganization,
 } from '../../utils/organizationScope';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
 
 function messageVisibility(message) {
   return message?.visibility || 'patrol';
@@ -15,6 +16,7 @@ function messageVisibility(message) {
 
 export const useUnreadCount = (userId, visibility = null, options = {}) => {
   const pauseIncrements = Boolean(options.pauseIncrements);
+  const { activeOrganizationId } = useActiveOrganization();
   const [count, setCount] = useState(0);
 
   const fetchCount = useCallback(async () => {
@@ -25,7 +27,7 @@ export const useUnreadCount = (userId, visibility = null, options = {}) => {
 
     try {
       const args = {
-        p_organization_id: getWorkingOrganizationId() || null,
+        p_organization_id: activeOrganizationId || getWorkingOrganizationId() || null,
       };
       if (visibility) args.p_visibility = visibility;
       let { data, error } = await supabase.rpc('chat_unread_for_me', args);
@@ -36,7 +38,7 @@ export const useUnreadCount = (userId, visibility = null, options = {}) => {
         /p_visibility|schema cache|could not find the function/i.test(error.message || '')
       ) {
         ({ data, error } = await supabase.rpc('chat_unread_for_me', {
-          p_organization_id: getWorkingOrganizationId() || null,
+          p_organization_id: activeOrganizationId || getWorkingOrganizationId() || null,
         }));
       }
       if (!error && typeof data === 'number') {
@@ -78,7 +80,7 @@ export const useUnreadCount = (userId, visibility = null, options = {}) => {
     } catch (err) {
       console.error('Error fetching unread count (fallback):', err);
     }
-  }, [userId, visibility]);
+  }, [userId, visibility, activeOrganizationId]);
 
   useEffect(() => {
     if (!userId) {
@@ -89,7 +91,7 @@ export const useUnreadCount = (userId, visibility = null, options = {}) => {
     void fetchCount();
 
     const subscription = supabase
-      .channel(`unread-count-${visibility || 'default'}`)
+      .channel(`unread-count-${visibility || 'default'}-${activeOrganizationId || 'none'}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
@@ -118,7 +120,7 @@ export const useUnreadCount = (userId, visibility = null, options = {}) => {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener(CHAT_READ_CURSOR_EVENT, onReadCursor);
     };
-  }, [userId, visibility, pauseIncrements, fetchCount]);
+  }, [userId, visibility, pauseIncrements, fetchCount, activeOrganizationId]);
 
   return { count, refetch: fetchCount };
 };

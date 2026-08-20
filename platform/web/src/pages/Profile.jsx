@@ -36,6 +36,13 @@ import { HOUSEHOLD_MODE_INTRO, markHouseholdIntroSeen } from '../utils/household
 import { useScopedOrganization } from '../utils/organizationScope';
 import { resolveAreaCoords } from '../utils/areaWeather';
 import { displayWatchAreaName } from '../config/neighborhoodRegions';
+import { parsePatrolTime } from '../utils/watchTime';
+
+function formatProfileDate(value) {
+  const d = parsePatrolTime(value);
+  if (!d) return '';
+  return d.toLocaleDateString('en-ZA');
+}
 
 /**
  * Soft cap before we warn the user (not an abort). Embedded IDE browsers often take 30–60s+ for
@@ -83,7 +90,6 @@ export default function Profile() {
   const [areaCenter, setAreaCenter] = useState(null);
 
   // Crop states
-  const [selectedImage, setSelectedImage] = useState(null); // file object
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const [crop, setCrop] = useState();
   const [completedCrop, setCompletedCrop] = useState(null);
@@ -245,6 +251,7 @@ export default function Profile() {
   };
 
   const handleChangePassword = async () => {
+    if (pwdLoading) return;
     const email = user?.email?.trim();
     if (!email) {
       toast.error('No email on this account; password change is not available.');
@@ -314,12 +321,17 @@ export default function Profile() {
   // When a file is selected, show crop modal
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
+    e.target.value = '';
     if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Choose an image file.');
+      return;
+    }
 
     // Create preview URL
     const previewUrl = URL.createObjectURL(file);
-    setSelectedImage(file);
     setImagePreviewUrl(previewUrl);
+    setCompletedCrop(null);
     setShowCropModal(true);
   };
 
@@ -343,18 +355,23 @@ export default function Profile() {
     setImageRef(e.currentTarget);
   };
 
-  // Upload the cropped image
+  // Upload the cropped image (canvas output is always JPEG)
   const handleCropConfirm = async () => {
-    if (!completedCrop || !imageRef) return;
+    if (!completedCrop || !imageRef || uploadingAvatar) return;
 
-    // Create a canvas to draw the cropped image
+    const pixelW = Math.max(1, Math.round(completedCrop.width));
+    const pixelH = Math.max(1, Math.round(completedCrop.height));
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      toast.error('Could not crop this image on this device.');
+      return;
+    }
     const scaleX = imageRef.naturalWidth / imageRef.width;
     const scaleY = imageRef.naturalHeight / imageRef.height;
 
-    canvas.width = completedCrop.width;
-    canvas.height = completedCrop.height;
+    canvas.width = pixelW;
+    canvas.height = pixelH;
 
     ctx.drawImage(
       imageRef,
@@ -364,21 +381,23 @@ export default function Profile() {
       completedCrop.height * scaleY,
       0,
       0,
-      completedCrop.width,
-      completedCrop.height
+      pixelW,
+      pixelH
     );
 
-    // Convert canvas to blob
+    setUploadingAvatar(true);
     canvas.toBlob(async (blob) => {
-      setUploadingAvatar(true);
+      if (!blob) {
+        setUploadingAvatar(false);
+        toast.error('Could not prepare the cropped image.');
+        return;
+      }
       try {
-        const fileExt = selectedImage.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const fileName = `${user.id}-${Date.now()}.jpg`;
 
-        // Upload cropped blob to Supabase
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(fileName, blob);
+          .upload(fileName, blob, { contentType: 'image/jpeg', upsert: false });
         if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage
@@ -386,7 +405,6 @@ export default function Profile() {
           .getPublicUrl(fileName);
         const publicUrl = urlData.publicUrl;
 
-        // Update user profile in database
         const { error: updateError } = await supabase
           .from('users')
           .update({ avatar_url: publicUrl })
@@ -395,20 +413,21 @@ export default function Profile() {
 
         await refreshUser();
         toast.success('Avatar updated!');
+        setShowCropModal(false);
+        if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+        setImagePreviewUrl(null);
+        setCompletedCrop(null);
       } catch (err) {
         console.error('Avatar upload error:', err);
         toast.error('Avatar upload failed: ' + err.message);
       } finally {
         setUploadingAvatar(false);
-        setShowCropModal(false);
-        URL.revokeObjectURL(imagePreviewUrl);
-        setSelectedImage(null);
-        setImagePreviewUrl(null);
       }
-    }, 'image/jpeg', 0.9); // Adjust quality as needed
+    }, 'image/jpeg', 0.9);
   };
 
   const handleDeleteMyAccount = async () => {
+    if (deleteBusy) return;
     const email = user?.email?.trim();
     if (!email) {
       toast.error('No email on this account.');
@@ -469,6 +488,8 @@ export default function Profile() {
   };
 
   const saveHomePin = async (next) => {
+    if (pinBusy) return;
+    const previous = homePin;
     setHomePin(next);
     setPinBusy(true);
     try {
@@ -477,6 +498,7 @@ export default function Profile() {
       await refreshUser();
       toast.success(next ? 'Home pin saved.' : 'Home pin cleared.');
     } catch (err) {
+      setHomePin(previous);
       toast.error(err.message || 'Could not save home pin.');
     } finally {
       setPinBusy(false);
@@ -484,6 +506,7 @@ export default function Profile() {
   };
 
   const handlePatrollerRequest = async (withdraw) => {
+    if (patrollerRequestBusy) return;
     setPatrollerRequestBusy(true);
     try {
       const { error } = withdraw
@@ -510,6 +533,7 @@ export default function Profile() {
   };
 
   const handleSaveProfile = async () => {
+    if (loading) return;
     const digits = String(form.phone || '').replace(/\D/g, '');
     if (digits.length < 10) {
       toast.error('Enter a valid phone number (at least 10 digits).');
@@ -592,7 +616,7 @@ export default function Profile() {
   };
 
   const handleSaveSecurityMembership = async () => {
-    if (!user?.id) return;
+    if (!user?.id || membershipBusy) return;
     if (!securityMembershipForm.security_company_id) {
       toast.error('Select your security company first.');
       return;
@@ -615,7 +639,7 @@ export default function Profile() {
   };
 
   const handleWithdrawMembership = async () => {
-    if (!securityMembershipRow?.id) return;
+    if (!securityMembershipRow?.id || membershipBusy) return;
     if (!window.confirm('Withdraw this pending company claim?')) return;
     setMembershipBusy(true);
     try {
@@ -634,6 +658,7 @@ export default function Profile() {
   };
 
   const handleTransferMembership = async () => {
+    if (membershipBusy) return;
     if (!transferForm.security_company_id) {
       toast.error('Select the company you are moving to.');
       return;
@@ -801,7 +826,7 @@ export default function Profile() {
                       ? `${row.actor_name} · ${row.actor_role?.replace(/_/g, ' ') || 'staff'}`
                       : `Vouch from ${row.actor_name}`}
                     {row.created_at
-                      ? ` · ${new Date(row.created_at).toLocaleDateString()}`
+                      ? ` · ${formatProfileDate(row.created_at)}`
                       : ''}
                   </li>
                 ))}
@@ -879,7 +904,7 @@ export default function Profile() {
                 <ReactCrop
                   crop={crop}
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
-                  onComplete={(c) => setCompletedCrop(c)}
+                  onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)}
                   aspect={1}
                   circularCrop
                 >
@@ -895,20 +920,21 @@ export default function Profile() {
                 <button
                   onClick={() => {
                     setShowCropModal(false);
-                    URL.revokeObjectURL(imagePreviewUrl);
-                    setSelectedImage(null);
+                    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
                     setImagePreviewUrl(null);
+                    setCompletedCrop(null);
                   }}
-                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                  disabled={uploadingAvatar}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleCropConfirm}
-                  disabled={!completedCrop}
+                  disabled={!completedCrop || uploadingAvatar}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                 >
-                  Upload
+                  {uploadingAvatar ? 'Uploading…' : 'Upload'}
                 </button>
               </div>
             </div>
@@ -1207,7 +1233,7 @@ export default function Profile() {
               <ul className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
                 {membershipEvents.slice(0, 8).map((event) => (
                   <li key={event.id}>
-                    {event.created_at ? new Date(event.created_at).toLocaleDateString() : ''} ·{' '}
+                    {event.created_at ? formatProfileDate(event.created_at) : ''} ·{' '}
                     {event.event_type === 'transferred'
                       ? `Transferred ${event.from_company_name || '—'} → ${event.to_company_name || '—'}`
                       : `${event.event_type}${event.to_company_name ? ` · ${event.to_company_name}` : event.from_company_name ? ` · ${event.from_company_name}` : ''}`}

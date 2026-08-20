@@ -1,5 +1,5 @@
 // src/pages/AdminDashboard.jsx
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
@@ -31,6 +31,8 @@ import { DEFAULT_PATROL_ZONE, displayPatrolZone, displayWatchAreaName } from '..
 import { adaptivePollIntervalMs, subscribeDataBudgetHints } from '../utils/dataSaverProfile';
 import { useActiveOrganization } from '../auth/useActiveOrganization';
 import { useScopedOrganization } from '../utils/organizationScope';
+import { periodStartDate, logOverlapsSince, watchDayStamp, addCalendarDays, parsePatrolTime, durationMinutesFromLog } from '../utils/watchTime';
+import { fetchAllQueryPages } from '../utils/fetchPagedRows';
 import AreaContextBar from '../components/layout/AreaContextBar';
 import AdminToolsMenu from '../components/admin/AdminToolsMenu';
 import { countPendingPatrollerRequests } from '../utils/residentVerification';
@@ -130,12 +132,26 @@ export default function AdminDashboard() {
   const [confirmEnd, setConfirmEnd] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [patrolPhotoPreview, setPatrolPhotoPreview] = useState(null);
-  const todayLocal = useMemo(() => {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+  const [forceEndBusyId, setForceEndBusyId] = useState(null);
+  const [slotDeleteBusy, setSlotDeleteBusy] = useState(false);
+  const activePatrolsGen = useRef(0);
+  const recentActivityGen = useRef(0);
+  const [todayLocal, setTodayLocal] = useState(() => watchDayStamp());
+
+  useEffect(() => {
+    const syncDay = () => {
+      const next = watchDayStamp();
+      setTodayLocal((prev) => (prev === next ? prev : next));
+    };
+    const id = window.setInterval(syncDay, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') syncDay();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   const isFeedbackReviewer = canReviewFeedback(user?.role);
@@ -151,11 +167,9 @@ export default function AdminDashboard() {
   // useSupabaseQuery hooks
   // ---------------------------------------------------------------------------
   const fetchPatrolLogs = useCallback(async () => {
-    const { data, error } = await scope(
-      supabase.from('patrol_logs').select('*')
-    ).order('start_time', { ascending: false });
-    if (error) throw error;
-    return data || [];
+    return fetchAllQueryPages(() =>
+      scope(supabase.from('patrol_logs').select('*')).order('start_time', { ascending: false, nullsFirst: false })
+    );
   }, [scope]);
 
   const fetchPatrolSlots = useCallback(async () => {
@@ -188,7 +202,7 @@ export default function AdminDashboard() {
   const { data: patrolLogs = [], loading: logsLoading, error: logsError, refetch: refetchLogs } =
     useSupabaseQuery(fetchPatrolLogs, [activeOrganizationId]);
   const { data: patrolSlots = [], loading: slotsLoading, error: slotsError, refetch: refetchSlots } =
-    useSupabaseQuery(fetchPatrolSlots, [activeOrganizationId]);
+    useSupabaseQuery(fetchPatrolSlots, [activeOrganizationId, todayLocal]);
   const { data: pendingCount = 0, loading: pendingLoading, error: pendingError, refetch: refetchPending } =
     useSupabaseQuery(fetchPendingCount, [activeOrganizationId]);
   const {
@@ -247,17 +261,20 @@ export default function AdminDashboard() {
   // ---------------------------------------------------------------------------
   const fetchActivePatrols = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
+    const gen = ++activePatrolsGen.current;
     if (!silent) setActivePatrolsLoading(true);
     try {
       const { data, error } = await scope(supabase.from('active_patrols').select('*'));
       if (error) throw error;
       const enriched = await enrichPatrolRowsWithAvatars(supabase, data || []);
+      if (gen !== activePatrolsGen.current) return;
       setActivePatrols(enriched);
       setActivePatrolsError(null);
     } catch (err) {
+      if (gen !== activePatrolsGen.current) return;
       setActivePatrolsError(err.message);
     } finally {
-      if (!silent) setActivePatrolsLoading(false);
+      if (gen === activePatrolsGen.current && !silent) setActivePatrolsLoading(false);
     }
   }, [scope]);
 
@@ -297,6 +314,7 @@ export default function AdminDashboard() {
   // Recent activity (last 24h)
   // ---------------------------------------------------------------------------
   const fetchRecentActivity = useCallback(async () => {
+    const gen = ++recentActivityGen.current;
     setRecentActivityLoading(true);
     setRecentActivityError(null);
     try {
@@ -309,15 +327,21 @@ export default function AdminDashboard() {
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
+      if (gen !== recentActivityGen.current) return;
       const combined = [
         ...(active || []).map(p => ({ ...p, type: 'active', end_time: null, duration_minutes: null })),
         ...(completed || []).map(p => ({ ...p, type: 'completed' })),
-      ].sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+      ].sort((a, b) => {
+        const tb = parsePatrolTime(b.start_time)?.getTime() ?? 0;
+        const ta = parsePatrolTime(a.start_time)?.getTime() ?? 0;
+        return tb - ta;
+      });
       setRecentActivity(combined);
     } catch (err) {
+      if (gen !== recentActivityGen.current) return;
       setRecentActivityError(err.message);
     } finally {
-      setRecentActivityLoading(false);
+      if (gen === recentActivityGen.current) setRecentActivityLoading(false);
     }
   }, [scope]);
 
@@ -351,10 +375,10 @@ export default function AdminDashboard() {
   const stats = useMemo(() => {
     const logs = patrolLogs ?? [];
     const now = new Date();
-    const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    const weekStart = periodStartDate('week', now);
 
-    const thisWeek = logs.filter(l => new Date(l.start_time) >= weekAgo);
-    const totalMinutes = logs.reduce((s, l) => s + (l.duration_minutes || 0), 0);
+    const thisWeek = logs.filter(l => logOverlapsSince(l, weekStart, now));
+    const totalMinutes = logs.reduce((s, l) => s + durationMinutesFromLog(l), 0);
     const avgMinutes = logs.length ? Math.round(totalMinutes / logs.length) : 0;
 
     // Group by user_id when present so two volunteers with the same first name don't merge
@@ -365,38 +389,45 @@ export default function AdminDashboard() {
           : `name:${(log.user_name || 'unknown').toString()}`;
       const displayName = (log.user_name || log.user_id || 'Unknown').toString().trim();
       if (!acc[id]) acc[id] = { id, displayName, totalMinutes: 0, patrols: 0 };
-      acc[id].totalMinutes += Number(log.duration_minutes) || 0;
+      acc[id].totalMinutes += durationMinutesFromLog(log);
       acc[id].patrols += 1;
       return acc;
     }, {});
     const volunteerList = Object.values(byVolunteer).sort((a, b) => b.totalMinutes - a.totalMinutes);
 
-    const thirtyAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const thirtyAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const byDay = days.map(d => ({ day: d, patrols: 0, hours: 0 }));
-    logs.filter(l => new Date(l.start_time) >= thirtyAgo).forEach(l => {
-      const d = new Date(l.start_time).getDay();
-      byDay[d].patrols += 1;
-      byDay[d].hours += (l.duration_minutes || 0) / 60;
+    logs.forEach(l => {
+      const started = parsePatrolTime(l.start_time);
+      if (!started || started < thirtyAgo) return;
+      const stamp = watchDayStamp(started);
+      if (!stamp) return;
+      const [y, m, d] = stamp.split('-').map(Number);
+      const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+      byDay[dow].patrols += 1;
+      byDay[dow].hours += durationMinutesFromLog(l) / 60;
     });
     byDay.forEach(d => { d.hours = Math.round(d.hours * 10) / 10; });
 
+    const todayStamp = watchDayStamp(now);
     const last7 = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (6 - i));
+      const stamp = addCalendarDays(todayStamp, i - 6);
+      const [y, m, d] = stamp.split('-').map(Number);
+      const labelDate = new Date(Date.UTC(y, m - 1, d, 12));
       return {
-        date: d.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric' }),
-        dateStr: d.toISOString().slice(0, 10),
+        date: labelDate.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', timeZone: 'UTC' }),
+        dateStr: stamp,
         patrols: 0,
         hours: 0,
       };
     });
     logs.forEach(l => {
-      const ds = new Date(l.start_time).toISOString().slice(0, 10);
+      const ds = watchDayStamp(l.start_time);
       const entry = last7.find(d => d.dateStr === ds);
       if (entry) {
         entry.patrols += 1;
-        entry.hours += (l.duration_minutes || 0) / 60;
+        entry.hours += durationMinutesFromLog(l) / 60;
       }
     });
     last7.forEach(d => { d.hours = Math.round(d.hours * 10) / 10; });
@@ -425,9 +456,14 @@ export default function AdminDashboard() {
   // Force end patrol
   // ---------------------------------------------------------------------------
   const handleForceEnd = async (patrol) => {
+    if (!patrol?.user_id || forceEndBusyId) return;
+    setForceEndBusyId(patrol.user_id);
     try {
       const end = new Date();
-      const durationMinutes = Math.floor((end - new Date(patrol.start_time)) / 60000);
+      const started = parsePatrolTime(patrol.start_time);
+      const durationMinutes = started
+        ? Math.max(1, Math.floor((end.getTime() - started.getTime()) / 60000))
+        : 1;
       const { error: insertError } = await supabase.from('patrol_logs').insert({
         user_id: patrol.user_id,
         user_name: patrol.user_name,
@@ -440,17 +476,21 @@ export default function AdminDashboard() {
         vehicle_make_model: patrol.vehicle_make_model || patrol.car_type || null,
         vehicle_reg: patrol.vehicle_reg || patrol.reg_number || null,
         vehicle_color: patrol.vehicle_color || 'gray',
-        organization_id: activeOrganizationId || patrol.organization_id || null,
+        organization_id: activeOrganizationId || patrol.organization_id || user?.organizationId || null,
       });
       if (insertError) throw insertError;
       const { error: deleteError } = await supabase.from('active_patrols').delete().eq('user_id', patrol.user_id);
       if (deleteError) throw deleteError;
       setActivePatrols(prev => prev.filter(p => p.user_id !== patrol.user_id));
       setConfirmEnd(null);
+      void refetchLogs();
+      void fetchRecentActivity();
       toast.success(`Patrol for ${patrol.user_name} ended.`);
     } catch (err) {
       console.error('Force-end failed:', err);
       toast.error('Failed to end patrol.');
+    } finally {
+      setForceEndBusyId(null);
     }
   };
 
@@ -458,6 +498,8 @@ export default function AdminDashboard() {
   // Delete slot
   // ---------------------------------------------------------------------------
   const handleDeleteSlot = async (slotId) => {
+    if (!slotId || slotDeleteBusy || forceEndBusyId) return;
+    setSlotDeleteBusy(true);
     try {
       const { error } = await supabase.rpc('admin_delete_patrol_slot', {
         p_slot_id: slotId,
@@ -468,6 +510,8 @@ export default function AdminDashboard() {
       toast.success('Slot deleted.');
     } catch (err) {
       toast.error("Delete failed: " + err.message);
+    } finally {
+      setSlotDeleteBusy(false);
     }
   };
 
@@ -475,6 +519,7 @@ export default function AdminDashboard() {
   // Export
   // ---------------------------------------------------------------------------
   const exportToExcel = async () => {
+    if (exporting) return;
     setExporting(true);
     try {
       const workbook = new ExcelJS.Workbook();
@@ -491,12 +536,14 @@ export default function AdminDashboard() {
       worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
 
       (patrolLogs || []).forEach(log => {
+        const start = parsePatrolTime(log.start_time);
+        const end = parsePatrolTime(log.end_time);
         worksheet.addRow({
           volunteer: log.user_name || '—',
-          date:      new Date(log.start_time).toLocaleDateString(),
-          startTime: new Date(log.start_time).toLocaleTimeString(),
-          endTime:   log.end_time ? new Date(log.end_time).toLocaleTimeString() : '—',
-          duration:  log.duration_minutes || 0,
+          date:      start ? start.toLocaleDateString('en-ZA') : '—',
+          startTime: start ? start.toLocaleTimeString('en-ZA') : '—',
+          endTime:   end ? end.toLocaleTimeString('en-ZA') : '—',
+          duration:  durationMinutesFromLog(log) || 0,
           zone:      displayPatrolZone(log.zone) || '—',
         });
       });
@@ -506,7 +553,7 @@ export default function AdminDashboard() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `patrol_logs_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.download = `patrol_logs_${watchDayStamp()}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -639,8 +686,10 @@ export default function AdminDashboard() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {activePatrols.map((p) => {
-                  const started = new Date(p.start_time);
-                  const elapsedSec = Math.floor((Date.now() - started) / 1000);
+                  const started = parsePatrolTime(p.start_time);
+                  const elapsedSec = started
+                    ? Math.max(0, Math.floor((Date.now() - started.getTime()) / 1000))
+                    : 0;
                   const vehicleType = normalizeVehicleType(p.vehicle_type, p.car_type);
                   const vehicleColor = p.vehicle_color || 'gray';
                   const vehicleDisplay = getVehicleDisplayText(
@@ -686,7 +735,7 @@ export default function AdminDashboard() {
                         ) : null}
                         <div className="flex items-center gap-1.5 min-w-0">
                           <PatrolInfoIcon icon={FaClock} colorKey={vehicleColor} />
-                          <span>Started: {started.toLocaleTimeString()}</span>
+                          <span>Started: {started ? started.toLocaleTimeString('en-ZA') : '—'}</span>
                         </div>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <PatrolInfoIcon icon={FaStopwatch} colorKey={vehicleColor} />
@@ -932,8 +981,8 @@ export default function AdminDashboard() {
                     return (
                       <tr key={rowKey} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
                         <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900 dark:text-white">{item.user_name}</td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400">{new Date(item.start_time).toLocaleString()}</td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.end_time ? new Date(item.end_time).toLocaleString() : '—'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400">{parsePatrolTime(item.start_time)?.toLocaleString('en-ZA') || '—'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.end_time ? (parsePatrolTime(item.end_time)?.toLocaleString('en-ZA') || '—') : '—'}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400">{item.duration_minutes ? formatDuration(item.duration_minutes) : item.type === 'active' ? 'Active' : '—'}</td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${item.type === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>

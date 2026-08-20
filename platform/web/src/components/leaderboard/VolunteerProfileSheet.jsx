@@ -5,6 +5,7 @@ import { initialsFromName } from "../../utils/residentVerification";
 import { buildLeaderboardFunFacts } from "../../utils/leaderboardFunFacts";
 import { evaluateLeaderboardBadges } from "../../utils/leaderboardBadges";
 import { buildVolunteerStats, logsForVolunteer } from "../../utils/volunteerStats";
+import { periodStartDate, logOverlapsSince, durationMinutesFromLog } from "../../utils/watchTime";
 import { summarizePatrolWeather } from "../../utils/patrolWeather";
 import { fetchPatrolLocationPoints, fetchPatrolRouteRows } from "../../utils/patrolHistoryRoute";
 import FunFactsPanel from "./FunFactsPanel";
@@ -24,6 +25,7 @@ function formatHoursMinutes(totalMinutes) {
 export default function VolunteerProfileSheet({
   volunteer,
   allLogs,
+  periodId = "all",
   allTimeRank,
   avatarUrl,
   vehicle = null,
@@ -41,6 +43,12 @@ export default function VolunteerProfileSheet({
     () => logsForVolunteer(allLogs, volunteer),
     [allLogs, volunteer]
   );
+  const periodPatrols = useMemo(() => {
+    const start = periodStartDate(periodId);
+    if (!start) return patrols;
+    return patrols.filter((log) => logOverlapsSince(log, start));
+  }, [patrols, periodId]);
+  const periodMinutes = periodPatrols.reduce((sum, log) => sum + durationMinutesFromLog(log), 0);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,8 +160,13 @@ export default function VolunteerProfileSheet({
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {allTimeRank ? `All-time rank #${allTimeRank}` : "Volunteer"}
-                {stats ? ` · ${formatHoursMinutes(stats.totalMinutes)} · ${stats.totalPatrols} patrols` : ""}
+                {stats ? ` · ${formatHoursMinutes(stats.totalMinutes)} all time · ${stats.totalPatrols} patrols` : ""}
               </p>
+              {periodId !== "all" && (
+                <p className="text-sm font-medium text-teal-700 dark:text-teal-300 mt-0.5">
+                  {periodId === "week" ? "This week" : "This month"}: {formatHoursMinutes(periodMinutes)} · {periodPatrols.length} patrol{periodPatrols.length === 1 ? "" : "s"}
+                </p>
+              )}
             </div>
           </div>
           <button
@@ -224,6 +237,7 @@ export default function VolunteerProfileSheet({
                 routeRows={routeRows}
                 locationPoints={locationPoints}
                 priceZarPerLitre={petrolPrice}
+                defaultPeriod={periodId}
                 isSelf={isSelf}
                 name={volunteer.name}
                 userId={volunteer.userId}

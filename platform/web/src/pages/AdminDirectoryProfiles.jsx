@@ -12,6 +12,7 @@ import { filterUsersForOrganization } from "../utils/organizationUsers";
 import { isResidentAppRole, normalizeAppRole } from "../auth/roleMatrix";
 import AreaContextBar from "../components/layout/AreaContextBar";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
+import { formatWatchDate, parsePatrolTime } from "../utils/watchTime";
 
 const THEMES = {
   patroller: {
@@ -57,15 +58,7 @@ function initialsFromRow(row) {
 
 function formatDateJoined(iso) {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
+  return formatWatchDate(iso) || "—";
 }
 
 function isVerifiedRow(user, profile) {
@@ -273,8 +266,8 @@ export default function AdminDirectoryProfiles({ variant = "patroller" }) {
     const tie = (a, b) => String(a.id).localeCompare(String(b.id));
     list.sort((a, b) => {
       if (sortBy === "joined") {
-        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        const ta = a.created_at ? parsePatrolTime(a.created_at)?.getTime() || 0 : 0;
+        const tb = b.created_at ? parsePatrolTime(b.created_at)?.getTime() || 0 : 0;
         if (tb !== ta) return tb - ta;
         return tie(a, b);
       }

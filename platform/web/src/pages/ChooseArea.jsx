@@ -14,6 +14,7 @@ export default function ChooseArea() {
     loading,
   } = useActiveOrganization();
   const [cityName, setCityName] = useState(DEFAULT_CITY_FULL_NAME);
+  const [choosingId, setChoosingId] = useState(null);
 
   useEffect(() => {
     let ignore = false;
@@ -26,8 +27,14 @@ export default function ChooseArea() {
   }, []);
 
   const handleChoose = async (organizationId) => {
-    await setActiveOrganizationId(organizationId);
-    navigate("/dashboard", { replace: true });
+    if (!organizationId || choosingId) return;
+    setChoosingId(organizationId);
+    try {
+      await setActiveOrganizationId(organizationId);
+      navigate("/dashboard", { replace: true });
+    } finally {
+      setChoosingId(null);
+    }
   };
 
   return (
@@ -64,7 +71,8 @@ export default function ChooseArea() {
                       key={org.id}
                       type="button"
                       onClick={() => void handleChoose(org.id)}
-                      className={`text-left rounded-xl border p-4 transition ${
+                      disabled={Boolean(choosingId)}
+                      className={`text-left rounded-xl border p-4 transition disabled:opacity-60 ${
                         selected
                           ? "border-teal-500 bg-teal-50 dark:bg-teal-900/20"
                           : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-teal-500 hover:shadow-sm"

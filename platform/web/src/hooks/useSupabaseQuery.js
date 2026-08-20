@@ -30,6 +30,7 @@ export function useSupabaseQuery(queryFn, deps = [], options = {}) {
   // isMounted tracks whether the hook is still active — initialised here (not
   // inside the effect) so concurrent async calls don't reset each other's flag
   const isMounted = useRef(true)
+  const fetchGen = useRef(0)
   useEffect(() => {
     isMounted.current = true
     return () => {
@@ -38,15 +39,16 @@ export function useSupabaseQuery(queryFn, deps = [], options = {}) {
   }, [])
 
   const fetchData = useCallback(async () => {
+    const gen = ++fetchGen.current
     if (!enabled) {
-      if (isMounted.current) {
+      if (isMounted.current && gen === fetchGen.current) {
         setLoading(false)
       }
       return
     }
 
     if (!user) {
-      if (isMounted.current) {
+      if (isMounted.current && gen === fetchGen.current) {
         setData(undefined)
         setError('Not authenticated')
         setLoading(false)
@@ -54,25 +56,25 @@ export function useSupabaseQuery(queryFn, deps = [], options = {}) {
       return
     }
 
-    if (isMounted.current) {
+    if (isMounted.current && gen === fetchGen.current) {
       setLoading(true)
       setError(null)
     }
 
     try {
       const result = await queryFnRef.current()
-      if (isMounted.current) {
+      if (isMounted.current && gen === fetchGen.current) {
         setData(result)
         setError(null)
       }
     } catch (err) {
-      if (isMounted.current) {
+      if (isMounted.current && gen === fetchGen.current) {
         console.error('useSupabaseQuery error:', err)
         setError(err.message || 'An error occurred')
         setData(undefined)
       }
     } finally {
-      if (isMounted.current) {
+      if (isMounted.current && gen === fetchGen.current) {
         setLoading(false)
       }
     }

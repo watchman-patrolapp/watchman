@@ -1,9 +1,9 @@
-import { format } from 'date-fns';
 import { formatSectionRoleLabel } from '../../constants/incidentSectionUpdates';
+import { formatWatchDateTime } from '../../utils/watchTime';
 
 /** Amber “official update” card — distinct from primary UI teal (section panel + evidence). */
 export default function IncidentUpdateCard({ row, sectionLabel }) {
-  const when = row.created_at ? new Date(row.created_at) : null;
+  const when = formatWatchDateTime(row.created_at);
   const name = row.author_name || 'Member';
   const role = formatSectionRoleLabel(row.author_role);
 
@@ -19,11 +19,9 @@ export default function IncidentUpdateCard({ row, sectionLabel }) {
             <span className="font-medium text-amber-900 dark:text-amber-200">{sectionLabel}</span>
           </>
         ) : null}
-        {when && (
-          <span className="text-amber-900/85 dark:text-amber-200/90">
-            {format(when, 'dd MMM yyyy HH:mm')}
-          </span>
-        )}
+        {when ? (
+          <span className="text-amber-900/85 dark:text-amber-200/90">{when}</span>
+        ) : null}
         <span className="text-amber-950 dark:text-amber-100">·</span>
         <span className="font-medium text-amber-950 dark:text-amber-100">{name}</span>
         <span className="inline-flex items-center rounded-full bg-amber-200/90 dark:bg-amber-800/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:text-amber-100">

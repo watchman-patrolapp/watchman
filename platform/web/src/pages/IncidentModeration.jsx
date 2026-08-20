@@ -20,6 +20,7 @@ import StructuredEvidenceList, { normalizeMediaUrls } from "../components/eviden
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { belongsToActiveOrganization, useScopedOrganization } from "../utils/organizationScope";
+import { parsePatrolTime } from "../utils/watchTime";
 import { canPublishCityHub } from "../auth/roleMatrix";
 import ShareToCityHubSheet from "../components/incident/ShareToCityHubSheet";
 
@@ -36,6 +37,7 @@ async function createResidentStatusEvents({
   actorUserId,
   resolvedStatus,
   rejectionReason = null,
+  organizationId = null,
 }) {
   if (!incidentId || !reporterId || !actorUserId) return;
   const resolvedTitle =
@@ -51,6 +53,7 @@ async function createResidentStatusEvents({
         ? `Your report was reviewed and closed as rejected.${rejectionReason ? ` Reason: ${rejectionReason}` : ""}`
         : `Status changed to ${resolvedStatus}.`;
 
+  const orgFields = organizationId ? { organization_id: organizationId } : {};
   const payload = [
     {
       incident_id: incidentId,
@@ -59,6 +62,7 @@ async function createResidentStatusEvents({
       title: "Report assigned",
       details: "A moderator has taken ownership of your report.",
       actor_user_id: actorUserId,
+      ...orgFields,
     },
     {
       incident_id: incidentId,
@@ -67,6 +71,7 @@ async function createResidentStatusEvents({
       title: resolvedTitle,
       details: resolvedDetails,
       actor_user_id: actorUserId,
+      ...orgFields,
     },
   ];
 
@@ -96,7 +101,9 @@ function Badge({ children, variant = 'default' }) {
 
 function ModerationCard({ incident, onApprove, onReject, processing }) {
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleString('en-ZA', {
+    const d = parsePatrolTime(dateStr);
+    if (!d) return '—';
+    return d.toLocaleString('en-ZA', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -238,6 +245,7 @@ export default function IncidentModeration() {
   const processedIds = useRef(new Set());
   const lastFetchTime = useRef(0);
   const realtimeChannel = useRef(null);
+  const loadGen = useRef(0);
 
   // ---------------------------------------------------------------------------
   // Data Fetching with deduplication
@@ -252,6 +260,7 @@ export default function IncidentModeration() {
       return;
     }
     
+    const gen = ++loadGen.current;
     if (!silent) setLoading(true);
     setError(null);
     
@@ -264,6 +273,7 @@ export default function IncidentModeration() {
         .order('submitted_at', { ascending: false });
 
       if (fetchError) throw fetchError;
+      if (gen !== loadGen.current) return;
       
       // Filter out locally processed IDs (prevents re-appearing during cache lag)
       const filtered = (data || []).filter(i => !processedIds.current.has(i.id));
@@ -276,6 +286,7 @@ export default function IncidentModeration() {
           .select("*")
           .in("incident_id", ids)
           .order("created_at", { ascending: true });
+        if (gen !== loadGen.current) return;
         if (!evErr && evRows) {
           for (const row of evRows) {
             if (!evidenceMap[row.incident_id]) evidenceMap[row.incident_id] = [];
@@ -292,11 +303,12 @@ export default function IncidentModeration() {
       );
       lastFetchTime.current = now;
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error("Error fetching incidents:", err);
       setError(err.message);
       if (!silent) toast.error("Failed to load pending incidents");
     } finally {
-      if (!silent) setLoading(false);
+      if (gen === loadGen.current && !silent) setLoading(false);
     }
   }, [scope]);
 
@@ -342,6 +354,9 @@ export default function IncidentModeration() {
               
             case 'INSERT':
               if (!belongsToActiveOrganization(payload.new, activeOrganizationId, includeUnscoped)) {
+                break;
+              }
+              if (/sos/i.test(String(payload.new.type || ''))) {
                 break;
               }
               // Only add if not locally processed — load evidence rows for this incident
@@ -410,6 +425,7 @@ export default function IncidentModeration() {
             approved_at: new Date().toISOString()
           })
           .eq('id', id)
+          .eq('status', 'pending')
           .select();
 
         if (updateError) throw updateError;
@@ -419,9 +435,10 @@ export default function IncidentModeration() {
 
       await createResidentStatusEvents({
         incidentId: id,
-        reporterId: selected?.reporter_id,
+        reporterId: selected?.reporter_id || selected?.submitted_by,
         actorUserId: user.id,
         resolvedStatus: "approved",
+        organizationId: selected?.organization_id || activeOrganizationId,
       });
 
       toast.success(
@@ -449,12 +466,14 @@ export default function IncidentModeration() {
   };
 
   const handleReject = async (id) => {
-    const reason = prompt("Reason for rejection (optional):")?.trim();
-    
-    // User cancelled
-    if (reason === null) return;
-    
+    if (processing) return;
+    const reasonRaw = prompt("Reason for rejection (optional):");
+    // Cancel returns null; empty string / whitespace means reject with no reason.
+    if (reasonRaw === null) return;
+    const reason = String(reasonRaw).trim() || null;
+
     const selected = incidents.find((row) => row.id === id) || null;
+    const reporterId = selected?.reporter_id || selected?.submitted_by || null;
 
     setProcessing(`reject-${id}`);
     
@@ -464,19 +483,35 @@ export default function IncidentModeration() {
     
     try {
       const { error: rpcError } = await supabase.rpc('reject_incident', {
-        p_incident_id: id,           // ✅ Match SQL parameter name
-        p_admin_id: user.id,         // ✅ Match SQL parameter name
-        p_rejection_reason: reason || null  // ✅ Match SQL parameter name
+        p_incident_id: id,
+        p_admin_id: user.id,
+        p_rejection_reason: reason,
       });
 
-      if (rpcError) throw rpcError;
+      if (rpcError?.message?.includes('function') || rpcError?.code === '42883') {
+        const { error: updateError } = await supabase
+          .from('incidents')
+          .update({
+            status: 'rejected',
+            rejected_by: user.id,
+            rejected_at: new Date().toISOString(),
+            rejection_reason: reason,
+          })
+          .eq('id', id)
+          .eq('status', 'pending')
+          .select();
+        if (updateError) throw updateError;
+      } else if (rpcError) {
+        throw rpcError;
+      }
 
       await createResidentStatusEvents({
         incidentId: id,
-        reporterId: selected?.reporter_id,
+        reporterId,
         actorUserId: user.id,
         resolvedStatus: "rejected",
-        rejectionReason: reason || null,
+        rejectionReason: reason,
+        organizationId: selected?.organization_id || activeOrganizationId,
       });
 
       toast.success("Incident rejected and archived");

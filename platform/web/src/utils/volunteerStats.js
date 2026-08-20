@@ -4,6 +4,7 @@
  */
 
 import { routeRowDistanceKm } from "./patrolHistoryRoute.js";
+import { periodStartDate, logOverlapsSince, watchDayStamp, parsePatrolTime, durationMinutesFromLog, watchZonedParts } from "./watchTime.js";
 
 export const TIME_RANGES = {
   night: { label: "Night Owl", hours: [0, 1, 2, 3, 4, 5], icon: "🌙" },
@@ -27,9 +28,7 @@ export const SA_FIXED_HOLIDAYS = [
 ];
 
 export function localDayStamp(date) {
-  const d = date instanceof Date ? date : new Date(date);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return watchDayStamp(date);
 }
 
 function zoneKey(zone) {
@@ -37,7 +36,9 @@ function zoneKey(zone) {
 }
 
 function isoWeekKey(date) {
-  const d = new Date(date);
+  const parsed = parsePatrolTime(date) || (date instanceof Date ? date : null);
+  if (!parsed) return "";
+  const d = new Date(parsed.getTime());
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
   const week1 = new Date(d.getFullYear(), 0, 4);
@@ -78,8 +79,8 @@ function median(values) {
 }
 
 function isNightishTimestamp(iso) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
+  const d = parsePatrolTime(iso);
+  if (!d) return false;
   const hour = d.getHours();
   return hour >= 18 || hour <= 5;
 }
@@ -89,7 +90,8 @@ function kmSinceDaysAgo(rows, daysAgo) {
   cutoff.setDate(cutoff.getDate() - daysAgo);
   return rows.reduce((sum, row) => {
     if (!row?.created_at) return sum;
-    if (new Date(row.created_at) < cutoff) return sum;
+    const created = parsePatrolTime(row.created_at);
+    if (!created || created < cutoff) return sum;
     return sum + routeRowDistanceKm(row);
   }, 0);
 }
@@ -127,12 +129,12 @@ function holidayIdForDate(date) {
 export function buildVolunteerStats(logs, routeRows = [], opts = {}) {
   if (!Array.isArray(logs) || logs.length === 0) return null;
 
-  const totalMinutes = logs.reduce((sum, log) => sum + (log.duration_minutes || 0), 0);
+  const durations = logs.map((log) => durationMinutesFromLog(log));
+  const totalMinutes = durations.reduce((sum, n) => sum + n, 0);
   const totalPatrols = logs.length;
-  const longestPatrolMinutes = Math.max(0, ...logs.map((log) => Number(log.duration_minutes) || 0));
-  const shortestPatrolMinutes = Math.min(
-    ...logs.map((log) => Number(log.duration_minutes) || 0).filter((n) => n > 0)
-  );
+  const longestPatrolMinutes = Math.max(0, ...durations);
+  const positiveDurations = durations.filter((n) => n > 0);
+  const shortestPatrolMinutes = positiveDurations.length ? Math.min(...positiveDurations) : 0;
 
   const patrolDates = [...new Set(logs.map((log) => localDayStamp(log.start_time)).filter(Boolean))].sort();
   const currentStreak = currentStreakFromDates(patrolDates);
@@ -156,17 +158,20 @@ export function buildVolunteerStats(logs, routeRows = [], opts = {}) {
   let longPatrols2h = 0;
   let longPatrols3h = 0;
 
-  logs.forEach((log) => {
-    const start = new Date(log.start_time);
-    if (Number.isNaN(start.getTime())) return;
-    const hour = start.getHours();
+  const weekdayIndex = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+  logs.forEach((log, idx) => {
+    const parts = watchZonedParts(log.start_time);
+    if (!parts) return;
+    const hour = parts.hour;
+    const dow = weekdayIndex[parts.weekday] ?? 0;
     hourStarts[hour] += 1;
-    dowCounts[start.getDay()] += 1;
-    seasonCounts[saSeason(start.getMonth())] += 1;
-    const hid = holidayIdForDate(start);
+    dowCounts[dow] += 1;
+    seasonCounts[saSeason(parts.month - 1)] += 1;
+    const hid = SA_FIXED_HOLIDAYS.find((h) => h.month === parts.month && h.day === parts.day)?.id || null;
     if (hid) holidayCounts[hid] += 1;
-    if (start.getDay() === 5 && start.getDate() === 13) friday13thCount += 1;
-    if (start.getMonth() === 1 && start.getDate() === 29) leapDayCount += 1;
+    if (dow === 5 && parts.day === 13) friday13thCount += 1;
+    if (parts.month === 2 && parts.day === 29) leapDayCount += 1;
     if (hour < 6) startsBefore6 += 1;
     if (hour <= 4) startsGraveyard += 1;
     if (hour >= 5 && hour <= 7) startsCoffee += 1;
@@ -178,17 +183,17 @@ export function buildVolunteerStats(logs, routeRows = [], opts = {}) {
       if (range.hours.includes(hour)) timeDistribution[period] += 1;
     });
 
-    const mins = Number(log.duration_minutes) || 0;
+    const mins = durations[idx] || 0;
     if (mins >= 120) longPatrols2h += 1;
     if (mins >= 180) longPatrols3h += 1;
 
-    const end = log.end_time ? new Date(log.end_time) : null;
-    if (end && !Number.isNaN(end.getTime()) && end.getDate() !== start.getDate()) {
+    const startStamp = localDayStamp(log.start_time);
+    const endStamp = localDayStamp(log.end_time);
+    if (startStamp && endStamp && endStamp !== startStamp) {
       crossedMidnight += 1;
     }
 
-    const stamp = localDayStamp(start);
-    perDay.set(stamp, (perDay.get(stamp) || 0) + 1);
+    if (startStamp) perDay.set(startStamp, (perDay.get(startStamp) || 0) + 1);
   });
 
   const favoritePeriod = Object.entries(timeDistribution).sort((a, b) => b[1] - a[1])[0];
@@ -200,13 +205,11 @@ export function buildVolunteerStats(logs, routeRows = [], opts = {}) {
   const sameDayTriples = [...perDay.values()].filter((n) => n >= 3).length;
   const maxSameDay = Math.max(0, ...perDay.values());
 
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const patrolsThisWeek = logs.filter((log) => new Date(log.start_time) >= weekAgo).length;
+  const weekStart = periodStartDate("week");
+  const patrolsThisWeek = logs.filter((log) => logOverlapsSince(log, weekStart)).length;
 
-  const monthAgo = new Date();
-  monthAgo.setDate(monthAgo.getDate() - 30);
-  const patrolsThisMonth = logs.filter((log) => new Date(log.start_time) >= monthAgo).length;
+  const monthStart = periodStartDate("month");
+  const patrolsThisMonth = logs.filter((log) => logOverlapsSince(log, monthStart)).length;
 
   const weekKeys = [...new Set(logs.map((log) => isoWeekKey(log.start_time)).filter(Boolean))].sort();
   let consecutiveWeeks = 0;
@@ -251,20 +254,18 @@ export function buildVolunteerStats(logs, routeRows = [], opts = {}) {
   }
 
   const weeklyTrend = [];
-  const now = new Date();
+  const thisMonday = periodStartDate("week") || new Date();
   for (let i = 7; i >= 0; i--) {
-    const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - i * 7);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekStart = new Date(thisMonday.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
     const weekMinutes = logs
       .filter((log) => {
-        const logDate = new Date(log.start_time);
-        return logDate >= weekStart && logDate < weekEnd;
+        const logDate = parsePatrolTime(log.start_time);
+        return logDate && logDate >= weekStart && logDate < weekEnd;
       })
-      .reduce((sum, log) => sum + (log.duration_minutes || 0), 0);
+      .reduce((sum, log) => sum + durationMinutesFromLog(log), 0);
     weeklyTrend.push({
-      week: `W${8 - i}`,
+      week: i === 0 ? "Now" : `W${8 - i}`,
       hours: Math.round((weekMinutes / 60) * 10) / 10,
     });
   }
@@ -363,11 +364,11 @@ export function buildVolunteerStats(logs, routeRows = [], opts = {}) {
 
 export function logsForVolunteer(allLogs, volunteer) {
   if (!volunteer) return [];
-  if (volunteer.userId) {
-    return (allLogs || []).filter((log) => log.user_id === volunteer.userId);
-  }
-  if (volunteer.name) {
-    return (allLogs || []).filter((log) => log.user_name === volunteer.name);
-  }
-  return [];
+  const id = volunteer.userId;
+  const name = String(volunteer.name || "").trim().toLowerCase();
+  return (allLogs || []).filter((log) => {
+    if (id && log.user_id === id) return true;
+    if (log.user_id) return false;
+    return Boolean(name && String(log.user_name || "").trim().toLowerCase() === name);
+  });
 }

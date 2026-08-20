@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { FaBullhorn } from "react-icons/fa";
 import { useAuth } from "../auth/useAuth";
@@ -18,6 +18,7 @@ import {
   postAreaBroadcast,
   subscribeAreaBroadcasts,
 } from "../utils/areaBroadcasts";
+import { formatWatchDateTime } from "../utils/watchTime";
 import { useScopedOrganization } from "../utils/organizationScope";
 
 export default function AreaBroadcast() {
@@ -28,10 +29,13 @@ export default function AreaBroadcast() {
   const [body, setBody] = useState("");
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
+  const loadGen = useRef(0);
   const back = homeBackNav(user?.role);
 
   const load = async () => {
+    const gen = ++loadGen.current;
     const { data, error } = await listAreaBroadcasts(12);
+    if (gen !== loadGen.current) return;
     if (error && !isRpcNotFoundError(error)) {
       console.warn("broadcasts:", error.message);
       return;
@@ -41,9 +45,6 @@ export default function AreaBroadcast() {
 
   useEffect(() => {
     void load();
-  }, []);
-
-  useEffect(() => {
     const unsubscribe = subscribeAreaBroadcasts(activeOrganizationId, () => {
       void load();
     });
@@ -52,7 +53,7 @@ export default function AreaBroadcast() {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!allowed) return;
+    if (!allowed || busy) return;
     setBusy(true);
     try {
       const { data, error } = await postAreaBroadcast({ headline, body });
@@ -162,7 +163,7 @@ export default function AreaBroadcast() {
                 className="whitespace-pre-wrap rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               >
                 <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  {row.author_name} · {new Date(row.created_at).toLocaleString()}
+                  {row.author_name} · {formatWatchDateTime(row.created_at) || "—"}
                   {isPinnedAreaBroadcast(row)
                     ? ` · on Home until ${formatClockTime(noticePinnedUntil(row))} (${formatNoticeRemaining(noticePinnedUntil(row))})`
                     : isActivityAreaBroadcast(row)

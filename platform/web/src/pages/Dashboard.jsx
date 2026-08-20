@@ -20,8 +20,14 @@ import {
   playPatrolAutoEnd,
   playPatrolSigninNotification
 } from '../utils/sound';
-import { useChatNotifications, useUnreadCount, isActiveChatPath, markChatVisited } from '../chat';
-import { defaultChatChannel } from '../chat/utils/chatChannels';
+import { useChatNotifications, useUnreadCount } from '../chat';
+import {
+  CHAT_CHANNEL_PATROL,
+  CHAT_CHANNEL_RESIDENT,
+  canAccessPatrolOpsChat,
+  defaultChatChannel,
+} from '../chat/utils/chatChannels';
+import { OpsChatUnreadSplit } from '../chat/components/OpsChatUnreadSplit';
 import { Avatar } from '../chat/components/common/Avatar';
 import { useGPSTracking } from '../hooks/useGPSTracking';
 import { enrichPatrolRowsWithAvatars } from '../utils/enrichPatrolAvatars';
@@ -41,15 +47,16 @@ import { canAccessAdminPanel, canReviewFeedback, isStaffForModerationAlerts } fr
 import { canAccessPatrolSchedule, canAccessSosBoard, canStartOrEndPatrol, canStaffVerifyResident, canUseHouseholdMode, canViewCityHub, canViewIntelligence, homePathForRole, isHouseholdModeRole } from '../auth/roleMatrix';
 import { hasHydratedAppRole } from '../auth/appRole';
 import { useActiveOrganization } from '../auth/useActiveOrganization';
-import { useScopedOrganization } from '../utils/organizationScope';
+import { useScopedOrganization, belongsToActiveOrganization } from '../utils/organizationScope';
 import { useUnreadCityHubCount } from '../hooks/useUnreadCityHubCount';
+import { parsePatrolTime, formatWatchDate } from '../utils/watchTime';
 
 // --- Constants ---
 /** Warn after this many seconds on patrol (2h). */
 const PATROL_WARNING_SECONDS = 7200;
 /** Grace period after the 2h mark before auto-end if the patroller does not end (30m). Guide: total 2.5h. */
 const AUTO_CLOSE_EXTENSION_SECONDS = 1800;
-/** Absolute patrol end from start_time = 2h + 30m (matches Guide / auto-end RPC expectations). */
+/** Absolute patrol end from start_time = 2h + 30m (matches Guide / auto-end expectations). */
 const PATROL_MAX_ELAPSED_MS = (PATROL_WARNING_SECONDS + AUTO_CLOSE_EXTENSION_SECONDS) * 1000;
 
 // Sound throttling
@@ -83,13 +90,13 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { activeOrganization, isGlobalOperator } = useActiveOrganization();
-  const { scope } = useScopedOrganization();
+  const { scope, activeOrganizationId, includeUnscoped } = useScopedOrganization();
 
   useEffect(() => {
     if (!hasHydratedAppRole(user?.role)) return;
     const home = homePathForRole(user.role, user.platformRole);
     if (home !== "/dashboard") navigate(home, { replace: true });
-  }, [user?.role, navigate]);
+  }, [user?.role, user?.platformRole, navigate]);
 
   // --- Patrol state ---
   const [activePatrol, setActivePatrol] = useState(null);
@@ -111,6 +118,8 @@ export default function Dashboard() {
 
   const warningTriggeredRef = useRef(false);
   const isEndingRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const fetchAllGenRef = useRef(0);
   const [, setTick] = useState(0);
   const prevPatrolsRef = useRef(null);
   const patrolAvatarUrlByUserIdRef = useRef({});
@@ -132,13 +141,31 @@ export default function Dashboard() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // --- New: Unread count via hook ---
-  const { count: unreadCount, refetch: refetchUnread } = useUnreadCount(
-    user?.id,
+  // --- Unread: ops keep Patrol ops vs Neighbours split (never merged) ---
+  const isOpsChat = canAccessPatrolOpsChat(user?.role);
+  const { count: patrolUnread, refetch: refetchPatrolUnread } = useUnreadCount(
+    isOpsChat ? user?.id : null,
+    CHAT_CHANNEL_PATROL
+  );
+  const { count: neighbourUnread, refetch: refetchNeighbourUnread } = useUnreadCount(
+    isOpsChat ? user?.id : null,
+    CHAT_CHANNEL_RESIDENT
+  );
+  const { count: residentUnread, refetch: refetchResidentUnread } = useUnreadCount(
+    !isOpsChat ? user?.id : null,
     defaultChatChannel(user?.role)
   );
+  const unreadCount = isOpsChat ? patrolUnread + neighbourUnread : residentUnread;
+  const refetchUnread = useCallback(() => {
+    if (isOpsChat) {
+      refetchPatrolUnread();
+      refetchNeighbourUnread();
+    } else {
+      refetchResidentUnread();
+    }
+  }, [isOpsChat, refetchPatrolUnread, refetchNeighbourUnread, refetchResidentUnread]);
 
-  // Handle new messages
+  // Handle new messages (sound is owned by useChatNotifications — avoid double play)
   const handleNewMessage = useCallback((message) => {
     refetchUnread();
     if (Notification.permission === 'granted') {
@@ -151,9 +178,6 @@ export default function Dashboard() {
         body: `${message.sender_name}: ${message.text?.substring(0, 50)}...`,
         icon: '/favicon.ico',
       });
-    }
-    if (!isActiveChatPath()) {
-      playThrottled('chat', playChatNotification);
     }
   }, [refetchUnread]);
 
@@ -303,37 +327,34 @@ export default function Dashboard() {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
-  const elapsed = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+  const elapsed = startTime ? Math.floor((Date.now() - startTime.getTime()) / 1000) : 0;
 
   // --- Fetch all active patrols ---
   const fetchAll = useCallback(async () => {
-    let cancelled = false;
+    const runId = ++fetchAllGenRef.current;
     setFetchAllLoading(prev => {
       if (prevPatrolsRef.current === null) return true;
       return prev;
     });
     try {
       const { data, error } = await scope(supabase.from('active_patrols').select('*'));
-      if (cancelled) return;
+      if (runId !== fetchAllGenRef.current) return;
       if (error) throw error;
       const incoming = await enrichPatrolRowsWithAvatars(supabase, data || []);
+      if (runId !== fetchAllGenRef.current) return;
       incoming.forEach((p) => {
         patrolAvatarUrlByUserIdRef.current[p.user_id] = p.patrol_avatar_url;
       });
-      const incomingIds = incoming.map(p => p.user_id).sort();
-      const prevIds = (prevPatrolsRef.current || []).map(p => p.user_id).sort();
-      if (JSON.stringify(incomingIds) !== JSON.stringify(prevIds)) {
-        setAllActivePatrols(incoming);
-        prevPatrolsRef.current = incoming;
-      }
+      // Always apply poll results so vehicle/start_time updates are not skipped when IDs match.
+      setAllActivePatrols(incoming);
+      prevPatrolsRef.current = incoming;
       setFetchAllError(null);
     } catch (err) {
-      if (cancelled) return;
+      if (runId !== fetchAllGenRef.current) return;
       setFetchAllError(err.message);
     } finally {
-      if (!cancelled) setFetchAllLoading(false);
+      if (runId === fetchAllGenRef.current) setFetchAllLoading(false);
     }
-    return () => { cancelled = true; };
   }, [scope]);
 
   // --- Manual refresh ---
@@ -391,11 +412,12 @@ export default function Dashboard() {
     const subscription = supabase
       .channel('patrol-starts')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_patrols' }, (payload) => {
+        if (!belongsToActiveOrganization(payload.new, activeOrganizationId, includeUnscoped)) return;
         if (payload.new.user_id !== user.id) playThrottled('patrol-start', playPatrolSigninNotification);
       })
       .subscribe();
     return () => supabase.removeChannel(subscription);
-  }, [user]);
+  }, [user, activeOrganizationId, includeUnscoped]);
 
   useEffect(() => {
     const subscription = supabase
@@ -403,6 +425,7 @@ export default function Dashboard() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_patrols' }, async (payload) => {
         const row = payload.new;
         if (!row?.user_id) return;
+        if (!belongsToActiveOrganization(row, activeOrganizationId, includeUnscoped)) return;
         const [enriched] = await enrichPatrolRowsWithAvatars(supabase, [row]);
         const next = enriched ?? {
           ...row,
@@ -422,6 +445,10 @@ export default function Dashboard() {
         setAllActivePatrols(prev => prev.filter(p => p.user_id !== payload.old.user_id));
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'active_patrols' }, (payload) => {
+        if (!belongsToActiveOrganization(payload.new, activeOrganizationId, includeUnscoped)) {
+          setAllActivePatrols((prev) => prev.filter((p) => p.user_id !== payload.new.user_id));
+          return;
+        }
         setAllActivePatrols(prev => prev.map(p => {
           if (p.user_id !== payload.new.user_id) return p;
           return {
@@ -436,7 +463,7 @@ export default function Dashboard() {
       })
       .subscribe();
     return () => supabase.removeChannel(subscription);
-  }, [user?.id, user?.avatarUrl]);
+  }, [user?.id, user?.avatarUrl, activeOrganizationId, includeUnscoped]);
 
   // --- GPS Tracking Hook ---
   // DB: active_patrols_pkey is (user_id) — there is no separate id column. patrol_locations.patrol_id FK targets that key.
@@ -447,7 +474,6 @@ export default function Dashboard() {
     routePoints,
     startTracking, 
     stopTracking,
-    setupAutoStopTimer
   } = useGPSTracking({ 
     patrolId: activePatrol?.user_id,
     userId: user?.id 
@@ -488,77 +514,100 @@ export default function Dashboard() {
 
   // --- Patrol logic ---
   const startPatrolWithVehicle = useCallback(async (vehicleId) => {
+    if (isStartingRef.current || isEndingRef.current) return;
+    isStartingRef.current = true;
     const vehicle = user.vehicles.find(v => v.id === vehicleId);
     try {
+      const { data: existing, error: existingErr } = await scope(
+        supabase.from('active_patrols').select('user_id, start_time')
+      ).eq('user_id', user.id).maybeSingle();
+      if (existingErr) throw existingErr;
+      if (existing) {
+        toast.error("You already have an active patrol.");
+        const started = parsePatrolTime(existing.start_time);
+        setActivePatrol((prev) => prev || { ...existing, user_id: user.id });
+        if (started) setStartTime(started);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('active_patrols')
-        .upsert({
+        .insert({
           user_id: user.id,
           user_name: user.fullName || user.email,
           vehicle_id: vehicleId,
-          vehicle_type: vehicle.vehicle_type || (vehicle.make_model?.toLowerCase().includes('bike') ? 'bicycle' : vehicle.make_model?.toLowerCase().includes('foot') ? 'on_foot' : 'car'),
+          vehicle_type: normalizeVehicleType(vehicle.vehicle_type, vehicle.make_model) || 'car',
           vehicle_make_model: vehicle.make_model,
           vehicle_reg: vehicle.registration,
           vehicle_color: vehicle.color,
-          start_time: new Date(),
+          start_time: new Date().toISOString(),
           zone: activeOrganization?.name || DEFAULT_PATROL_ZONE,
           organization_id: activeOrganization?.id || user.organizationId || null,
-        }, { onConflict: 'user_id' })
+        })
         .select();
       if (error) throw error;
       if (data && data.length > 0) {
         const newPatrol = data[0];
         setActivePatrol(newPatrol);
-        setStartTime(new Date(newPatrol.start_time));
+        setStartTime(parsePatrolTime(newPatrol.start_time) || new Date());
         toast.success("Patrol started!");
         playPatrolStart();
-        
-        // Start GPS tracking
         startTracking();
-        
-        // Set up auto-stop timer for GPS tracking (synced with patrol)
-        // Default 8 hours (480 minutes) max patrol duration
-        setupAutoStopTimer(480);
       }
     } catch (err) {
       console.error("Check-in failed:", err);
       toast.error("Check-in failed: " + err.message);
+    } finally {
+      isStartingRef.current = false;
     }
-  }, [user, startTracking, setupAutoStopTimer, activeOrganization]);
+  }, [user, startTracking, activeOrganization, scope]);
 
   const startPatrolWithLegacy = useCallback(async () => {
+    if (isStartingRef.current || isEndingRef.current) return;
+    isStartingRef.current = true;
     try {
+      const { data: existing, error: existingErr } = await scope(
+        supabase.from('active_patrols').select('user_id, start_time')
+      ).eq('user_id', user.id).maybeSingle();
+      if (existingErr) throw existingErr;
+      if (existing) {
+        toast.error("You already have an active patrol.");
+        const started = parsePatrolTime(existing.start_time);
+        setActivePatrol((prev) => prev || { ...existing, user_id: user.id });
+        if (started) setStartTime(started);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('active_patrols')
-        .upsert({
+        .insert({
           user_id: user.id,
           user_name: user.fullName || user.email,
           vehicle_type: normalizeVehicleType(user.carType, null),
           car_type: user.carType || "—",
           reg_number: user.registrationNumber || "—",
           vehicle_color: user.vehicleColor || "gray",
-          start_time: new Date(),
+          start_time: new Date().toISOString(),
           zone: activeOrganization?.name || DEFAULT_PATROL_ZONE,
           organization_id: activeOrganization?.id || user.organizationId || null,
-        }, { onConflict: 'user_id' })
+        })
         .select();
       if (error) throw error;
       if (data && data.length > 0) {
         const newPatrol = data[0];
         setActivePatrol(newPatrol);
-        setStartTime(new Date(newPatrol.start_time));
+        setStartTime(parsePatrolTime(newPatrol.start_time) || new Date());
         toast.success("Patrol started!");
         playPatrolStart();
-        
-        // Start GPS tracking for legacy too
         startTracking();
-        setupAutoStopTimer(480);
       }
     } catch (err) {
       console.error("Check-in failed:", err);
       toast.error("Check-in failed: " + err.message);
+    } finally {
+      isStartingRef.current = false;
     }
-  }, [user, startTracking, setupAutoStopTimer, activeOrganization]);
+  }, [user, startTracking, activeOrganization, scope]);
 
   const handleCheckIn = useCallback(async () => {
     if (!user) return;
@@ -585,7 +634,19 @@ export default function Dashboard() {
       // Stop GPS tracking before ending patrol
       await stopTracking();
       
-      const { error: rpcError } = await supabase.rpc('end_patrol', { p_user_id: user.id });
+      let { error: rpcError } = await supabase.rpc('end_patrol', {
+        p_user_id: user.id,
+        p_auto_closed: Boolean(autoClosed),
+      });
+      // Until migration is applied, older end_patrol(uuid) still works for manual ends.
+      if (
+        rpcError &&
+        /p_auto_closed|could not find the function|function public\.end_patrol/i.test(
+          String(rpcError.message || rpcError)
+        )
+      ) {
+        ({ error: rpcError } = await supabase.rpc('end_patrol', { p_user_id: user.id }));
+      }
       if (rpcError) throw rpcError;
       setAllActivePatrols(prev => prev.filter(p => p.user_id !== user.id));
       setActivePatrol(null);
@@ -647,7 +708,7 @@ export default function Dashboard() {
         if (error) throw error;
         if (data) { 
           setActivePatrol(data); 
-          setStartTime(new Date(data.start_time)); 
+          setStartTime(parsePatrolTime(data.start_time)); 
         }
         else setActivePatrol(null);
         setFetchError(null);
@@ -783,8 +844,8 @@ export default function Dashboard() {
             <div className="p-4 sm:p-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 {allActivePatrols.map((p) => {
-                  const started = new Date(p.start_time);
-                  const elapsedSec = Math.floor((Date.now() - started) / 1000);
+                  const started = parsePatrolTime(p.start_time);
+                  const elapsedSec = started ? Math.floor((Date.now() - started.getTime()) / 1000) : 0;
                   const vehicleType = normalizeVehicleType(p.vehicle_type, p.car_type);
                   const vehicleColor = p.vehicle_color || 'gray';
                   const vehicleDisplay = getVehicleDisplayText(
@@ -830,7 +891,7 @@ export default function Dashboard() {
                         ) : null}
                         <div className="flex items-center gap-1.5 min-w-0">
                           <PatrolInfoIcon icon={FaClock} colorKey={vehicleColor} />
-                          <span>Started: {started.toLocaleTimeString()}</span>
+                          <span>Started: {started ? started.toLocaleTimeString() : '—'}</span>
                         </div>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <PatrolInfoIcon icon={FaStopwatch} colorKey={vehicleColor} />
@@ -1083,25 +1144,48 @@ export default function Dashboard() {
             </svg>
             <span className="text-sm text-center leading-tight">Report incident</span>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              void markChatVisited(null);
-              navigate('/chat');
-            }}
-            aria-label="Open emergency chat"
-            className="bento-tile-interactive relative flex flex-col items-center justify-center gap-2 min-h-[5.5rem] rounded-lg border-0 bg-gradient-to-br from-violet-600 to-purple-800 text-white font-semibold p-4 shadow-lg shadow-purple-900/25 hover:shadow-xl transition dark:from-violet-700 dark:to-purple-900"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            <span className="text-sm text-center leading-tight">Emergency chat</span>
-            {unreadCount > 0 && (
-              <span className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center motion-safe:animate-pulse">
+          <div className="bento-tile-interactive relative flex flex-col items-center justify-center gap-2 min-h-[5.5rem] rounded-lg border-0 bg-gradient-to-br from-violet-600 to-purple-800 text-white font-semibold p-4 shadow-lg shadow-purple-900/25 hover:shadow-xl transition dark:from-violet-700 dark:to-purple-900">
+            <button
+              type="button"
+              className="absolute inset-0 z-0 rounded-lg"
+              onClick={() => {
+                if (isOpsChat && neighbourUnread > 0 && patrolUnread === 0) {
+                  navigate('/chat?room=resident');
+                } else if (isOpsChat) {
+                  navigate('/chat?room=patrol');
+                } else {
+                  navigate('/chat');
+                }
+              }}
+              aria-label={
+                isOpsChat
+                  ? `Open chat. Patrol ops ${patrolUnread} unread, Neighbours ${neighbourUnread} unread`
+                  : 'Open emergency chat'
+              }
+            />
+            <div className="relative z-10 pointer-events-none flex flex-col items-center justify-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span className="text-sm text-center leading-tight">Emergency chat</span>
+            </div>
+            {isOpsChat ? (
+              <div className="absolute top-2 right-2 z-20 max-w-[calc(100%-1rem)]">
+                <OpsChatUnreadSplit
+                  patrolUnread={patrolUnread}
+                  neighbourUnread={neighbourUnread}
+                  size="sm"
+                  className="flex-wrap justify-end"
+                  onPatrolClick={() => navigate('/chat?room=patrol')}
+                  onNeighbourClick={() => navigate('/chat?room=resident')}
+                />
+              </div>
+            ) : unreadCount > 0 ? (
+              <span className="absolute top-2 right-2 z-20 bg-red-500 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center motion-safe:animate-pulse">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
-            )}
-          </button>
+            ) : null}
+          </div>
           {canUseIntelligence ? (
             <button
               type="button"
@@ -1213,7 +1297,7 @@ export default function Dashboard() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-500 dark:text-gray-400 flex justify-between items-center border-t border-gray-200 dark:border-gray-700 pt-4">
-          <span>Neighbourhood Watch Platform • Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "recently"}</span>
+          <span>Neighbourhood Watch Platform • Member since {user?.createdAt ? formatWatchDate(user.createdAt) || "recently" : "recently"}</span>
           <button type="button" onClick={signOut} className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition text-xs underline">Sign Out</button>
         </div>
       </div>
@@ -1230,8 +1314,10 @@ export default function Dashboard() {
                 type="button"
                 onClick={() => {
                   setShowWarning(false);
-                  setAutoCloseAt(null);
-                  // Keep warningTriggeredRef true so the 2h modal does not re-fire every tick while patrol continues.
+                  // Keep auto-end at start + 2.5h — Continue only dismisses the modal.
+                  if (autoCloseAt == null && startTime) {
+                    setAutoCloseAt(startTime.getTime() + PATROL_MAX_ELAPSED_MS);
+                  }
                   warningTriggeredRef.current = true;
                 }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"

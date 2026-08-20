@@ -12,6 +12,8 @@
  * }} CriminalProfileSightingEntry
  */
 
+import { parsePatrolTime } from './watchTime';
+
 export function newSightingId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return `sg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -92,8 +94,8 @@ export function syncLegacyLastSeenFromSightings(sightingsLog) {
     return { last_seen_at: null, last_seen_location: null, last_seen_coordinates: null };
   }
   const sorted = [...list].sort((a, b) => {
-    const ta = new Date(a.seen_at || 0).getTime();
-    const tb = new Date(b.seen_at || 0).getTime();
+    const ta = parsePatrolTime(a.seen_at)?.getTime() || 0;
+    const tb = parsePatrolTime(b.seen_at)?.getTime() || 0;
     return tb - ta;
   });
   const top = sorted[0];

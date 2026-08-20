@@ -30,6 +30,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { listNeighborhoodNextOfKin, resolveEmergencyContacts } from "../utils/emergencyContact";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
+import { formatWatchDate, parsePatrolTime } from "../utils/watchTime";
 
 function InlineConfirm({ label, onConfirm, onCancel, disabled }) {
   return (
@@ -82,15 +83,7 @@ function KinBlock({ title, kin }) {
 
 function formatJoined(iso) {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
+  return formatWatchDate(iso) || "—";
 }
 
 function telHref(phone) {
@@ -188,7 +181,10 @@ export default function AdminResidents() {
       if (!isResidentAppRole(u.role)) return false;
       if (u.organizationId === activeOrganizationId || memberUserIds.has(u.uid)) return true;
       if (nearbyUserIds.has(u.uid)) return true;
-      if (!u.organizationId) return true;
+      // Null-org only for Theescombe legacy (includeUnscoped); never list in every area.
+      if (!u.organizationId) {
+        return /theescombe/i.test(String(activeOrganization?.name || ""));
+      }
       const notes = String(profilesByUser[u.uid]?.notes || "").toLowerCase();
       return Boolean(orgName && notes.includes(orgName));
     });
@@ -230,8 +226,8 @@ export default function AdminResidents() {
       const rb = requestRank(b.uid);
       if (ra !== rb) return ra - rb;
       if (sortBy === "joined_desc" || sortBy === "joined_asc") {
-        const ta = new Date(a.createdAt || 0).getTime();
-        const tb = new Date(b.createdAt || 0).getTime();
+        const ta = parsePatrolTime(a.createdAt)?.getTime() || 0;
+        const tb = parsePatrolTime(b.createdAt)?.getTime() || 0;
         if (ta !== tb) return sortBy === "joined_desc" ? tb - ta : ta - tb;
         return tie(a, b);
       }
@@ -423,6 +419,7 @@ export default function AdminResidents() {
   };
 
   const handleAssignToNeighborhood = async (uid, organizationId) => {
+    if (busyUid) return;
     const orgId = organizationId || activeOrganizationId;
     if (!orgId) {
       toast.error("Select a neighborhood at the top first.");
@@ -457,6 +454,7 @@ export default function AdminResidents() {
   };
 
   const handleVerify = async (uid) => {
+    if (busyUid) return;
     setBusyUid(uid);
     try {
       const { data, error } = await verifyResidentAsStaff(uid);
@@ -497,6 +495,7 @@ export default function AdminResidents() {
   };
 
   const handleReviewPatroller = async (uid, approve) => {
+    if (busyUid) return;
     setBusyUid(uid);
     try {
       const { error } = await reviewPatrollerRoleRequest(uid, approve);
@@ -529,6 +528,7 @@ export default function AdminResidents() {
   };
 
   const handleRoleChange = async (uid, newRole) => {
+    if (busyUid) return;
     if (isGlobalAppRole(newRole)) {
       toast.error("Main admin and technical support are global and cannot be assigned here.");
       return;
@@ -538,6 +538,7 @@ export default function AdminResidents() {
       return;
     }
     const orgId = assignTargetByUid[uid] || activeOrganizationId;
+    setBusyUid(uid);
     try {
       if (!isResidentAppRole(newRole) && orgId) {
         const { error: assignErr } = await assignResidentToNeighborhood(uid, orgId);
@@ -560,10 +561,13 @@ export default function AdminResidents() {
     } catch (err) {
       console.error("Error updating role:", err);
       toast.error("Failed to update role.");
+    } finally {
+      setBusyUid(null);
     }
   };
 
   const handleDeleteUser = async (uid) => {
+    if (deleteLoading) return;
     setDeleteLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("admin-delete-user", {

@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { viewConeLatLngs } from '../../utils/hotspotGeometry';
 import { DEFAULT_FOV_DEG } from '../../utils/cameraSuggestions';
 import { hotspotKindLabel } from '../../utils/hotspotKinds';
+import { formatWatchDateTime } from '../../utils/watchTime';
 
 const DEFAULT_CENTER = [-33.95, 25.58];
 
@@ -74,11 +75,24 @@ function FitToItems({ events, cameras, showCameras }) {
 
 function whenLabel(ev) {
   if (!ev.occurred_at) return 'Date unknown';
-  const d = new Date(ev.occurred_at);
-  if (Number.isNaN(d.getTime())) return 'Date unknown';
-  const date = d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-  if (!ev.time_known) return date;
-  return `${date} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  if (!ev.time_known) {
+    return (
+      formatWatchDateTime(ev.occurred_at, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }) || 'Date unknown'
+    );
+  }
+  return (
+    formatWatchDateTime(ev.occurred_at, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }) || 'Date unknown'
+  );
 }
 
 export default function HotspotsMap({

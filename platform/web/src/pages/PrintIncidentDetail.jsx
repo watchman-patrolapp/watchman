@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { supabase } from '../supabase/client';
 import { downloadDomAsPdf } from '../utils/downloadDomAsPdf';
@@ -17,6 +16,7 @@ import {
 import { connectionTypeLabel } from '../data/profileIncidentLinkTaxonomy';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { belongsToActiveOrganization, useScopedOrganization } from '../utils/organizationScope';
+import { formatWatchDate, formatWatchDateTime, watchDayStamp } from '../utils/watchTime';
 
 /** Renders public image URLs for screen + print/PDF (browser must be able to fetch the URL). */
 function EvidenceImageGrid({ urls, altPrefix }) {
@@ -68,7 +68,7 @@ export default function PrintIncidentDetail() {
     setPdfBusy(true);
     toast.loading('Building PDF…', { id: 'pdf-export' });
     try {
-      const filename = `incident-${id.slice(0, 8)}-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      const filename = `incident-${id.slice(0, 8)}-${watchDayStamp()}.pdf`;
       await downloadDomAsPdf(el, filename, { waitForImages: true });
       toast.success('PDF saved', { id: 'pdf-export' });
     } catch (e) {
@@ -224,7 +224,7 @@ export default function PrintIncidentDetail() {
               Incident report
             </h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 print:text-gray-800">
-              Reference: {id} · Status: {incident.status} · Generated {format(new Date(), 'PPpp')}
+              Reference: {id} · Status: {incident.status} · Generated {formatWatchDateTime(new Date()) || watchDayStamp()}
             </p>
           </header>
 
@@ -234,7 +234,7 @@ export default function PrintIncidentDetail() {
               <div>
                 <dt className="text-xs font-medium uppercase text-gray-500">Date of incident</dt>
                 <dd className="text-gray-900 dark:text-white print:text-black">
-                  {format(new Date(incident.incident_date), 'PPP')}
+                  {formatWatchDate(incident.incident_date) || '—'}
                 </dd>
               </div>
               <div>
@@ -248,7 +248,7 @@ export default function PrintIncidentDetail() {
               <div>
                 <dt className="text-xs font-medium uppercase text-gray-500">Reported by</dt>
                 <dd className="text-gray-900 dark:text-white print:text-black">
-                  {incident.submitted_by_name} · {format(new Date(incident.submitted_at), 'PPp')}
+                  {incident.submitted_by_name} · {formatWatchDateTime(incident.submitted_at) || '—'}
                 </dd>
               </div>
             </dl>
@@ -313,7 +313,7 @@ export default function PrintIncidentDetail() {
                           <li key={row.id} className="border-l-2 border-amber-400 pl-3 print:border-amber-500">
                             <p className="text-xs text-gray-600 dark:text-gray-400 print:text-gray-800">
                               {row.created_at
-                                ? format(new Date(row.created_at), 'dd MMM yyyy HH:mm')
+                                ? formatWatchDateTime(row.created_at) || '—'
                                 : '—'}{' '}
                               · {row.author_name || 'Member'} · {formatSectionRoleLabel(row.author_role)}
                             </p>

@@ -5,6 +5,7 @@ import { FaExclamationTriangle, FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
 import { mergedSightingsForDisplay } from '../../utils/criminalProfileSightings';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
+import { parsePatrolTime } from '../../utils/watchTime';
 
 /** Haversine distance in km */
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -52,7 +53,7 @@ function filterProfilesWithRecentNearbySightings(profiles, userLat, userLng, max
 
     for (const s of sightings) {
       if (!s.seen_at || String(s.seen_at).trim() === '') continue;
-      const t = new Date(s.seen_at).getTime();
+      const t = parsePatrolTime(s.seen_at)?.getTime() || 0;
       if (!Number.isFinite(t) || now - t > recentWindowMs || now - t < 0) continue;
 
       const slat = s.lat != null ? Number(s.lat) : NaN;
@@ -67,7 +68,7 @@ function filterProfilesWithRecentNearbySightings(profiles, userLat, userLng, max
     }
 
     if (!matched && profile.last_seen_at) {
-      const t = new Date(profile.last_seen_at).getTime();
+      const t = parsePatrolTime(profile.last_seen_at)?.getTime() || 0;
       if (Number.isFinite(t) && now - t <= recentWindowMs && now - t >= 0) {
         const pt = parseProfilePoint(profile.last_seen_coordinates);
         if (pt) {

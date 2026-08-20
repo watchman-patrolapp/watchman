@@ -22,6 +22,7 @@ import { mergedSightingsForDisplay } from '../../utils/criminalProfileSightings'
 import PatrollerPhotoPreview from '../patrol/PatrollerPhotoPreview';
 import BrandedLoader from '../layout/BrandedLoader';
 import ProfileRecordAudit from './ProfileRecordAudit';
+import { formatWatchDate, formatWatchDateTime } from '../../utils/watchTime';
 
 const RiskBadge = ({ level }) => {
   const styles = {
@@ -266,7 +267,7 @@ export default function CriminalProfileCard({ profile, stats = {}, associatesPre
             {profile.date_of_birth && (
               <span className="flex items-center gap-1">
                 <FaCalendarAlt className="h-3 w-3" />
-                DOB: {new Date(profile.date_of_birth).toLocaleDateString()}
+                DOB: {formatWatchDate(profile.date_of_birth) || String(profile.date_of_birth).slice(0, 10)}
               </span>
             )}
             {profile.nationality?.length > 0 && (
@@ -381,7 +382,7 @@ export default function CriminalProfileCard({ profile, stats = {}, associatesPre
           const sightings = mergedSightingsForDisplay(profile);
           const formatSightingLine = (s) => {
             const bits = [];
-            if (s.seen_at) bits.push(new Date(s.seen_at).toLocaleString());
+            if (s.seen_at) bits.push(formatWatchDateTime(s.seen_at) || String(s.seen_at));
             if ((s.location || '').trim()) bits.push((s.location || '').trim());
             const who = (
               s.seen_by_other_name ||

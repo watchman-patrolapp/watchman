@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/client';
 import { format } from 'date-fns';
@@ -28,6 +28,27 @@ import toast from 'react-hot-toast';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { useAuth } from '../auth/useAuth';
 import ThemeToggle from '../components/ThemeToggle';
+import { parsePatrolTime } from '../utils/watchTime';
+
+function formatIncidentWhen(value, pattern = 'MMM dd, yyyy HH:mm') {
+  const d = parsePatrolTime(value);
+  if (!d) {
+    const s = String(value || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      try {
+        return format(new Date(`${s}T12:00:00+02:00`), pattern.includes('HH') ? 'MMM dd, yyyy' : pattern);
+      } catch {
+        return s;
+      }
+    }
+    return '—';
+  }
+  try {
+    return format(d, pattern);
+  } catch {
+    return '—';
+  }
+}
 import { deleteIncidentFully } from '../utils/deleteIncident';
 import {
   connectionTypeBadgeClasses,
@@ -69,7 +90,7 @@ function confidenceScoreFromSuspectEvidence(evidenceRows, profileId) {
     const n = Number(raw);
     if (!Number.isFinite(n)) continue;
     const clamped = Math.max(1, Math.min(100, Math.round(n)));
-    const t = new Date(row.updated_at || row.created_at || 0).getTime();
+    const t = parsePatrolTime(row.updated_at || row.created_at)?.getTime() || 0;
     if (best == null || t >= bestT) {
       best = clamped;
       bestT = t;
@@ -226,6 +247,7 @@ export default function IncidentDetail() {
   const [migrateLegacyBusy, setMigrateLegacyBusy] = useState(false);
   const [cityHubShare, setCityHubShare] = useState(null);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const loadGen = useRef(0);
 
   const showAdminDelete = canStaffManageIncidents(user?.role);
   const canShareToCityHub = canPublishCityHub(user?.role, user?.platformRole);
@@ -273,6 +295,7 @@ export default function IncidentDetail() {
       : [];
 
   const fetchIncidentDetails = useCallback(async () => {
+    const gen = ++loadGen.current;
     try {
       // Fetch incident
       const { data: incidentData, error: incidentError } = await supabase
@@ -281,6 +304,7 @@ export default function IncidentDetail() {
         .eq('id', id)
         .single();
 
+      if (gen !== loadGen.current) return;
       if (incidentError) throw incidentError;
       if (!belongsToActiveOrganization(incidentData, activeOrganizationId, includeUnscoped)) {
         toast.error('This incident belongs to another neighborhood.');
@@ -341,15 +365,16 @@ export default function IncidentDetail() {
       }
 
     } catch (error) {
+      if (gen !== loadGen.current) return;
       console.error('Error fetching incident:', error);
       toast.error('Failed to load incident details');
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, [id, activeOrganizationId, includeUnscoped, navigate]);
 
   const handleMigrateLegacyScenePhotos = useCallback(async () => {
-    if (!id || !incident || !user?.id) return;
+    if (!id || !incident || !user?.id || migrateLegacyBusy) return;
     const urls = normalizeMediaUrls(incident.media_urls);
     if (urls.length === 0) {
       toast.error('No legacy photo URLs to migrate.');
@@ -382,6 +407,7 @@ export default function IncidentDetail() {
   }, [id, incident, user?.id, evidence, fetchIncidentDetails]);
 
   const handleAdminDelete = async () => {
+    if (deleteBusy) return;
     const msg =
       'Permanently delete this incident and all related data (evidence rows, suspects, profile links, match queue)?\n\n' +
       'Photos under this incident in Storage will be removed.\n\nThis cannot be undone.';
@@ -411,7 +437,7 @@ export default function IncidentDetail() {
 
   const handleSubmitSectionUpdate = useCallback(
     async (bodyText) => {
-      if (!updateModal || !user?.id) return;
+      if (!updateModal || !user?.id || sectionUpdateBusy) return;
       setSectionUpdateBusy(true);
       try {
         const insertPayload = {
@@ -439,7 +465,7 @@ export default function IncidentDetail() {
         setSectionUpdateBusy(false);
       }
     },
-    [updateModal, user?.id, id]
+    [updateModal, user?.id, id, sectionUpdateBusy]
   );
 
   if (loading) {
@@ -491,7 +517,7 @@ export default function IncidentDetail() {
               Incident #{id.slice(0, 8)}
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Reported by {incident.submitted_by_name} on {format(new Date(incident.submitted_at), 'MMM dd, yyyy HH:mm')}
+              Reported by {incident.submitted_by_name} on {formatIncidentWhen(incident.submitted_at)}
             </p>
             {hasAnySectionUpdates && (
               <p className="mt-2 inline-flex items-center gap-2 text-xs font-medium text-amber-900 dark:text-amber-200">
@@ -600,7 +626,7 @@ export default function IncidentDetail() {
               label={INCIDENT_SECTION_LABELS[INCIDENT_SECTION_KEYS.INCIDENT_DATE]}
               originalChildren={
                 <p className="text-gray-900 dark:text-white">
-                  {format(new Date(incident.incident_date), 'MMM dd, yyyy')}
+                  {formatIncidentWhen(incident.incident_date, 'MMM dd, yyyy')}
                 </p>
               }
               updates={updatesBySection[INCIDENT_SECTION_KEYS.INCIDENT_DATE] || []}
@@ -979,7 +1005,7 @@ export default function IncidentDetail() {
                   This incident is not linked to any criminal profiles yet.
                 </p>
                 <button 
-                  onClick={() => navigate(`/incident-form?link=${id}`)}
+                  onClick={() => navigate(`/incident/${id}/edit`)}
                   className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition"
                 >
                   Link Suspect to Profile

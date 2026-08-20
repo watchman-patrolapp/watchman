@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { hasHydratedAppRole } from '../auth/appRole';
@@ -9,6 +9,7 @@ import { FaArrowLeft, FaCheck, FaUndo, FaSync, FaEnvelope, FaUser, FaClock } fro
 import ThemeToggle from '../components/ThemeToggle';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { useScopedOrganization } from '../utils/organizationScope';
+import { formatWatchDateTime } from '../utils/watchTime';
 
 export default function AdminFeedbackReviews() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ export default function AdminFeedbackReviews() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const loadGen = useRef(0);
 
   useEffect(() => {
     if (!user) return;
@@ -28,6 +30,7 @@ export default function AdminFeedbackReviews() {
   }, [user, navigate]);
 
   const load = useCallback(async () => {
+    const gen = ++loadGen.current;
     setLoading(true);
     try {
       const { data, error } = await scope(
@@ -36,13 +39,15 @@ export default function AdminFeedbackReviews() {
           .select('id, name, email, message, created_at, reviewed_at, reviewed_by, submitter_user_id')
       ).order('created_at', { ascending: false });
       if (error) throw error;
+      if (gen !== loadGen.current) return;
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error(e);
+      if (gen !== loadGen.current) return;
       toast.error(e?.message || 'Could not load feedback');
       setRows([]);
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, [scope]);
 
@@ -68,7 +73,7 @@ export default function AdminFeedbackReviews() {
   }, [user?.id, user?.role, load]);
 
   const markReviewed = async (id) => {
-    if (!user?.id) return;
+    if (!user?.id || busyId) return;
     setBusyId(id);
     try {
       const { error } = await supabase
@@ -95,6 +100,7 @@ export default function AdminFeedbackReviews() {
   };
 
   const reopen = async (id) => {
+    if (busyId) return;
     setBusyId(id);
     try {
       const { error } = await supabase
@@ -235,10 +241,13 @@ export default function AdminFeedbackReviews() {
 
 function FeedbackCardBody({ row, reviewed: isReviewed }) {
   const when = row.created_at
-    ? new Date(row.created_at).toLocaleString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      })
+    ? formatWatchDateTime(row.created_at, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }) || '—'
     : '—';
 
   return (
@@ -250,7 +259,7 @@ function FeedbackCardBody({ row, reviewed: isReviewed }) {
         </span>
         {isReviewed && row.reviewed_at && (
           <span className="text-xs text-green-600 dark:text-green-400">
-            Reviewed {new Date(row.reviewed_at).toLocaleString()}
+            Reviewed {formatWatchDateTime(row.reviewed_at) || '—'}
           </span>
         )}
       </div>

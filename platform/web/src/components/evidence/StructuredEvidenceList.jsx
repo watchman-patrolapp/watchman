@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { format } from 'date-fns';
 import { FaPlus } from 'react-icons/fa';
 import PatrollerPhotoPreview from '../patrol/PatrollerPhotoPreview';
 import IncidentUpdateCard from '../incident/IncidentUpdateCard';
@@ -8,6 +7,7 @@ import {
   INCIDENT_SECTION_LABELS,
 } from '../../constants/incidentSectionUpdates';
 import { connectionTypeLabel } from '../../data/profileIncidentLinkTaxonomy';
+import { formatWatchDateTime, parsePatrolTime } from '../../utils/watchTime';
 
 export const EVIDENCE_CATEGORY_LABELS = {
   scene_photos: 'Scene evidence',
@@ -148,8 +148,8 @@ function dedupeEvidenceRowsByLogicalEntry(rows) {
       map.set(key, row);
       continue;
     }
-    const tRow = new Date(row.created_at || 0);
-    const tPrev = new Date(prev.created_at || 0);
+    const tRow = parsePatrolTime(row.created_at)?.getTime() || 0;
+    const tPrev = parsePatrolTime(prev.created_at)?.getTime() || 0;
     const primary = tRow >= tPrev ? row : prev;
     const secondary = tRow >= tPrev ? prev : row;
     const mergedUrls = [
@@ -205,7 +205,7 @@ export default function StructuredEvidenceList({
       const oa = categoryDisplayOrder(a.category);
       const ob = categoryDisplayOrder(b.category);
       if (oa !== ob) return oa - ob;
-      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      return (parsePatrolTime(a.created_at)?.getTime() || 0) - (parsePatrolTime(b.created_at)?.getTime() || 0);
     });
   }, [items, categoryFilter]);
 
@@ -350,7 +350,7 @@ export default function StructuredEvidenceList({
                 <h4 className="font-semibold text-gray-900 dark:text-white">{headingText}</h4>
                 {item.created_at && (
                   <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                    {format(new Date(item.created_at), 'dd MMM yyyy HH:mm')}
+                    {formatWatchDateTime(item.created_at) || '—'}
                   </span>
                 )}
               </div>

@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { watchDayStamp } from "./watchTime";
 
 export async function getMyAway(userId) {
   if (!userId) return { data: null, error: null };
@@ -33,10 +34,8 @@ export function isAwayNow(row, today = new Date()) {
   if (!row?.starts_on || !row?.ends_on) return false;
   const start = String(row.starts_on).slice(0, 10);
   const end = String(row.ends_on).slice(0, 10);
-  const y = today.getFullYear();
-  const m = String(today.getMonth() + 1).padStart(2, "0");
-  const d = String(today.getDate()).padStart(2, "0");
-  const iso = `${y}-${m}-${d}`;
+  const iso = watchDayStamp(today);
+  if (!iso) return false;
   return iso >= start && iso <= end;
 }
 
@@ -44,9 +43,10 @@ export function formatAwayRange(row) {
   if (!row?.starts_on || !row?.ends_on) return "";
   const fmt = (value) => {
     try {
-      return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
+      return new Date(`${String(value).slice(0, 10)}T12:00:00+02:00`).toLocaleDateString("en-ZA", {
         day: "numeric",
         month: "short",
+        timeZone: "Africa/Johannesburg",
       });
     } catch {
       return String(value);

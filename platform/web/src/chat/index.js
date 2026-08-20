@@ -17,6 +17,7 @@ export { useSound } from './hooks/useSound';
 // NEW EXPORTS for Dashboard
 export { useChatNotifications } from './hooks/useChatNotifications';
 export { useUnreadCount } from './hooks/useUnreadCount';
+export { OpsChatUnreadSplit } from './components/OpsChatUnreadSplit';
 
 // ==================== SERVICES ====================
 export { messageService } from './services/messageService';

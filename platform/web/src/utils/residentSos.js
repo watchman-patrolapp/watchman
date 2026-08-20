@@ -9,6 +9,13 @@ import { MessageType } from "../chat/utils/constants";
 import { sanitizeInput } from "../chat/utils/security";
 import { isRpcNotFoundError } from "./isRpcNotFound";
 import { fetchUserLabelMap } from "./profileUserLabels";
+import { parsePatrolTime } from "./watchTime";
+
+export function formatSosTimestamp(value) {
+  const d = parsePatrolTime(value);
+  if (!d) return "";
+  return d.toLocaleString("en-ZA");
+}
 
 function coordsFromPosition(position) {
   if (!position?.coords) return null;
@@ -76,6 +83,9 @@ export async function triggerResidentSos({
   const homeAddress = householdAddressFrom(user, { home_address: card.homeAddress });
   const description = String(notes || "").trim() || "Resident triggered SOS.";
   const orgId = organizationId || user.organizationId || getWorkingOrganizationId() || null;
+  if (!orgId) {
+    throw new Error("Select or join a neighbourhood before sending an SOS.");
+  }
   const locationLabel = homeAddress
     ? homeAddress
     : coords
@@ -115,7 +125,10 @@ export async function triggerResidentSos({
       trigger_type: "button",
     }));
   }
-  if (sosErr) throw sosErr;
+  if (sosErr) {
+    await supabase.from("incidents").delete().eq("id", incident.id);
+    throw sosErr;
+  }
 
   await broadcastSosToPatrolChat({
     user,

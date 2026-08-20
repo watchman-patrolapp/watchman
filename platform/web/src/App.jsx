@@ -1,5 +1,5 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import { useAuth } from "./auth/useAuth";
 import RequireRole from "./components/RequireRole";
@@ -760,26 +760,7 @@ function AppRoutes() {
         
         <Route
           path="/intelligence/nearby"
-          element={
-            <NeighborhoodRoute>
-              <RequireRole allowedRoles={ADMIN_PANEL_ROLES}>
-                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-6">
-                  <div className="max-w-4xl mx-auto">
-                    <Link
-                      to="/intelligence"
-                      className="inline-flex items-center gap-2 text-sm text-teal-600 dark:text-teal-400 hover:underline mb-6"
-                    >
-                      ← Intelligence hub
-                    </Link>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Nearby Threats</h1>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      This page will display high-risk profiles within your patrol area.
-                    </p>
-                  </div>
-                </div>
-              </RequireRole>
-            </NeighborhoodRoute>
-          }
+          element={<Navigate to="/intelligence" replace />}
         />
         
         <Route

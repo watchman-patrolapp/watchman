@@ -63,13 +63,18 @@ export default function ResidentActivityReport() {
 
   const submitReport = async (event) => {
     event.preventDefault();
-    if (!user?.id) return;
+    if (!user?.id || saving) return;
     if (!form.location.trim() || !form.description.trim()) {
       toast.error("Location and description are required.");
       return;
     }
     if (form.anonymousTip && !form.legalAccepted) {
       toast.error("You must accept the legal notice for anonymous tips.");
+      return;
+    }
+    const organizationId = activeOrganizationId || user.organizationId;
+    if (!organizationId) {
+      toast.error("Select or join a neighbourhood before submitting a report.");
       return;
     }
     setSaving(true);
@@ -87,7 +92,7 @@ export default function ResidentActivityReport() {
           ? "Anonymous resident"
           : user.fullName || user.email || "Resident",
         reporter_id: user.id,
-        organization_id: activeOrganizationId || user.organizationId || null,
+        organization_id: organizationId,
         status: "pending",
         title: form.type,
       };
@@ -158,6 +163,7 @@ export default function ResidentActivityReport() {
         title: "Report received",
         details: "Your report has been received and is awaiting assignment.",
         actor_user_id: user.id,
+        organization_id: organizationId,
       });
       if (timelineErr) {
         console.warn("Resident report timeline insert:", timelineErr.message);

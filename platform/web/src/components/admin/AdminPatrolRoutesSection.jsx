@@ -10,6 +10,7 @@ import {
   routeRowDistanceKm,
 } from '../../utils/patrolHistoryRoute';
 import { reverseGeocodeStartEnd } from '../../utils/reverseGeocodeNominatim';
+import { parsePatrolTime, durationMinutesFromLog, watchDayStamp, formatWatchDate } from '../../utils/watchTime';
 import PatrolRouteMapPanel from '../leaderboard/PatrolRouteMapPanel';
 import BrandedLoader from '../layout/BrandedLoader';
 import { useScopedOrganization } from '../../utils/organizationScope';
@@ -17,18 +18,20 @@ import { useScopedOrganization } from '../../utils/organizationScope';
 const MAX_ROWS = 50;
 
 function formatPatrolPeriod(log) {
-  const start = new Date(log.start_time);
-  const end = new Date(log.end_time);
+  const start = parsePatrolTime(log.start_time);
+  const end = parsePatrolTime(log.end_time);
+  if (!start) return { title: 'Unknown date', sub: '—' };
   const dateStr = start.toLocaleDateString('en-ZA', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
+  const endTime = end || start;
   const timeStr = `${start.toLocaleTimeString('en-ZA', {
     hour: '2-digit',
     minute: '2-digit',
-  })} – ${end.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}`;
+  })} – ${endTime.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}`;
   return { title: dateStr, sub: timeStr };
 }
 
@@ -127,21 +130,16 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
   const sorted = useMemo(() => {
     return [...(patrolLogs || [])]
       .filter((log) => log.end_time && matchesVolunteerFilter(log, volunteerFilter))
-      .sort((a, b) => new Date(b.start_time) - new Date(a.start_time))
+      .sort((a, b) => (parsePatrolTime(b.start_time)?.getTime() || 0) - (parsePatrolTime(a.start_time)?.getTime() || 0))
       .slice(0, MAX_ROWS);
   }, [patrolLogs, volunteerFilter]);
 
   const groupedByDay = useMemo(() => {
     const groups = new Map();
     for (const log of sorted) {
-      const d = new Date(log.start_time);
-      const key = d.toISOString().slice(0, 10);
-      const label = d.toLocaleDateString('en-ZA', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
+      const key = watchDayStamp(log.start_time);
+      if (!key) continue;
+      const label = formatWatchDate(log.start_time) || key;
       if (!groups.has(key)) groups.set(key, { key, label, items: [] });
       groups.get(key).items.push(log);
     }
@@ -149,8 +147,7 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
   }, [sorted]);
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    setExpandedDays(new Set([today]));
+    setExpandedDays(new Set([watchDayStamp()]));
   }, [volunteerFilter]);
 
   const routesForLog = useCallback(
@@ -303,7 +300,7 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
               return null;
             })();
             const { title, sub } = formatPatrolPeriod(log);
-            const dur = log.duration_minutes ?? 0;
+            const dur = durationMinutesFromLog(log);
             const canMap = !!log.user_id;
             const streetInfo = streetsByKey[key];
 

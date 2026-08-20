@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { FaPrint, FaFilePdf } from 'react-icons/fa';
 import { supabase } from '../supabase/client';
@@ -8,6 +7,8 @@ import { downloadDomAsPdf } from '../utils/downloadDomAsPdf';
 import { displayPatrolZone } from '../config/neighborhoodRegions';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { useScopedOrganization } from '../utils/organizationScope';
+import { fetchAllQueryPages } from '../utils/fetchPagedRows';
+import { parsePatrolTime, durationMinutesFromLog, formatWatchDateTime, watchDayStamp } from '../utils/watchTime';
 
 export default function PrintPatrolLogs() {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ export default function PrintPatrolLogs() {
     try {
       await downloadDomAsPdf(
         el,
-        `patrol-logs-${format(new Date(), 'yyyy-MM-dd')}.pdf`,
+        `patrol-logs-${watchDayStamp()}.pdf`,
         { waitForImages: false }
       );
       toast.success('PDF saved', { id: 'pdf-patrol-logs' });
@@ -63,30 +64,33 @@ export default function PrintPatrolLogs() {
   }, [loading, pdfIntent, handleDownloadPdf, setSearchParams]);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchLogs() {
       try {
-        const { data, error } = await scope(
-          supabase.from('patrol_logs').select('*')
-        ).order('start_time', { ascending: false });
-
-        if (error) throw error;
+        const data = await fetchAllQueryPages(() =>
+          scope(supabase.from('patrol_logs').select('*')).order('start_time', { ascending: false, nullsFirst: false })
+        );
+        if (cancelled) return;
 
         const formattedData = (data || []).map((log) => ({
           id: log.id,
           userName: log.user_name,
-          start: log.start_time ? new Date(log.start_time) : null,
-          end: log.end_time ? new Date(log.end_time) : null,
-          durationMinutes: log.duration_minutes,
+          start: log.start_time ? parsePatrolTime(log.start_time) : null,
+          end: log.end_time ? parsePatrolTime(log.end_time) : null,
+          durationMinutes: durationMinutesFromLog(log),
           zone: log.zone,
         }));
         setLogs(formattedData);
       } catch (err) {
-        console.error('Error fetching logs:', err);
+        if (!cancelled) console.error('Error fetching logs:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     fetchLogs();
+    return () => {
+      cancelled = true;
+    };
   }, [scope]);
 
   if (loading) {
@@ -138,7 +142,7 @@ export default function PrintPatrolLogs() {
             Patrol Logs – Neighbourhood Watch
           </h1>
           <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            Generated on {new Date().toLocaleString()}
+            Generated on {formatWatchDateTime(new Date()) || watchDayStamp()}
           </p>
 
           <div className="overflow-x-auto">

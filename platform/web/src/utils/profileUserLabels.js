@@ -3,6 +3,7 @@
  */
 
 import { isRpcNotFoundError } from './isRpcNotFound';
+import { formatWatchDateTime, parsePatrolTime } from './watchTime';
 
 export function userDisplayLabelFromRow(row) {
   if (!row) return null;
@@ -69,19 +70,15 @@ export async function fetchUserLabelMap(supabase, userIds) {
 
 export function formatAuditDateTime(iso) {
   if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  } catch {
-    return '—';
-  }
+  return formatWatchDateTime(iso) || '—';
 }
 
 /** True if the row was edited after creation (or updated_by is set and differs from creator). */
 export function profileHasDistinctUpdate(profile) {
   if (!profile?.updated_at) return false;
-  const u = new Date(profile.updated_at).getTime();
+  const u = parsePatrolTime(profile.updated_at)?.getTime();
   if (!Number.isFinite(u)) return false;
-  const c = profile.created_at ? new Date(profile.created_at).getTime() : NaN;
+  const c = profile.created_at ? parsePatrolTime(profile.created_at)?.getTime() : NaN;
   if (!Number.isFinite(c)) return true;
   if (u - c > 2000) return true;
   const ub = profile.updated_by != null && String(profile.updated_by).trim() !== '';

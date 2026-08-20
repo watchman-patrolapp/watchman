@@ -1,3 +1,5 @@
+import { parsePatrolTime } from "./watchTime";
+
 export const CITY_HUB_READ_EVENT = "city-hub-read-updated";
 
 const SHARED_KEY = "nwp.cityHub.lastSeen";
@@ -40,7 +42,11 @@ export function readCityHubLastSeen(userId) {
 function laterIso(a, b) {
   if (!a) return b || null;
   if (!b) return a;
-  return Date.parse(a) >= Date.parse(b) ? a : b;
+  const ta = parsePatrolTime(a)?.getTime() ?? Date.parse(a);
+  const tb = parsePatrolTime(b)?.getTime() ?? Date.parse(b);
+  if (!Number.isFinite(ta)) return b;
+  if (!Number.isFinite(tb)) return a;
+  return ta >= tb ? a : b;
 }
 
 export function markCityHubVisited(userId, seenAtIso = null) {
@@ -63,9 +69,11 @@ export function isCityHubPath(pathname = "") {
 export function isCityHubPostUnread(post, lastSeenIso) {
   if (!post || post.status !== "published") return false;
   if (!lastSeenIso) return true;
-  const created = Date.parse(post.created_at || post.updated_at || "");
-  if (Number.isNaN(created)) return false;
-  const seen = Date.parse(lastSeenIso);
-  if (Number.isNaN(seen)) return true;
+  const created =
+    parsePatrolTime(post.created_at || post.updated_at)?.getTime() ??
+    Date.parse(post.created_at || post.updated_at || "");
+  if (!Number.isFinite(created)) return false;
+  const seen = parsePatrolTime(lastSeenIso)?.getTime() ?? Date.parse(lastSeenIso);
+  if (!Number.isFinite(seen)) return true;
   return created > seen;
 }

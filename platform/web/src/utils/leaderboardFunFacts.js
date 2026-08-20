@@ -26,6 +26,7 @@
 
 import { SA_FIXED_HOLIDAYS } from "./volunteerStats.js";
 import { routeRowDistanceKm } from "./patrolHistoryRoute.js";
+import { parsePatrolTime, watchDayStamp } from "./watchTime";
 
 export const SWIFT_CRUISE_KMH = 40;
 export const SWIFT_TOP_KMH = 112;
@@ -56,12 +57,13 @@ const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "
 const COMPARISON_GROUPS = new Set(["distanceTotal", "landmark", "hours"]);
 
 function localDateStr(date) {
-  const d = date instanceof Date ? date : new Date(date);
-  if (Number.isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  if (date instanceof Date) {
+    if (Number.isNaN(date.getTime())) return "";
+    return watchDayStamp(date);
+  }
+  const d = parsePatrolTime(date);
+  if (!d) return "";
+  return watchDayStamp(d);
 }
 
 function yesterdayStr() {

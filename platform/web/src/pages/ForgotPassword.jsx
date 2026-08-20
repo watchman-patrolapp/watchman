@@ -13,6 +13,7 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError('');
     const trimmed = email.trim();
     if (!trimmed) {

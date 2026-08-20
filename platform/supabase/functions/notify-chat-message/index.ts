@@ -103,6 +103,15 @@ Deno.serve(async (req) => {
     /^sos\b/i.test(text)
   const organizationId = String(record.organization_id ?? '').trim()
 
+  // Fail closed: never fan out to every device when org is missing.
+  if (!organizationId) {
+    console.warn('notify-chat-message: missing organization_id — skipping push')
+    return new Response(JSON.stringify({ ok: true, sent: 0, reason: 'no_organization_id' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   // If sender_name is missing in the row payload, resolve from profiles.
   if (!senderName) {
     try {
@@ -120,7 +129,8 @@ Deno.serve(async (req) => {
 
   let tokenQuery = supabase.from('user_push_tokens').select('token, user_id').neq('user_id', senderId)
 
-  if (isCritical && organizationId) {
+  // Always constrain recipients to the message organization (critical and non-critical).
+  {
     const orgIds = new Set<string>()
     const { data: orgUsers } = await supabase.from('users').select('id').eq('organization_id', organizationId)
     for (const u of orgUsers ?? []) orgIds.add(String(u.id))
@@ -139,8 +149,10 @@ Deno.serve(async (req) => {
       })
     }
     tokenQuery = tokenQuery.in('user_id', memberIds)
-  } else if (roomId) {
-    // Optional room-targeting: if room_id exists and room_members table is available, only notify members in that room.
+  }
+
+  if (!isCritical && roomId) {
+    // Optional room-targeting: further narrow to room_members when that table exists.
     try {
       const { data: members, error: memberErr } = await supabase
         .from('room_members')
@@ -158,7 +170,7 @@ Deno.serve(async (req) => {
         tokenQuery = tokenQuery.in('user_id', memberIds)
       }
     } catch {
-      // Fallback to global recipient set when room_members is not present.
+      // room_members may not exist — keep org-scoped tokenQuery
     }
   }
 
@@ -174,7 +186,8 @@ Deno.serve(async (req) => {
 
   let recipientRows = rows ?? []
   try {
-    if (!isCritical && organizationId) {
+    // Defense in depth: re-filter to org (already applied above).
+    if (organizationId) {
       const orgIds = new Set<string>()
       const { data: orgUsers } = await supabase.from('users').select('id').eq('organization_id', organizationId)
       for (const u of orgUsers ?? []) orgIds.add(String(u.id))

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { belongsToActiveOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
+import { combineWatchDateTime } from '../../utils/watchTime';
 import { supabase } from '../../supabase/client';
 import { safeInternalReturnPath } from '../../utils/safeReturnPath';
 import MoTemplatePicker from '../../components/intelligence/MoTemplatePicker';
@@ -180,7 +181,7 @@ export default function CreateProfile() {
         if (inc.location) row.location = inc.location;
         if (inc.incident_date) {
           const d = String(inc.incident_date).slice(0, 10);
-          row.seen_at = new Date(`${d}T12:00:00`).toISOString();
+          row.seen_at = combineWatchDateTime(d, '12:00');
         }
         if (row.location || row.seen_at) setSightingsLog([row]);
 
@@ -343,8 +344,15 @@ export default function CreateProfile() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     if (!primaryName.trim()) {
       toast.error('Primary Name is required');
+      return;
+    }
+
+    const orgId = activeOrganizationId || user?.organizationId || null;
+    if (!orgId) {
+      toast.error('Select a neighbourhood before creating a profile.');
       return;
     }
 
@@ -423,7 +431,7 @@ export default function CreateProfile() {
           // Metadata (must match auth.uid() for RLS delete-as-creator)
           created_by: authUid,
           first_identified_at: new Date().toISOString(),
-          organization_id: activeOrganizationId || user?.organizationId || null,
+          organization_id: orgId,
         })
         .select()
         .single();

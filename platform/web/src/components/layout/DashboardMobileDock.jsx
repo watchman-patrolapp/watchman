@@ -1,17 +1,20 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FaHome, FaListUl, FaPlusCircle, FaComment, FaClipboardCheck, FaShieldAlt, FaCalendarAlt, FaBell, FaPhone, FaUserFriends } from 'react-icons/fa';
-import { markChatVisited } from '../../chat/utils/markChatVisited';
 import { useAuth } from '../../auth/useAuth';
 import { canAccessAdminPanel } from '../../auth/staffRoles';
 import { canAccessPatrolSchedule, homePathForRole, isHouseholdModeRole, isResidentAppRole } from '../../auth/roleMatrix';
+import { OpsChatUnreadSplit } from '../../chat/components/OpsChatUnreadSplit';
 
 /**
  * Mobile-first quick nav (bento / shell pattern). Hidden on md+ where dashboard tiles suffice.
  * @param {number} [pendingIncidentsCount] — incidents awaiting moderation
  * @param {number} [pendingFeedbackCount] — unreviewed feedback rows
+ * @param {{ patrolUnread: number, neighbourUnread: number }|null} [chatBadgeSplit] — ops dual unread
  */
 export default function DashboardMobileDock({
   unreadCount = 0,
+  chatBadgeSplit = null,
+  onChatNavigate,
   pendingIncidentsCount = 0,
   pendingFeedbackCount = 0,
 }) {
@@ -27,8 +30,8 @@ export default function DashboardMobileDock({
   const onHouseholdPath = pathname.startsWith('/resident');
 
   const goChat = () => {
-    void markChatVisited(null);
-    navigate('/chat');
+    if (typeof onChatNavigate === 'function') onChatNavigate();
+    else navigate('/chat');
   };
 
   const householdDockItem = {
@@ -39,12 +42,22 @@ export default function DashboardMobileDock({
     active: onHouseholdPath,
   };
 
+  const chatItem = {
+    path: '/chat',
+    label: 'Chat',
+    icon: FaComment,
+    onClick: goChat,
+    active: pathname === '/chat',
+    badge: unreadCount,
+    chatSplit: chatBadgeSplit,
+  };
+
   const residentItems = [
     { path: homePath, label: 'Home', icon: FaHome, onClick: () => navigate(homePath), active: pathname === homePath },
     { path: '/resident/activity', label: 'Reports', icon: FaListUl, onClick: () => navigate('/resident/activity'), active: pathname.startsWith('/resident/activity') },
     { path: '/resident/neighbours', label: 'Neighbours', icon: FaUserFriends, onClick: () => navigate('/resident/neighbours'), active: pathname.startsWith('/resident/neighbours') || pathname.startsWith('/resident/sector') },
     { path: '/resident/sos', label: 'SOS', icon: FaBell, onClick: () => navigate('/resident/sos'), active: pathname === '/resident/sos', danger: true },
-    { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
+    chatItem,
     { path: '/resident/contacts', label: 'Contacts', icon: FaPhone, onClick: () => navigate('/resident/contacts'), active: pathname.startsWith('/resident/contacts') },
   ];
 
@@ -57,7 +70,7 @@ export default function DashboardMobileDock({
       { path: '/resident', label: 'Home', icon: FaHome, onClick: () => navigate('/resident'), active: pathname === '/resident' },
       { path: '/resident/neighbours', label: 'Neighbours', icon: FaUserFriends, onClick: () => navigate('/resident/neighbours'), active: pathname.startsWith('/resident/neighbours') || pathname.startsWith('/resident/sector') },
       { path: '/resident/sos', label: 'SOS', icon: FaBell, onClick: () => navigate('/resident/sos'), active: pathname === '/resident/sos', danger: true },
-      { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
+      chatItem,
     ];
   } else if (isStaffAdminNav) {
     items = [
@@ -71,7 +84,7 @@ export default function DashboardMobileDock({
         active: pathname.startsWith('/admin'),
         badge: adminDockBadge,
       },
-      { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
+      chatItem,
       { path: '/incident/new', label: 'Report', icon: FaPlusCircle, onClick: () => navigate('/incident/new'), active: pathname === '/incident/new' },
       { path: '/incidents', label: 'Incident', icon: FaClipboardCheck, onClick: () => navigate('/incidents'), active: pathname.startsWith('/incidents') && !pathname.includes('/new') },
     ];
@@ -82,7 +95,7 @@ export default function DashboardMobileDock({
       ...(canUsePatrolSchedule
         ? [{ path: '/schedule', label: 'Schedule', icon: FaCalendarAlt, onClick: () => navigate('/schedule'), active: pathname === '/schedule' }]
         : []),
-      { path: '/chat', label: 'Chat', icon: FaComment, onClick: goChat, active: pathname === '/chat', badge: unreadCount },
+      chatItem,
       { path: '/incident/new', label: 'Report', icon: FaPlusCircle, onClick: () => navigate('/incident/new'), active: pathname === '/incident/new' },
       { path: '/incidents', label: 'Incident', icon: FaListUl, onClick: () => navigate('/incidents'), active: pathname.startsWith('/incidents') && !pathname.includes('/new') },
     ];
@@ -94,16 +107,23 @@ export default function DashboardMobileDock({
       aria-label="Primary navigation"
     >
       <ul className="flex justify-around items-stretch max-w-lg mx-auto px-1 pt-1">
-        {items.map(({ path, label, icon: Icon, onClick, active, badge, danger }) => {
+        {items.map(({ path, label, icon: Icon, onClick, active, badge, danger, chatSplit }) => {
           const n = badge ?? 0;
-          const hasAlert = n > 0;
+          const splitActive =
+            chatSplit &&
+            ((chatSplit.patrolUnread || 0) > 0 || (chatSplit.neighbourUnread || 0) > 0);
+          const hasAlert = splitActive || (!chatSplit && n > 0);
           const alertInactive =
             hasAlert && !active
-              ? 'text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-950/45 ring-2 ring-red-500/85 shadow-[0_0_12px_rgba(239,68,68,0.28)]'
+              ? chatSplit
+                ? 'text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900/50 ring-1 ring-amber-500/50 dark:ring-teal-500/40'
+                : 'text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-950/45 ring-2 ring-red-500/85 shadow-[0_0_12px_rgba(239,68,68,0.28)]'
               : '';
           const alertActive =
             hasAlert && active
-              ? 'ring-2 ring-red-500/90 ring-offset-2 ring-offset-white dark:ring-offset-gray-900 shadow-[0_0_10px_rgba(239,68,68,0.25)]'
+              ? chatSplit
+                ? 'ring-1 ring-teal-500/50 ring-offset-1 ring-offset-white dark:ring-offset-gray-900'
+                : 'ring-2 ring-red-500/90 ring-offset-2 ring-offset-white dark:ring-offset-gray-900 shadow-[0_0_10px_rgba(239,68,68,0.25)]'
               : '';
           const baseActive =
             active && !hasAlert
@@ -126,15 +146,28 @@ export default function DashboardMobileDock({
                 type="button"
                 onClick={onClick}
                 aria-current={active ? 'page' : undefined}
+                aria-label={
+                  chatSplit
+                    ? `Chat. Patrol ops ${chatSplit.patrolUnread || 0} unread, Neighbours ${chatSplit.neighbourUnread || 0} unread`
+                    : undefined
+                }
                 className={`w-full flex flex-col items-center gap-0.5 py-2 px-1 rounded-xl text-[10px] font-semibold uppercase tracking-wide motion-safe:transition-colors ${baseActive} ${baseInactive} ${alertInactive} ${alertActive}`}
               >
                 <span className="relative inline-flex">
                   <Icon className="w-5 h-5" aria-hidden />
-                  {n > 0 && (
+                  {chatSplit ? (
+                    <OpsChatUnreadSplit
+                      patrolUnread={chatSplit.patrolUnread}
+                      neighbourUnread={chatSplit.neighbourUnread}
+                      size="sm"
+                      layout="stack"
+                      className="absolute -top-2 -right-3 pointer-events-none"
+                    />
+                  ) : n > 0 ? (
                     <span className="absolute -top-1.5 -right-2 min-w-[1rem] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold shadow-sm">
                       {n > 9 ? '9+' : n}
                     </span>
-                  )}
+                  ) : null}
                 </span>
                 {label}
               </button>

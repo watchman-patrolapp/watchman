@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
@@ -21,6 +21,8 @@ import { initialsFromName } from "../utils/residentVerification";
 import { buildLeaderboardFunFacts } from "../utils/leaderboardFunFacts";
 import { evaluateLeaderboardBadges } from "../utils/leaderboardBadges";
 import { TIME_RANGES, buildVolunteerStats } from "../utils/volunteerStats";
+import { periodStartDate, logOverlapsSince, watchDayStamp, addCalendarDays, parsePatrolTime, activePatrolAsLog, durationMinutesFromLog } from "../utils/watchTime";
+import { fetchAllQueryPages } from "../utils/fetchPagedRows";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import FunFactsPanel from "../components/leaderboard/FunFactsPanel";
@@ -62,51 +64,58 @@ import { usePetrolPrice } from "../hooks/usePetrolPrice";
 const CHART_INITIAL = { width: 800, height: 256 };
 const CHART_INITIAL_SHORT = { width: 800, height: 224 };
 
-const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const HOURS_OF_DAY = Array.from({ length: 12 }, (_, i) => `${i * 2}:00`);
-
 const PERIODS = [
   { id: 'week', label: 'This week' },
   { id: 'month', label: 'This month' },
   { id: 'all', label: 'All time' },
 ];
 
-function periodStartDate(periodId) {
-  const now = new Date();
-  if (periodId === 'week') {
-    const d = new Date(now);
-    const day = d.getDay();
-    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }
-  if (periodId === 'month') {
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  }
-  return null;
+function resolveVolunteerName(log, nameByUserId = {}) {
+  const fromLog = String(log?.user_name || "").trim();
+  if (fromLog) return fromLog;
+  const fromProfile = log?.user_id ? String(nameByUserId?.[log.user_id] || "").trim() : "";
+  return fromProfile;
 }
 
-function aggregateLeaderboard(logs) {
+/** Stable key so active_patrols + patrol_logs with different timestamp string forms still dedupe. */
+function patrolIdentityKey(userId, startTime) {
+  const t = parsePatrolTime(startTime);
+  return `${userId || ""}|${t ? t.toISOString() : String(startTime || "")}`;
+}
+
+function chartAxisName(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return "Volunteer";
+  return raw.split(/\s+/)[0];
+}
+
+function aggregateLeaderboard(logs, nameByUserId = {}) {
   const stats = {};
   (logs || []).forEach((log) => {
     const key = log.user_id || log.user_name;
     if (!key) return;
+    const resolved = resolveVolunteerName(log, nameByUserId);
     if (!stats[key]) {
       stats[key] = {
-        name: log.user_name,
+        name: resolved,
         totalMinutes: 0,
         patrols: 0,
-        userId: log.user_id,
+        userId: log.user_id || null,
       };
     }
-    stats[key].totalMinutes += log.duration_minutes || 0;
+    stats[key].totalMinutes += durationMinutesFromLog(log);
     stats[key].patrols += 1;
-    if (log.user_name) stats[key].name = log.user_name;
+    if (log.user_id && !stats[key].userId) stats[key].userId = log.user_id;
+    if (resolved) stats[key].name = resolved;
   });
 
   return Object.values(stats)
-    .sort((a, b) => b.totalMinutes - a.totalMinutes)
-    .map((item, index) => ({ ...item, rank: index + 1 }));
+    .sort((a, b) => b.totalMinutes - a.totalMinutes || String(a.name).localeCompare(String(b.name)))
+    .map((item, index) => ({
+      ...item,
+      rank: index + 1,
+      name: item.name || "Volunteer",
+    }));
 }
 
 function formatHoursMinutes(totalMinutes) {
@@ -118,11 +127,15 @@ function formatHoursMinutes(totalMinutes) {
   return `${h}h ${m}m`;
 }
 
+function minutesToChartHours(totalMinutes) {
+  return Math.round((Math.max(0, Number(totalMinutes) || 0) / 60) * 10) / 10;
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function StatCard({ label, value, sub, color = 'teal', trend, icon: Icon, emoji }) {
+function StatCard({ label, value, sub, color = 'teal', icon: Icon }) {
   const colors = {
     teal: 'bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400',
     emerald: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400',
@@ -134,18 +147,9 @@ function StatCard({ label, value, sub, color = 'teal', trend, icon: Icon, emoji 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 shadow-sm hover:shadow-md transition">
       <div className="flex items-start justify-between">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colors[color]}`}>
-          {emoji ? <span className="text-2xl">{emoji}</span> : Icon ? <Icon className="w-6 h-6" /> : <FaChartLine className="w-6 h-6" />}
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colors[color] || colors.teal}`}>
+          {Icon ? <Icon className="w-6 h-6" /> : <FaChartLine className="w-6 h-6" />}
         </div>
-        {trend && (
-          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-            trend > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 
-            trend < 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-            'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-          }`}>
-            {trend > 0 ? '+' : ''}{trend}%
-          </span>
-        )}
       </div>
       <div className="mt-3">
         <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
@@ -288,30 +292,27 @@ function YourStanding({ entry, nextUp, periodId, periodLabel, hasPatrolsThisPeri
 }
 
 function ActivityHeatmap({ patrolData }) {
-  // Generate last 84 days (12 weeks) of activity
+  // Align columns to Mon→Sun (SAST), same week definition as the leaderboard.
   const days = useMemo(() => {
+    const today = watchDayStamp(new Date());
+    const weekStart = periodStartDate("week");
+    const mondayStamp = weekStart ? watchDayStamp(weekStart) : today;
+    // 12 full weeks ending this week (84 days).
+    const startStamp = addCalendarDays(mondayStamp, -11 * 7);
     const result = [];
-    const today = new Date();
-    for (let i = 83; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      result.push({
-        date: d.toISOString().split('T')[0],
-        dayOfWeek: d.getDay(),
-        count: 0
-      });
+    for (let i = 0; i < 84; i++) {
+      const date = addCalendarDays(startStamp, i);
+      result.push({ date, count: 0 });
     }
     return result;
   }, []);
 
-  // Fill with actual data
   const filledDays = useMemo(() => {
-    const dayMap = new Map(days.map(d => [d.date, d]));
-    patrolData.forEach(patrol => {
-      const date = new Date(patrol.start_time).toISOString().split('T')[0];
-      if (dayMap.has(date)) {
-        dayMap.get(date).count += 1;
-      }
+    const dayMap = new Map(days.map((d) => [d.date, { ...d }]));
+    (patrolData || []).forEach((patrol) => {
+      const date = watchDayStamp(patrol.start_time);
+      const cell = dayMap.get(date);
+      if (cell) cell.count += 1;
     });
     return Array.from(dayMap.values());
   }, [days, patrolData]);
@@ -338,9 +339,9 @@ function ActivityHeatmap({ patrolData }) {
       <div className="flex gap-1 overflow-x-auto pb-2">
         {weeks.map((week, weekIdx) => (
           <div key={weekIdx} className="flex flex-col gap-1">
-            {week.map((day, dayIdx) => (
+            {week.map((day) => (
               <div
-                key={dayIdx}
+                key={day.date}
                 title={`${day.date}: ${day.count} patrol${day.count !== 1 ? 's' : ''}`}
                 className={`w-3 h-3 rounded-sm ${getIntensity(day.count)} transition hover:ring-2 hover:ring-teal-500`}
               />
@@ -428,7 +429,7 @@ function FavoriteTimeRadar({ timeDistribution }) {
 }
 
 function RecentPatrols({ patrols }) {
-  const recentPatrols = patrols.slice(0, 5);
+  const recentPatrols = (patrols || []).slice(0, 5);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6">
@@ -437,41 +438,55 @@ function RecentPatrols({ patrols }) {
         Recent Patrols
       </h3>
       <div className="space-y-3">
-        {recentPatrols.map((patrol, idx) => (
-          <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+        {recentPatrols.map((patrol, idx) => {
+          const start = parsePatrolTime(patrol.start_time);
+          const end = parsePatrolTime(patrol.end_time);
+          const mins = durationMinutesFromLog(patrol);
+          const key = patrolIdentityKey(patrol.user_id, patrol.start_time) || `patrol-${idx}`;
+          return (
+          <div key={key} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
                 <FaMapMarkerAlt className="w-4 h-4 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {new Date(patrol.start_time).toLocaleDateString('en-ZA', { 
-                    weekday: 'short', 
-                    day: 'numeric', 
-                    month: 'short' 
-                  })}
+                  {start
+                    ? start.toLocaleDateString('en-ZA', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                      })
+                    : 'Unknown date'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {new Date(patrol.start_time).toLocaleTimeString('en-ZA', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })} - {new Date(patrol.end_time).toLocaleTimeString('en-ZA', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
+                  {start
+                    ? start.toLocaleTimeString('en-ZA', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '—'}
+                  {' - '}
+                  {end
+                    ? end.toLocaleTimeString('en-ZA', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '—'}
                 </p>
               </div>
             </div>
             <div className="text-right">
               <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                {Math.floor(patrol.duration_minutes / 60)}h {patrol.duration_minutes % 60}m
+                {formatHoursMinutes(mins)}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {displayPatrolZone(patrol.zone) || DEFAULT_PATROL_ZONE}
               </p>
             </div>
           </div>
-        ))}
+          );
+        })}
         {recentPatrols.length === 0 && (
           <p className="text-center text-gray-500 dark:text-gray-400 py-4">No patrols recorded yet</p>
         )}
@@ -497,59 +512,104 @@ export default function Leaderboard() {
   const [patrolRouteRows, setPatrolRouteRows] = useState([]);
   const [locationPoints, setLocationPoints] = useState([]);
   const [avatarByUserId, setAvatarByUserId] = useState({});
+  const [nameByUserId, setNameByUserId] = useState({});
   const [vehicleByUserId, setVehicleByUserId] = useState({});
-  const [period, setPeriod] = useState("all");
+  const [period, setPeriod] = useState("week");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedVolunteer, setSelectedVolunteer] = useState(null);
+  const fetchGenRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    const runId = ++fetchGenRef.current;
     setLoading(true);
     setError(null);
     
     try {
       // Fetch all patrol logs
-      const { data: logsData, error: logsError } = await scope(
-        supabase
-          .from('patrol_logs')
-          .select('user_name, duration_minutes, start_time, end_time, zone, user_id')
-      ).order('start_time', { ascending: false });
+      let logs;
+      try {
+        logs = await fetchAllQueryPages(() =>
+          scope(
+            supabase
+              .from("patrol_logs")
+              .select("user_name, duration_minutes, start_time, end_time, zone, user_id, created_at")
+          ).order("start_time", { ascending: false })
+        );
+      } catch (err) {
+        if (!/created_at/i.test(String(err?.message || err))) throw err;
+        logs = await fetchAllQueryPages(() =>
+          scope(
+            supabase
+              .from("patrol_logs")
+              .select("user_name, duration_minutes, start_time, end_time, zone, user_id")
+          ).order("start_time", { ascending: false })
+        );
+      }
+      if (runId !== fetchGenRef.current) return;
 
-      if (logsError) throw logsError;
+      let activeLogs = [];
+      try {
+        const { data: active, error: activeError } = await scope(
+          supabase.from("active_patrols").select("user_name, start_time, user_id, zone")
+        );
+        if (!activeError && Array.isArray(active) && active.length) {
+          const now = new Date();
+          const started = new Set(
+            logs.map((log) => patrolIdentityKey(log.user_id, log.start_time))
+          );
+          activeLogs = active
+            .map((row) => activePatrolAsLog(row, now))
+            .filter((row) => !started.has(patrolIdentityKey(row.user_id, row.start_time)));
+        }
+      } catch {
+        activeLogs = [];
+      }
+      if (runId !== fetchGenRef.current) return;
 
-      const logs = Array.isArray(logsData) ? logsData : [];
-      setAllLogs(logs);
+      const combinedLogs = [...activeLogs, ...logs];
+      setAllLogs(combinedLogs);
 
-      const sorted = aggregateLeaderboard(logs);
-
-      const userIds = [...new Set(logs.map((log) => log.user_id).filter(Boolean))];
+      let profileNames = {};
+      const userIds = [...new Set(combinedLogs.map((log) => log.user_id).filter(Boolean))];
       if (userIds.length > 0) {
         try {
           const [{ data: avatars }, fuelVehicles] = await Promise.all([
-            supabase.from("users").select("id, avatar_url, car_type").in("id", userIds),
+            supabase.from("users").select("id, avatar_url, car_type, full_name").in("id", userIds),
             supabase.rpc("list_watch_fuel_vehicles").then(({ data, error }) => (error ? [] : data || [])),
           ]);
+          if (runId !== fetchGenRef.current) return;
           const map = {};
           (avatars || []).forEach((row) => {
-            if (row?.id) map[row.id] = row.avatar_url || null;
+            if (!row?.id) return;
+            map[row.id] = row.avatar_url || null;
+            const label = String(row.full_name || "").trim();
+            if (label) profileNames[row.id] = label;
           });
           setAvatarByUserId(map);
+          setNameByUserId(profileNames);
           setVehicleByUserId(mergeFuelVehicles({
             userRows: avatars || [],
             rpcRows: Array.isArray(fuelVehicles) ? fuelVehicles : [],
             selfUser: user,
           }));
         } catch {
+          if (runId !== fetchGenRef.current) return;
+          profileNames = {};
           setAvatarByUserId({});
+          setNameByUserId({});
           setVehicleByUserId(mergeFuelVehicles({ selfUser: user }));
         }
       } else {
         setAvatarByUserId({});
+        setNameByUserId({});
         setVehicleByUserId(mergeFuelVehicles({ selfUser: user }));
       }
 
+      const sorted = aggregateLeaderboard(combinedLogs, profileNames);
+
       // Calculate current user's detailed stats
-      const userLogs = logs.filter(log => log.user_id === user?.id);
+      const userLogs = combinedLogs.filter(log => log.user_id === user?.id);
       let routeRows = [];
       if (user?.id) {
         try {
@@ -558,19 +618,22 @@ export default function Leaderboard() {
           routeRows = [];
         }
       }
+      if (runId !== fetchGenRef.current) return;
       setPatrolRouteRows(routeRows);
 
-      const allTimeRank = sorted.findIndex((s) => s.userId === user?.id) + 1 || (userLogs.length ? sorted.length + 1 : null);
-      const stats = buildVolunteerStats(userLogs, routeRows, { globalRank: allTimeRank || null });
+      const idx = sorted.findIndex((s) => s.userId === user?.id);
+      const allTimeRank = idx >= 0 ? idx + 1 : null;
+      const stats = buildVolunteerStats(userLogs, routeRows, { globalRank: allTimeRank });
       setUserStats(stats);
       setUserPatrols(userLogs);
 
     } catch (err) {
+      if (runId !== fetchGenRef.current) return;
       console.error("Error fetching data:", err);
       setError(err.message);
       toast.error("Failed to load leaderboard");
     } finally {
-      setLoading(false);
+      if (runId === fetchGenRef.current) setLoading(false);
     }
   }, [user, scope]);
 
@@ -579,7 +642,6 @@ export default function Leaderboard() {
   }, [fetchData]);
 
   const periodLabel = PERIODS.find((p) => p.id === period)?.label || "All time";
-  const periodSince = useMemo(() => periodStartDate(period), [period]);
 
   useEffect(() => {
     let cancelled = false;
@@ -597,17 +659,17 @@ export default function Leaderboard() {
   const leaderboard = useMemo(() => {
     const start = periodStartDate(period);
     const logs = start
-      ? allLogs.filter((log) => new Date(log.start_time) >= start)
+      ? allLogs.filter((log) => logOverlapsSince(log, start))
       : allLogs;
-    return aggregateLeaderboard(logs);
-  }, [allLogs, period]);
+    return aggregateLeaderboard(logs, nameByUserId);
+  }, [allLogs, period, nameByUserId]);
 
   const topThree = leaderboard.slice(0, 3);
   const myPeriodEntry = leaderboard.find((entry) => entry.userId === user?.id) || null;
   const nextUp = myPeriodEntry && myPeriodEntry.rank > 1
     ? leaderboard.find((entry) => entry.rank === myPeriodEntry.rank - 1)
     : null;
-  const allTimeBoard = useMemo(() => aggregateLeaderboard(allLogs), [allLogs]);
+  const allTimeBoard = useMemo(() => aggregateLeaderboard(allLogs, nameByUserId), [allLogs, nameByUserId]);
   const selectedAllTimeRank = selectedVolunteer
     ? allTimeBoard.find((entry) =>
         (selectedVolunteer.userId && entry.userId === selectedVolunteer.userId)
@@ -772,7 +834,7 @@ export default function Leaderboard() {
 
           {/* Rest of Top 10 */}
           {leaderboard.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
               <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Top 10 Volunteers
@@ -785,36 +847,49 @@ export default function Leaderboard() {
                 </p>
               </div>
               
-              {/* Mini bar chart */}
-              <div className="p-6 border-b border-gray-100 dark:border-gray-700 min-w-0">
-                <div className="h-56 w-full min-w-0 min-h-[14rem]">
+              {/* Mini bar chart — values are hours (not raw minutes) so the Y-axis unit is honest */}
+              <div className="p-6 pb-4 border-b border-gray-100 dark:border-gray-700 min-w-0 overflow-visible">
+                <div className="h-64 w-full min-w-0 min-h-[16rem]">
                   <ResponsiveContainer
                     width="100%"
                     height="100%"
                     minWidth={0}
-                    minHeight={224}
+                    minHeight={256}
                     initialDimension={CHART_INITIAL_SHORT}
                   >
-                    <BarChart data={leaderboard.slice(0, 10)} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                    <BarChart
+                      data={leaderboard.slice(0, 10).map((entry) => ({
+                        ...entry,
+                        hours: minutesToChartHours(entry.totalMinutes),
+                      }))}
+                      margin={{ top: 8, right: 20, left: 12, bottom: 56 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis 
-                        dataKey="name" 
-                        tick={{ fontSize: 10 }} 
+                      <XAxis
+                        dataKey="name"
+                        type="category"
+                        tick={{ fontSize: 11 }}
                         interval={0}
-                        angle={-45}
+                        minTickGap={0}
+                        angle={-40}
                         textAnchor="end"
-                        height={72}
+                        height={80}
+                        tickMargin={8}
+                        tickFormatter={chartAxisName}
                       />
                       <YAxis tick={{ fontSize: 11 }} unit="h" />
                       <Tooltip 
-                        formatter={(val) => [`${Math.floor(val / 60)}h ${val % 60}m`, 'Hours']}
+                        formatter={(val, _name, item) => [
+                          formatHoursMinutes(item?.payload?.totalMinutes ?? val * 60),
+                          'Hours',
+                        ]}
                         contentStyle={{ borderRadius: 8 }}
                       />
                       <Bar 
-                        dataKey="totalMinutes" 
+                        dataKey="hours" 
                         fill="#0d9488" 
                         radius={[4, 4, 0, 0]}
-                        name="Minutes"
+                        name="Hours"
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -835,7 +910,7 @@ export default function Leaderboard() {
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {leaderboard.slice(0, 10).map(entry => (
                       <tr 
-                        key={entry.userId || entry.name} 
+                        key={entry.userId || `${entry.rank}-${entry.name}`}
                         className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition ${
                           entry.userId === user?.id ? 'bg-teal-50 dark:bg-teal-900/20' : ''
                         }`}
@@ -916,14 +991,14 @@ export default function Leaderboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <StatCard
                 label="Total Hours"
-                value={`${Math.floor(userStats.totalMinutes / 60)}h`}
-                sub={`${userStats.totalMinutes % 60}m total`}
+                value={formatHoursMinutes(userStats.totalMinutes)}
+                sub={`${userStats.totalPatrols} patrol${userStats.totalPatrols === 1 ? "" : "s"} all time`}
                 color="teal"
                 icon={FaClock}
               />
               <StatCard
                 label="Global Rank"
-                value={`#${userStats.globalRank}`}
+                value={userStats.globalRank ? `#${userStats.globalRank}` : "—"}
                 sub="among all volunteers"
                 color="amber"
                 icon={FaTrophy}
@@ -937,8 +1012,8 @@ export default function Leaderboard() {
               />
               <StatCard
                 label="Avg Duration"
-                value={`${Math.floor(userStats.averageDuration / 60)}h`}
-                sub={`${userStats.averageDuration % 60}m per patrol`}
+                value={formatHoursMinutes(userStats.averageDuration)}
+                sub="per patrol"
                 color="violet"
                 icon={FaChartLine}
               />
@@ -955,7 +1030,7 @@ export default function Leaderboard() {
                       {userStats.favoriteTime.label}
                     </h3>
                     <p className="text-violet-100 text-sm mt-1">
-                      {userStats.favoriteTime.count} patrols during {userStats.favoriteTime.period} hours
+                      {userStats.favoriteTime.count} patrols · {userStats.favoriteTime.label}
                     </p>
                   </div>
                   <div className="text-right">
@@ -981,6 +1056,7 @@ export default function Leaderboard() {
                   locationPoints={locationPoints}
                   priceZarPerLitre={petrol.price}
                   onPriceChange={petrol.setPrice}
+                  defaultPeriod={period}
                   onSaveArea={async () => {
                     const result = await petrol.saveArea();
                     if (result?.ok) toast.success("Neighbourhood petrol price saved");
@@ -1117,6 +1193,7 @@ export default function Leaderboard() {
         <VolunteerProfileSheet
           volunteer={selectedVolunteer}
           allLogs={allLogs}
+          periodId={period}
           allTimeRank={selectedAllTimeRank}
           avatarUrl={avatarByUserId[selectedVolunteer.userId]}
           vehicle={vehicleByUserId[selectedVolunteer.userId]}

@@ -13,6 +13,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { assignResidentToNeighborhood } from "../utils/residentVerification";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
+import { parsePatrolTime } from "../utils/watchTime";
 
 function InlineConfirm({ label, onConfirm, onCancel, disabled }) {
   return (
@@ -81,8 +82,8 @@ export default function UserManagement() {
     const tie = (a, b) => String(a.uid).localeCompare(String(b.uid));
     list.sort((a, b) => {
       if (sortBy === "joined_desc" || sortBy === "joined_asc") {
-        const ta = new Date(a.createdAt || 0).getTime();
-        const tb = new Date(b.createdAt || 0).getTime();
+        const ta = parsePatrolTime(a.createdAt)?.getTime() || 0;
+        const tb = parsePatrolTime(b.createdAt)?.getTime() || 0;
         if (ta !== tb) return sortBy === "joined_desc" ? tb - ta : ta - tb;
         return tie(a, b);
       }
@@ -191,6 +192,7 @@ export default function UserManagement() {
   };
 
   const handleAssignToNeighborhood = async (uid, organizationId) => {
+    if (busyUid) return;
     const orgId = organizationId || activeOrganizationId;
     if (!orgId) {
       toast.error("Select a neighborhood first.");
@@ -230,6 +232,7 @@ export default function UserManagement() {
   };
 
   const handleDeleteUser = async (uid) => {
+    if (deleteLoading) return;
     setDeleteLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("admin-delete-user", {

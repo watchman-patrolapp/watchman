@@ -6,6 +6,7 @@ import { captureChatError } from '../utils/chatTelemetry';
 
 /**
  * Send one queued item (after media restored from IndexedDB if needed).
+ * Passes localId as clientMessageId so retries are idempotent in DB.
  * @returns {{ ok: boolean, error?: Error }}
  */
 export async function flushChatQueueItem(raw) {
@@ -14,6 +15,9 @@ export async function flushChatQueueItem(raw) {
   const senderId = item.sender_id;
   const senderName = item.sender_name;
   const senderAvatar = item.sender_avatar;
+  const clientMessageId = localId || null;
+  const replyToMessageId = item.reply_to_message_id || null;
+  const replyPreviewText = item.reply_preview_text || null;
 
   try {
     if (item.type === MessageType.TEXT) {
@@ -24,6 +28,9 @@ export async function flushChatQueueItem(raw) {
         senderAvatar,
         isCritical: !!item.is_critical,
         visibility: item.visibility || null,
+        clientMessageId,
+        replyToMessageId,
+        replyPreviewText,
       });
       return { ok: true };
     }
@@ -39,6 +46,9 @@ export async function flushChatQueueItem(raw) {
         senderAvatar,
         isCritical: !!item.is_critical,
         visibility: item.visibility || null,
+        clientMessageId,
+        replyToMessageId,
+        replyPreviewText,
       });
       return { ok: true };
     }
@@ -59,6 +69,9 @@ export async function flushChatQueueItem(raw) {
         senderName,
         senderAvatar,
         visibility: item.visibility || null,
+        clientMessageId,
+        replyToMessageId,
+        replyPreviewText,
       });
       if (item._mediaKey) await queueMediaDelete(item._mediaKey);
       return { ok: true };
@@ -80,6 +93,9 @@ export async function flushChatQueueItem(raw) {
         senderName,
         senderAvatar,
         visibility: item.visibility || null,
+        clientMessageId,
+        replyToMessageId,
+        replyPreviewText,
       });
       if (item._mediaKey) await queueMediaDelete(item._mediaKey);
       return { ok: true };

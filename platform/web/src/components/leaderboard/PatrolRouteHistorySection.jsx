@@ -10,24 +10,27 @@ import {
   routeRowDistanceKm,
 } from '../../utils/patrolHistoryRoute';
 import { reverseGeocodeStartEnd } from '../../utils/reverseGeocodeNominatim';
+import { parsePatrolTime, durationMinutesFromLog } from '../../utils/watchTime';
 import PatrolRouteMapPanel from './PatrolRouteMapPanel';
 import BrandedLoader from '../layout/BrandedLoader';
 
 const MAX_PATROLS = 25;
 
 function formatPatrolPeriod(log) {
-  const start = new Date(log.start_time);
-  const end = new Date(log.end_time);
+  const start = parsePatrolTime(log.start_time);
+  const end = parsePatrolTime(log.end_time);
+  if (!start) return { title: 'Unknown date', sub: '—' };
   const dateStr = start.toLocaleDateString('en-ZA', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
+  const endTime = end || start;
   const timeStr = `${start.toLocaleTimeString('en-ZA', {
     hour: '2-digit',
     minute: '2-digit',
-  })} – ${end.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}`;
+  })} – ${endTime.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}`;
   return { title: dateStr, sub: timeStr };
 }
 
@@ -87,7 +90,7 @@ export default function PatrolRouteHistorySection({ userPatrols, userId, routeRo
 
   const sorted = useMemo(() => {
     return [...(userPatrols || [])]
-      .sort((a, b) => new Date(b.start_time) - new Date(a.start_time))
+      .sort((a, b) => (parsePatrolTime(b.start_time)?.getTime() || 0) - (parsePatrolTime(a.start_time)?.getTime() || 0))
       .slice(0, MAX_PATROLS);
   }, [userPatrols]);
 
@@ -178,7 +181,7 @@ export default function PatrolRouteHistorySection({ userPatrols, userId, routeRo
             return null;
           })();
           const { title, sub } = formatPatrolPeriod(log);
-          const dur = log.duration_minutes ?? 0;
+          const dur = durationMinutesFromLog(log);
           const streetInfo = streetsByKey[key];
 
           return (

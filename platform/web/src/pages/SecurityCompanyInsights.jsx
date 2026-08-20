@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { supabase } from "../supabase/client";
 import PageHeader from "../components/layout/PageHeader";
+import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 
 export default function SecurityCompanyInsights() {
   const [rows, setRows] = useState([]);
@@ -12,15 +13,18 @@ export default function SecurityCompanyInsights() {
     const load = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("security_company_resident_metrics")
-          .select("*")
-          .order("residents_linked_count", { ascending: false });
-        if (error) throw error;
-        if (!ignore) setRows(data || []);
+        const { data, error } = await supabase.rpc("list_security_company_resident_metrics");
+        if (error) {
+          if (isRpcNotFoundError(error)) {
+            throw new Error("Apply the security metrics SQL on Supabase first.");
+          }
+          throw error;
+        }
+        if (!ignore) setRows(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error(err);
-        toast.error("Could not load security-company insights.");
+        toast.error(err.message || "Could not load security-company insights.");
+        if (!ignore) setRows([]);
       } finally {
         if (!ignore) setLoading(false);
       }

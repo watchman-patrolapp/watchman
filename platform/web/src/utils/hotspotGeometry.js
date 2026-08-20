@@ -1,4 +1,5 @@
 import { distanceMeters } from './dataSaverProfile';
+import { parsePatrolTime } from './watchTime';
 
 /** Group pins within this neighborhood-scale distance into one hot zone. */
 export const CLUSTER_RADIUS_M = 3000;
@@ -191,12 +192,16 @@ export function clusterHotZones(events, radiusM = CLUSTER_RADIUS_M) {
   return zones;
 }
 
+function occurredMs(value) {
+  return parsePatrolTime(value)?.getTime() ?? NaN;
+}
+
 function threadLatLngs(group) {
   return [...group]
     .filter((e) => Number.isFinite(e.latitude) && Number.isFinite(e.longitude))
     .sort((a, b) => {
-      const ta = new Date(a.occurred_at || 0).getTime();
-      const tb = new Date(b.occurred_at || 0).getTime();
+      const ta = occurredMs(a.occurred_at || 0);
+      const tb = occurredMs(b.occurred_at || 0);
       return ta - tb;
     })
     .map((e) => [e.latitude, e.longitude]);
@@ -236,7 +241,7 @@ export function bufferPathCorridor(latlngs, halfWidthM = THREAD_HALF_WIDTH_M) {
 export function travelPathSegments(events, maxGapMs = TRAVEL_GAP_MS) {
   const sorted = [...(events || [])]
     .filter((e) => Number.isFinite(e.latitude) && Number.isFinite(e.longitude) && e.occurred_at)
-    .sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
+    .sort((a, b) => occurredMs(a.occurred_at) - occurredMs(b.occurred_at));
 
   const segments = [];
   let current = [];
@@ -253,7 +258,7 @@ export function travelPathSegments(events, maxGapMs = TRAVEL_GAP_MS) {
       continue;
     }
     const prev = current[current.length - 1];
-    const gap = new Date(ev.occurred_at).getTime() - new Date(prev.occurred_at).getTime();
+    const gap = occurredMs(ev.occurred_at) - occurredMs(prev.occurred_at);
     if (gap > maxGapMs) {
       pushCurrent();
       current.push(ev);

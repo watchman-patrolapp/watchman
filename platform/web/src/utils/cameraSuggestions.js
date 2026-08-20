@@ -5,6 +5,7 @@ import {
   distancePointToSegmentM,
   TRAVEL_GAP_MS,
 } from './hotspotGeometry';
+import { parsePatrolTime } from './watchTime';
 
 /** Extra slack beyond the camera’s stated range. */
 export const DISTANCE_SLACK_M = 120;
@@ -35,8 +36,8 @@ export function compassLabel(bearing) {
  */
 export function formatFootageWindow(event) {
   if (!event?.occurred_at) return 'Time unknown — ask for the day of the incident.';
-  const at = new Date(event.occurred_at);
-  if (Number.isNaN(at.getTime())) return 'Time unknown — ask for the day of the incident.';
+  const at = parsePatrolTime(event.occurred_at);
+  if (!at) return 'Time unknown — ask for the day of the incident.';
   if (!event.time_known) {
     return `Any time on ${formatDate(at)}`;
   }
@@ -90,7 +91,7 @@ function rankCameraForEvent(camera, event) {
 function pathCameras(event, cameras, allEvents) {
   const sorted = [...(allEvents || [])]
     .filter((e) => e.time_known && e.occurred_at && Number.isFinite(e.latitude))
-    .sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
+    .sort((a, b) => (parsePatrolTime(a.occurred_at)?.getTime() || 0) - (parsePatrolTime(b.occurred_at)?.getTime() || 0));
   const idx = sorted.findIndex((e) => e.id === event.id);
   if (idx < 0) return [];
 
@@ -100,7 +101,10 @@ function pathCameras(event, cameras, allEvents) {
 
   const extra = [];
   for (const other of neighbors) {
-    const gap = Math.abs(new Date(event.occurred_at) - new Date(other.occurred_at));
+    const a = parsePatrolTime(event.occurred_at)?.getTime();
+    const b = parsePatrolTime(other.occurred_at)?.getTime();
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    const gap = Math.abs(a - b);
     if (gap > TRAVEL_GAP_MS) continue;
     for (const cam of cameras) {
       const d = distancePointToSegmentM(

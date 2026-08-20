@@ -6,15 +6,12 @@ import {
   FaUserSecret,
   FaSearch,
   FaPlusCircle,
-  FaClipboardList,
-  FaMapMarkerAlt,
   FaFire,
   FaPhone,
   FaChevronRight,
 } from 'react-icons/fa';
 import ThemeToggle from '../../components/ThemeToggle';
 import {
-  canModerateIntelligence,
   canViewIntelligence,
 } from '../../auth/roleMatrix';
 
@@ -22,7 +19,6 @@ export default function IntelligenceHome() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canMemberIntel = canViewIntelligence(user?.role);
-  const canCommitteeIntel = canModerateIntelligence(user?.role);
 
   if (!canMemberIntel) {
     return (
@@ -61,15 +57,6 @@ export default function IntelligenceHome() {
       show: true,
     },
     {
-      id: 'matches',
-      title: 'Match queue',
-      description: 'Review suggested links between new incidents and existing profiles; approve or reject for analysts.',
-      to: '/intelligence/matches',
-      icon: FaClipboardList,
-      color: 'bg-amber-600',
-      show: canCommitteeIntel,
-    },
-    {
       id: 'hotspots',
       title: 'Hotspots',
       description: 'Break-ins and cable / infrastructure theft on the map, hot zones, travel paths, and camera suggestions.',
@@ -86,15 +73,6 @@ export default function IntelligenceHome() {
       icon: FaPhone,
       color: 'bg-blue-700',
       show: true,
-    },
-    {
-      id: 'nearby',
-      title: 'Nearby threats',
-      description: 'High-risk profiles mapped near patrol areas — coming soon; placeholder for future map integration.',
-      to: '/intelligence/nearby',
-      icon: FaMapMarkerAlt,
-      color: 'bg-rose-600',
-      show: canCommitteeIntel,
     },
   ].filter((c) => c.show);
 
@@ -122,9 +100,11 @@ export default function IntelligenceHome() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Intelligence</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 max-w-xl">
-              Start here: search the database, add profiles, map break-in hotspots, and (for committee) verify incident matches. Use the{' '}
+              Start here: search the database, add profiles, and map break-in hotspots. Link known suspects on the
+              incident report when you already have a profile. Use the{' '}
               <strong className="text-gray-800 dark:text-gray-200">field guide</strong> on the database page for risk
-              levels, status, and MO definitions.
+              levels, status, and MO definitions. Nearby high-risk sightings already surface on the patrol dashboard
+              when you are on duty.
             </p>
           </div>
         </div>

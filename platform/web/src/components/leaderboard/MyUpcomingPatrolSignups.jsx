@@ -9,14 +9,7 @@ import {
   isSlotEnded,
 } from "../../utils/patrolSlotWindows";
 import { useScopedOrganization } from "../../utils/organizationScope";
-
-function todayLocalStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+import { watchDayStamp } from "../../utils/watchTime";
 
 /**
  * Leaderboard (and similar): upcoming patrol_slots for the signed-in volunteer.
@@ -29,7 +22,7 @@ export default function MyUpcomingPatrolSignups({ userId }) {
   const [err, setErr] = useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const minDate = useMemo(() => todayLocalStr(), [nowMs]);
+  const minDate = useMemo(() => watchDayStamp(new Date(nowMs)), [nowMs]);
 
   const load = useCallback(async () => {
     if (!userId) {

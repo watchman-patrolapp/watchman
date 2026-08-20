@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
@@ -26,6 +26,8 @@ import IncidentUpdateCard from "../components/incident/IncidentUpdateCard";
 import { INCIDENT_SECTION_LABELS } from "../constants/incidentSectionUpdates";
 import { canStaffManageIncidents } from "../auth/staffRoles";
 import { useScopedOrganization } from "../utils/organizationScope";
+import { parsePatrolTime } from "../utils/watchTime";
+import { fetchAllQueryPages } from "../utils/fetchPagedRows";
 
 /** Newest / latest-first timestamps for date-style sorts */
 const SORT_OPTIONS = [
@@ -40,8 +42,15 @@ const SORT_OPTIONS = [
 
 function timeMs(d) {
   if (d == null || d === "") return null;
-  const t = new Date(d).getTime();
-  return Number.isFinite(t) ? t : null;
+  const parsed = parsePatrolTime(d);
+  if (parsed) return parsed.getTime();
+  // Date-only YYYY-MM-DD → noon SAST so sort day is stable in ZA.
+  const s = String(d).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const t = new Date(`${s}T12:00:00+02:00`).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+  return null;
 }
 
 /** Latest activity: incident timestamps + section updates + evidence rows */
@@ -178,10 +187,14 @@ function IncidentCard({ incident, showAdminDelete, onAdminDelete, deleteBusyId, 
     incident.sectionUpdates?.filter((u) => !isEvidenceSectionKey(u.section_key)) ?? [];
 
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-ZA', {
+    const d = parsePatrolTime(dateStr) || (/^\d{4}-\d{2}-\d{2}/.test(String(dateStr || ""))
+      ? new Date(`${String(dateStr).slice(0, 10)}T12:00:00+02:00`)
+      : null);
+    if (!d || Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString('en-ZA', {
       day: 'numeric',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
@@ -322,6 +335,7 @@ export default function IncidentList() {
   const [error, setError] = useState(null);
   const [deleteBusyId, setDeleteBusyId] = useState(null);
   const [sortBy, setSortBy] = useState("incident_date");
+  const loadGen = useRef(0);
 
   const showAdminDelete = canStaffManageIncidents(user?.role);
 
@@ -332,6 +346,7 @@ export default function IncidentList() {
   }, [incidents, sortBy]);
 
   const handleAdminDelete = async (incidentId) => {
+    if (deleteBusyId) return;
     const msg =
       "Permanently delete this incident and all related data (evidence rows, suspects, profile links, match queue)?\n\n" +
       "Photos under this incident in Storage will be removed.\n\nThis cannot be undone.";
@@ -356,14 +371,14 @@ export default function IncidentList() {
   };
 
   const fetchIncidents = useCallback(async () => {
+    const gen = ++loadGen.current;
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await scope(
-        supabase.from("incidents").select("*")
-      ).eq("status", "approved");
-        
-      if (fetchError) throw fetchError;
+      const data = await fetchAllQueryPages(() =>
+        scope(supabase.from("incidents").select("*")).eq("status", "approved").order("submitted_at", { ascending: false })
+      );
+      if (gen !== loadGen.current) return;
       const rows = data || [];
       const ids = rows.map((i) => i.id);
       const evidenceMap = {};
@@ -373,6 +388,7 @@ export default function IncidentList() {
           .select("*")
           .in("incident_id", ids)
           .order("created_at", { ascending: true });
+        if (gen !== loadGen.current) return;
         if (!evErr && evRows) {
           for (const row of evRows) {
             if (!evidenceMap[row.incident_id]) evidenceMap[row.incident_id] = [];
@@ -387,6 +403,7 @@ export default function IncidentList() {
           .select("*")
           .in("incident_id", ids)
           .order("created_at", { ascending: true });
+        if (gen !== loadGen.current) return;
         if (!suErr && suRows) {
           for (const row of suRows) {
             if (!updatesMap[row.incident_id]) updatesMap[row.incident_id] = [];
@@ -402,11 +419,12 @@ export default function IncidentList() {
         }))
       );
     } catch (err) {
+      if (gen !== loadGen.current) return;
       console.error("Error fetching incidents:", err);
       setError(err.message);
       toast.error("Failed to load incidents");
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, [scope]);
 
