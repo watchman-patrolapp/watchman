@@ -26,10 +26,11 @@ import {
   listEmergencyDirectory,
   saveEmergencyDirectoryEntry,
   setEmergencyDirectoryActive,
+  sortEmergencyDirectoryRows,
   uploadEmergencyDirectoryImage,
 } from "../utils/emergencyDirectory";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
-import { canManageEmergencyDirectory, homeBackNav } from "../auth/roleMatrix";
+import { canManageEmergencyDirectory, homeBackNav, isGlobalOperatorUser } from "../auth/roleMatrix";
 import { useAuth } from "../auth/useAuth";
 
 export const DIRECTORY_KINDS = [
@@ -65,7 +66,81 @@ const EMPTY_FORM = {
   active: true,
   logo_url: "",
   banner_url: "",
+  organization_id: null,
+  scope: "org",
 };
+
+function contactFormFromRow(row) {
+  return {
+    ...EMPTY_FORM,
+    ...row,
+    scope: row?.organization_id ? "org" : "global",
+  };
+}
+
+function ScopeChip({ organizationId }) {
+  const local = Boolean(organizationId);
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        local
+          ? "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200"
+          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+      }`}
+    >
+      {local ? "Local" : "City"}
+    </span>
+  );
+}
+
+function ScopeSwitch({ scope, locked, canChooseCityScope, onChange }) {
+  const neighbourhood = scope !== "global";
+  const buttonClass = (selected) =>
+    `rounded-xl px-3 py-2 text-xs font-semibold ring-1 transition disabled:cursor-not-allowed disabled:opacity-60 ${
+      selected
+        ? "bg-teal-50 text-teal-900 ring-teal-500 dark:bg-teal-950/50 dark:text-teal-100"
+        : "bg-white text-gray-700 ring-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700"
+    }`;
+
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-gray-800 dark:text-gray-100">Who can see this contact</p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={locked}
+          aria-pressed={neighbourhood}
+          onClick={() => onChange("org")}
+          className={buttonClass(neighbourhood)}
+        >
+          This neighbourhood
+        </button>
+        {canChooseCityScope || !neighbourhood ? (
+          <button
+            type="button"
+            disabled={locked || !canChooseCityScope}
+            aria-pressed={!neighbourhood}
+            onClick={() => onChange("global")}
+            className={buttonClass(!neighbourhood)}
+          >
+            City-wide
+          </button>
+        ) : null}
+      </div>
+      <p className="mt-2 text-xs text-gray-500">
+        {locked
+          ? "Scope stays with this contact. A neighbourhood contact remains local, and a city number remains city-wide."
+          : neighbourhood
+            ? "Only this neighbourhood will see this contact."
+            : "Every neighbourhood will see this number."}
+        {!canChooseCityScope && neighbourhood ? " City-wide numbers are managed by main admin." : ""}
+        {!canChooseCityScope && !neighbourhood
+          ? " Only main admin or technical support can change a city-wide number."
+          : ""}
+      </p>
+    </div>
+  );
+}
 
 function CivicCard({ row, canManage, onEdit, onToggleActive, toggleBusy }) {
   const meta = KIND_META[row.kind] || KIND_META.other;
@@ -89,7 +164,10 @@ function CivicCard({ row, canManage, onEdit, onToggleActive, toggleBusy }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-wide text-gray-400">{meta.label}</p>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">{row.name}</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">{row.name}</h3>
+              <ScopeChip organizationId={row.organization_id} />
+            </div>
           </div>
           {row.active === false ? (
             <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-800 dark:text-gray-400">
@@ -141,7 +219,7 @@ function CivicCard({ row, canManage, onEdit, onToggleActive, toggleBusy }) {
   );
 }
 
-function ContactForm({ form, saving, uploading, onChange, onSave, onCancel, onUpload }) {
+function ContactForm({ form, saving, uploading, canChooseCityScope, onChange, onSave, onCancel, onUpload }) {
   const logoInputRef = useRef(null);
   const bannerInputRef = useRef(null);
   const usingCustomLogo = Boolean(form.logo_url);
@@ -161,6 +239,13 @@ function ContactForm({ form, saving, uploading, onChange, onSave, onCancel, onUp
           <FaTimes />
         </button>
       </div>
+
+      <ScopeSwitch
+        scope={form.scope}
+        locked={Boolean(form.id)}
+        canChooseCityScope={canChooseCityScope}
+        onChange={(scope) => onChange({ scope })}
+      />
 
       <div>
         <p className="mb-2 text-sm font-medium text-gray-800 dark:text-gray-100">System icon</p>
@@ -329,6 +414,7 @@ export default function EmergencyContacts() {
   const { pathname } = useLocation();
   const { user } = useAuth();
   const canManage = canManageEmergencyDirectory(user?.role, user?.platformRole);
+  const canChooseCityScope = isGlobalOperatorUser(user);
   const residentView = pathname.startsWith("/resident");
   const adminView = pathname.startsWith("/admin");
   const intelligenceView = pathname.startsWith("/intelligence");
@@ -360,7 +446,8 @@ export default function EmergencyContacts() {
         listDirectorySecurityCompanies(),
       ]);
       if (gen !== loadGen.current) return;
-      setCivic(canManage ? civicRows : civicRows.filter((row) => row.active !== false));
+      const visible = canManage ? civicRows : civicRows.filter((row) => row.active !== false);
+      setCivic(sortEmergencyDirectoryRows(visible));
       setCompanies(companyRows);
     } catch (err) {
       console.error(err);
@@ -405,14 +492,17 @@ export default function EmergencyContacts() {
     }
     setSaving(true);
     try {
-      await saveEmergencyDirectoryEntry(form);
+      const scope = form.id
+        ? (form.organization_id ? "org" : "global")
+        : (canChooseCityScope && form.scope === "global" ? "global" : "org");
+      await saveEmergencyDirectoryEntry({ ...form, scope });
       toast.success(form.id ? "Contact updated." : "Contact added.");
       setForm(null);
       await load();
     } catch (err) {
       toast.error(
         isRpcNotFoundError(err)
-          ? "Run the latest emergency directory SQL in Supabase first."
+          ? "Run the emergency directory org scope SQL in Supabase first."
           : err.message || "Could not save contact."
       );
     } finally {
@@ -445,7 +535,7 @@ export default function EmergencyContacts() {
           title="Emergency contacts"
           subtitle={
             canManage
-              ? "Civic numbers, local doctors or clinics, and registered security companies. Add a contact for residents and intelligence."
+              ? "Civic numbers, local doctors or clinics, and registered security companies. Neighbourhood contacts stay in this watch. City-wide numbers are for main admin."
               : residentView
                 ? "Police, ambulance, fire, electrical, local medical help, and security companies registered on this platform."
                 : "Operational directory: civic emergency numbers, local medical help, and every registered security company."
@@ -474,6 +564,7 @@ export default function EmergencyContacts() {
             form={form}
             saving={saving}
             uploading={uploading}
+            canChooseCityScope={canChooseCityScope}
             onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
             onSave={saveForm}
             onCancel={() => setForm(null)}
@@ -496,7 +587,7 @@ export default function EmergencyContacts() {
                     <div className="flex flex-wrap gap-2 border-t border-gray-100 px-4 py-3 dark:border-gray-800">
                       <button
                         type="button"
-                        onClick={() => setForm({ ...EMPTY_FORM, ...row })}
+                        onClick={() => setForm(contactFormFromRow(row))}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
                       >
                         <FaPen className="h-3 w-3" aria-hidden />
@@ -523,6 +614,7 @@ export default function EmergencyContacts() {
                         email={row.email}
                         contactPerson={row.contact_person_name}
                         kicker={meta.label}
+                        badge={<ScopeChip organizationId={row.organization_id} />}
                         footer={manageFooter}
                       />
                     );
@@ -532,7 +624,7 @@ export default function EmergencyContacts() {
                       key={row.id}
                       row={row}
                       canManage={canManage}
-                      onEdit={(item) => setForm({ ...EMPTY_FORM, ...item })}
+                      onEdit={(item) => setForm(contactFormFromRow(item))}
                       onToggleActive={toggleActive}
                       toggleBusy={Boolean(togglingId)}
                     />
