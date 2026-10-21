@@ -1,13 +1,15 @@
 # Watchman — Cursor Agent Prompt Pack
 
-*Companion to [`NEW_FEATURES_BLUEPRINT.md`](NEW_FEATURES_BLUEPRINT.md) (v3) · Updated 14 October 2026 · Owner: Theescombe Fibre*
+*Companion to [`NEW_FEATURES_BLUEPRINT.md`](NEW_FEATURES_BLUEPRINT.md) (v4) · Updated 21 October 2026 · Owner: Theescombe Fibre*
 
-> **v3 (14 Oct 2026):** money features removed by owner decision. The former money-related prompts were removed; Feature 2 is now the money-free **needs board** (prompt 11). The pack has 21 prompts, renumbered.
+> **v4 (21 Oct 2026):** prompt 22 (P8) added — Google Play release readiness. No SQL. The pack has 22 prompts.
+>
+> **v3 (14 Oct 2026):** money features removed by owner decision. The former money-related prompts were removed; Feature 2 is now the money-free **needs board** (prompt 11).
 
 ## How to use
 
 1. **One prompt = one PR.** Paste a whole prompt (everything inside its fenced block) into a **new Cursor Agent chat** in the repo root (`F:\Projects\Neighborhood Watch Platform`). Don't combine prompts.
-2. **Go in order.** Later prompts assume earlier helpers exist (`is_org_nw_admin`, `try_uuid`, `has_org_capability`, `should_notify` …). If you must skip one, read its "Depends on" line first.
+2. **Go in order.** Later prompts assume earlier helpers exist (`is_org_nw_admin`, `try_uuid`, `has_org_capability`, `should_notify` …). If you must skip one, read its "Depends on" line first. Prompt 22 (P8) is the exception: it ships a Play build of the current app and does not wait on G1–P7.
 3. **Before you paste:**
    - `git status` should be clean, apart from your own pending items (currently `platform/web/src/pages/Dashboard.jsx` and the untracked `20260827010000_end_patrol_idempotent.sql`; commit or stash them yourself first).
    - Create a branch: `git checkout -b g1-broadcast-hide`.
@@ -55,8 +57,11 @@
 | [ ] | 19 | P6a — Community events & RSVP | `20261003070000_community_events.sql` | P0b |
 | [ ] | 20 | P6b — Polls + lost & found / pets | `20261003071000_…`, `20261003072000_…` | P0b |
 | [ ] | 21 | P7 — Onboarding checklist, volunteer tasks, camera footage requests | `20261003090000_…`–`092000_…` | P0b |
+| [ ] | 22 | P8 — Google Play release readiness | `platform/docs/PLAY_STORE_LISTING.md`; `android:aab:release` script; public `/privacy` and `/delete-account` | — |
 
 > P3 is split so that `036000` is written across two prompts. P3b creates the file with bookings/loans. P3c **appends** transfers to the same file only if it hasn't been applied yet; otherwise P3c creates `20261003036500_equipment_transfers.sql`. The agent must check which applies.
+>
+> P8 does not wait on G1–P7. It ships a Play-ready build of the app as it is today. It adds no migration.
 
 ---
 ## 1. G1 — Area broadcasts: hide, restore, edit-own, realtime UPDATE
@@ -1227,4 +1232,101 @@ When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or a
 
 ---
 
-*End of prompt pack. Tick each box in the progress checklist when its PR is merged and its SQL is applied on production.*
+## 22. P8 — Google Play release readiness
+
+**Depends on:** none (ship the current Capacitor app; do not wait for G1–P7) · **Migration:** none · **Output:** `platform/docs/PLAY_STORE_LISTING.md`, upload-key signing, `android:aab:release` script, public `/privacy` and `/delete-account`
+
+````text
+You are working in the Watchman repo (React 19 + Vite + Capacitor 8 web app in platform/web, Supabase backend in platform/supabase, Android shell in platform/android). Task: P8 — Google Play release readiness.
+
+GOAL
+Produce a Google Play–ready Android App Bundle. Residents can only install from Google Play; the sideloaded APK is flagged by Play Protect. This prompt replaces that sideload path with a signed AAB enrolled in Play App Signing, a public privacy policy and account-deletion URL, and a store-listing draft the owner can paste into Play Console. You do the repo work. The owner does the Play Console clicks (checklist in the doc you write).
+
+READ FIRST (context)
+- @platform/docs/NEW_FEATURES_BLUEPRINT.md (§19 P8)
+- @platform/docs/PRIVACY_POLICY_AND_TERMS_OF_SERVICE.md
+- @platform/docs/DATA_INVENTORY_AND_DELETION_RUNBOOK.md
+- @platform/web/capacitor.config.json (appId com.watchman.app, webDir dist, android.path ../android)
+- @platform/android/app/build.gradle (applicationId com.watchman.app, versionCode 5, versionName 1.0.4, no signingConfig)
+- @platform/android/variables.gradle (minSdk 24, compileSdk 36, targetSdk 36)
+- @platform/android/app/src/main/AndroidManifest.xml
+- @platform/android/app/src/main/java/com/watchman/app/MainActivity.java (extends BridgeActivity)
+- @platform/android/.gitignore and the repo-root .gitignore (*.keystore and *.jks already ignored at the root; the Android gitignore still has those lines commented out)
+- @platform/web/package.json (android:apk:debug uses gradlew.bat; android:apk:debug:unix uses ./gradlew)
+- @platform/web/src/App.jsx
+- @platform/web/src/pages/Login.jsx
+- @platform/web/src/pages/Register.jsx
+- @platform/web/src/pages/Profile.jsx (in-app delete calls the delete-my-account edge function after a password re-check)
+- @platform/supabase/functions/delete-my-account/index.ts
+- @platform/web/src/components/PermissionsPrimerModal.jsx (foreground location + notifications primer; not a background-location disclosure)
+- @platform/web/src/hooks/useGPSTracking.js (patrol watchPosition while the screen is open)
+
+SCOPE
+Investigate the Android project first, then: release signing (Play App Signing, upload keystore kept out of git), a signed AAB script, permission cleanup, privacy and account-deletion pages, version bump, and platform/docs/PLAY_STORE_LISTING.md (data safety answers, store listing, screenshot list, closed-testing plan, owner checklist). OUT of scope: new product features, SQL, iOS, generating or committing a keystore, uploading to Play Console, inventing legal identity details (company number, address, privacy email).
+
+STEPS
+1. Investigate before editing. Record what you find in the PR description and in PLAY_STORE_LISTING.md: applicationId, versionCode, versionName, minSdk, compileSdk, targetSdk, every uses-permission in AndroidManifest.xml, and whether any Capacitor plugin manifest adds more (read plugin AndroidManifest.xml files under platform/web/node_modules/@capacitor and platform/android/capacitor-cordova-android-plugins if that folder exists). Confirm MainActivity extends BridgeActivity and webDir is dist. Confirm there is no signingConfig today.
+2. Target API. As of 31 Aug 2026, Google Play requires new apps and app updates to target Android 16 (API 36) or higher (https://support.google.com/googleplay/android-developer/answer/11926878). The repo already sets compileSdk and targetSdk to 36. Re-read that page on the day you run this prompt. Do not lower either value. If Play's required level is now higher than 36, raise compileSdk and targetSdk together in variables.gradle. minSdk 24 may stay.
+3. Permissions. Start from the app manifest:
+   INTERNET, POST_NOTIFICATIONS, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION, RECORD_AUDIO, CAMERA, READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO, READ_EXTERNAL_STORAGE (maxSdk 32), WRITE_EXTERNAL_STORAGE (maxSdk 29).
+   Keep INTERNET. Keep POST_NOTIFICATIONS (FCM; google-services.json is gitignored and the Google Services plugin is applied only when that file exists locally — do not commit it, and do not invent a Firebase project). Keep ACCESS_COARSE_LOCATION and ACCESS_FINE_LOCATION (patrol, incidents, SOS, home pin, chat share-location). Keep CAMERA (photo capture) and RECORD_AUDIO (voice messages in chat via getUserMedia in VoiceRecorder.jsx and MessageInput.jsx).
+   Photos are chosen with <input type="file">, not a media-store scan. Remove READ_MEDIA_IMAGES, READ_MEDIA_VIDEO, READ_MEDIA_AUDIO, READ_EXTERNAL_STORAGE, and WRITE_EXTERNAL_STORAGE unless you find a caller that reads the gallery without the system picker. If a plugin manifest merges one of those back in, strip it with tools:node="remove" on the app manifest only after you have confirmed the picker path still works. Play's Photos and Videos Permissions policy rejects broad media access for one-off picks.
+   There is no ACCESS_BACKGROUND_LOCATION and no foreground service in the app manifest. Patrol GPS is navigator.geolocation.watchPosition while a patrol screen is open. Do not add background location. If you find the app keeps collecting location after the user leaves it, stop that collection when the app backgrounds. Add a foreground service, FOREGROUND_SERVICE_LOCATION, ACCESS_BACKGROUND_LOCATION, Play Console justification text, and an in-app prominent disclosure only if background collection is a real product requirement you can point at in code. The disclosure must appear inside the app before the system permission dialog, must say which feature collects location while the app is closed or not in use, and must link to /privacy. PermissionsPrimerModal is a foreground primer; it is not that disclosure. Default: no background location, no foreground-service declaration, and say so in PLAY_STORE_LISTING.md.
+4. Release signing, Play App Signing. Google holds the app signing key. The repo only configures an upload key.
+   - Uncomment *.jks and *.keystore in platform/android/.gitignore. Ignore platform/android/keystore.properties there and in the repo-root .gitignore.
+   - Add platform/android/keystore.properties.example with empty storeFile, storePassword, keyAlias, and keyPassword. No real passwords.
+   - In platform/android/app/build.gradle, give the release buildType a signingConfig loaded from keystore.properties when that file exists, otherwise from env WATCHMAN_UPLOAD_STORE_FILE, WATCHMAN_UPLOAD_STORE_PASSWORD, WATCHMAN_UPLOAD_KEY_ALIAS, and WATCHMAN_UPLOAD_KEY_PASSWORD. If neither source is set, fail bundleRelease with an error that names what is missing. Do not sign release with the debug keystore. Debug builds stay as they are.
+   - Do not run keytool. Do not write a keystore anywhere in the worktree. In PLAY_STORE_LISTING.md, give the owner a keytool command that writes the upload keystore outside the repo (for example in their home directory) and the Play Console steps to enroll in Play App Signing.
+5. Signed AAB script. In platform/web/package.json, next to the existing debug APK scripts, add android:aab:release (android:sync, then gradlew.bat bundleRelease from platform/android) and android:aab:release:unix (android:sync, then ./gradlew bundleRelease). The artifact Play consumes is the AAB, not another sideloaded APK.
+6. Version bump. In platform/android/app/build.gradle set versionCode 6 and versionName 1.1.0. Leave applicationId com.watchman.app unchanged. If you find evidence a higher versionCode was already uploaded, use the next integer and say so.
+7. Public privacy page. Add a lazy route /privacy in App.jsx with no PrivateRoute, linked from Login.jsx, Register.jsx, and Profile.jsx. Render Part A of platform/docs/PRIVACY_POLICY_AND_TERMS_OF_SERVICE.md in the page (a React page is enough; do not add a markdown dependency). Keep the draft banner and every [INSERT …] placeholder. Do not invent a registration number, address, or email. If VITE_PRIVACY_CONTACT_EMAIL is set, show that address as the contact; otherwise leave the placeholder. The page must be readable while logged out, because Play fetches the URL in a browser.
+8. Public account-deletion URL. Add lazy route /delete-account, also with no login wall, linked from the privacy page and from Profile. Explain that a signed-in member deletes the account on the web Profile page (password re-check, then the existing delete-my-account edge function) and that someone who cannot sign in emails the privacy contact (VITE_PRIVACY_CONTACT_EMAIL, or the placeholder if it is unset). Do not add a second deletion backend. Do not invoke the edge function from the logged-out page. Do not run SQL.
+9. Write platform/docs/PLAY_STORE_LISTING.md as a draft the owner pastes from, using §19 of the blueprint. Include all of the following:
+   - Data safety form answers. Data collected: precise location (patrol, incidents, SOS, home pin; app in use, not background, unless step 3 found otherwise), photos and videos (incidents, chat, avatars), name, phone number, email, address, audio (voice messages, if RECORD_AUDIO stays), incident reports and other messages the user writes, FCM push tokens. Purposes: app functionality and account management. Not sold. Not used for advertising. Encrypted in transit. Users can request deletion. Service providers (Supabase, Vercel, Google FCM) process data for us; do not mark processor transfers as "shared" under Play's definition unless you find a transfer for the third party's own use. No financial data (money features were removed). Check the merged manifest for AD_ID and remove it if nothing uses ads.
+   - Store listing draft: app name Watchman; short description (80 characters or fewer); long description; category Social; content-rating notes (user-generated incident reports and chat, location shared inside the neighbourhood, no in-app purchases, not directed at children, not Designed for Families).
+   - Screenshot list the owner captures from a demo neighbourhood (no real resident data): resident home, report an incident, patrol map, alerts or emergency contacts, profile with delete account. Note Play's phone screenshot rules and the 1024×500 feature graphic as an owner task.
+   - Closed testing plan. A personal Play Console account must have at least 12 testers opted in for 14 continuous days before production. An organization account is exempt; assume a personal account unless the owner says otherwise. Include a blank tracker table (name or email, opt-in date, still opted in on day 14). You do not invite testers.
+   - The owner's manual Play Console checklist (see ACCEPTANCE). You do not perform those steps.
+10. Do not commit google-services.json, keystore.properties, any .jks or .keystore, or any password. If one of those is already tracked, stop and say so; do not delete it from history yourself.
+
+MIGRATION FILE
+None. Do not add or edit a migration. Do not run SQL.
+
+CONSTRAINTS (apply to everything you write):
+- Follow existing React patterns: lazy pages in App.jsx, PageHeader + homeBackNav() on in-app pages, existing Tailwind card classes. The public /privacy and /delete-account pages must render logged out, so do not wrap them in PrivateRoute.
+- Release plumbing only: signing, version, permissions, the two public pages, links to them, package.json scripts, gitignore, keystore.properties.example, and PLAY_STORE_LISTING.md. No unrelated refactors. Do not touch platform/web/src/pages/Dashboard.jsx or platform/supabase/migrations/20260827010000_end_patrol_idempotent.sql. Do not change patrol, incident, or chat behaviour except to stop background location collection if step 3 finds it.
+- No new npm packages. No new edge function. Reuse delete-my-account.
+- Do not lower targetSdk or compileSdk. Do not change applicationId.
+- Do not generate, commit, or print a keystore or a real signing password. keystore.properties.example uses empty values.
+- Do not run SQL against any Supabase project. Do not commit, do not push, do not upload to Play Console.
+- STOP AND SHOW ME THE DIFF BEFORE COMMITTING. End with: files changed, the version you set, permissions kept and removed, whether background location is used, the public URLs the owner will submit, and anything you could not verify (Android SDK, a local keystore, Play Console).
+
+ACCEPTANCE CRITERIA
+- applicationId is still com.watchman.app. versionCode is 6 and versionName is 1.1.0 (or the next code if a higher one was already uploaded). targetSdk and compileSdk are 36 or whatever higher level Play requires on the day you run this, and are not lower than today's 36.
+- bundleRelease signs with the upload key from keystore.properties or the WATCHMAN_UPLOAD_* env vars, and fails with a clear error when both are missing. Debug builds are unchanged. The diff contains no keystore, no keystore.properties, and no google-services.json.
+- Broad media and legacy storage permissions are gone, or PLAY_STORE_LISTING.md explains the feature that still needs each one. Background location is not declared unless collection continues while the app is backgrounded; if it is, the app shows a prominent disclosure before the permission request and the doc has the Play Console justification text.
+- Logged-out /privacy and /delete-account render. The privacy page still shows the draft banner and unfilled placeholders. The deletion page points at Profile plus the existing delete-my-account function and does not delete anything by itself.
+- PLAY_STORE_LISTING.md has data safety answers for location, photos, name, phone, email, and incident reports (plus audio and push tokens as investigated), a short and long description, category, content-rating notes, a screenshot list, the 12-tester / 14-day closed-testing plan, and this owner checklist:
+  - Create the Play Console app for com.watchman.app and enroll in Play App Signing.
+  - Generate the upload keystore outside the repo and store the passwords in a password manager.
+  - Build with android:aab:release (or the unix script) and upload the AAB to closed testing.
+  - Paste the listing, set the privacy policy URL to https://<production host>/privacy and the account deletion URL to https://<production host>/delete-account.
+  - Complete Data safety, the content-rating questionnaire, and app access (a test resident login).
+  - Declare location. Declare a foreground service only if the build actually uses one. Ads, news, government, and financial features: no.
+  - Countries: South Africa.
+  - Personal accounts: 12 testers opted in for 14 continuous days, then apply for production.
+  - Replace privacy-policy placeholders and have counsel review before production.
+
+TESTS / MANUAL CHECKS TO RUN
+- npm run lint in platform/web.
+- Logged out, open /privacy and /delete-account (dev server or vite preview) and confirm both render and that /delete-account does not call delete-my-account.
+- git status shows none of: *.jks, *.keystore, keystore.properties, google-services.json.
+- If the Android SDK is installed, run the merged-manifest task and confirm removed permissions are absent. If it is not installed, say so and review the manifest diff instead. Do not create a keystore to force bundleRelease to succeed.
+- Do not run SQL. Do not upload the AAB.
+
+When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push, apply SQL, or upload to Play Console.
+````
+
+---
+
+*End of prompt pack. Tick each box in the progress checklist when its PR is merged and its SQL is applied on production. P8 has no SQL; tick it when the Play-ready PR is merged. The owner still completes the Play Console checklist in `PLAY_STORE_LISTING.md`.*

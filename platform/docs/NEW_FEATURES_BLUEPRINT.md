@@ -1,6 +1,6 @@
 # Watchman — New Features Blueprint (v3)
 
-*Drafted: 3 October 2026 · Revised: 14 October 2026 (v3) · Status: **proposal / build-ready draft** · Owner: Theescombe Fibre*
+*Drafted: 3 October 2026 · Revised: 21 October 2026 (v4) · Status: **proposal / build-ready draft** · Owner: Theescombe Fibre*
 
 Canonical app: `platform/web` · Canonical backend: `platform/supabase` · Companions: [`SCALE_ROADMAP.md`](SCALE_ROADMAP.md), [`CURSOR_PROMPTS.md`](CURSOR_PROMPTS.md)
 
@@ -10,6 +10,7 @@ Canonical app: `platform/web` · Canonical backend: `platform/supabase` · Compa
 
 | Version | Date | Changes |
 |---|---|---|
+| **v4** | 21 Oct 2026 | **P8 — Google Play release readiness** (§19, prompt 22). The Android app is a Capacitor 8 shell (`platform/android`, `webDir` `dist`, `MainActivity` extends `BridgeActivity`) currently handed out as a sideloaded APK, which Play Protect flags. Residents can only install from Google Play. P8 is docs-and-release plumbing: investigate the existing project, Play App Signing with an upload keystore kept out of git, a signed AAB script, permission cleanup, public `/privacy` and `/delete-account`, and `PLAY_STORE_LISTING.md` (data safety, listing, closed testing, owner checklist). No SQL. Does not wait on G–P7. v3 still stands: no money in the app. |
 | **v3** | 14 Oct 2026 | **Owner decision: no money in the app.** Removed in-app money collection (former Feature 3, §8 now a stub), the online-payment phase, the money-related capabilities and decisions, the payment research rows, and the related open items. **Feature 2 rewritten (§7)** as a money-free **Equipment wishlist / needs board**: admin/custodian lists needed items (photo, name, qty, est. price, reason, store link, product code, status needed/acquired/cancelled); residents view and send an "offer to help / contribute item" interest note; acquired items convert into inventory units (`equipment_units.wishlist_item_id`, `create_equipment_from_wishlist`). New table set `equipment_wishlist_items` + `equipment_wishlist_offers`, helper `can_manage_wishlist()`. Capabilities now: `resident_broadcaster`, `resident_moderator`, `equipment_custodian`. `community-private` SELECT policy now ships with equipment (P3). Phases renumbered: G → P0 → P1 → **P2 needs board** → P3 equipment → P4 local services → P5 outage + digest → P6 events/polls/lost & found → **P7** onboarding/tasks/cameras. Migration plan, ERD, permission matrices, isolation tests, defaults (§16), resolved items (§17) and open items (§18) updated; Cursor prompt pack reduced to 21 prompts. |
 | **v2** | 3 Oct 2026 | New Phase G (§4): 7 fixes for gaps in today's code (G1–G7). New Feature 6 (§10): equipment inventory & borrowing with chain of custody, capability `equipment_custodian`. Security review (§12.7). Shared SQL helpers defined once (G2/G4). (verify) items resolved (§17). Decisions applied as defaults (§16). Cursor prompts moved to `CURSOR_PROMPTS.md`. Extras priorities renamed High/Medium/Later. |
 | v1 | 3 Oct 2026 | First draft: foundations, resident moderators, money features (removed in v3), local services, extras, open decisions |
@@ -36,6 +37,7 @@ Canonical app: `platform/web` · Canonical backend: `platform/supabase` · Compa
 16. [Defaults applied (override any)](#16-defaults-applied-override-any)
 17. [Resolved "(verify)" items](#17-resolved-verify-items-v2)
 18. [Still genuinely open](#18-still-genuinely-open-needs-you-or-a-live-check)
+19. [P8 — Google Play release readiness](#19-p8--google-play-release-readiness)
 
 *(Feature numbers are kept from v1 so earlier references still work. The equipment feature is "Feature 6" but sits in §10, before the extras.)*
 
@@ -63,6 +65,7 @@ The new work builds on these. It does not add a parallel system. The v2 review a
 | 6 | **Equipment inventory & borrowing** | Watch gear catalogue with QR labels, shift-linked bookings, dual-confirmed checkout/return, patroller-to-patroller handover handshake, incident reports (incl. SAPS CAS no.), append-only custody ledger, stocktake and dashboards | **L** (3 PRs + UI PR) |
 | 4 | Local services directory | Residents list trades/businesses as a **Local services** tab in Contacts, with synonym + full-text + fuzzy search and verified-neighbour ratings | **L** |
 | 5 | Extras | Outage notices, daily digest, events + RSVP, polls, lost & found / pets, onboarding, volunteer tasks, camera footage requests | S–M each |
+| P8 | Google Play release readiness | Signed AAB (Play App Signing), permission cleanup, public privacy and account-deletion URLs, store listing and data-safety draft | **S–M** |
 
 **Key design decisions**
 
@@ -91,6 +94,7 @@ Effort scale (one developer working with Cursor): **S** ≈ 1–2 days · **M** 
 | **P5** | Outage notices, daily digest | P1, G6 | S–M | Cheap and high-visibility |
 | **P6** | Events + RSVP, polls / committee votes, lost & found / pets | P0 | M each | Community engagement |
 | **P7** | Onboarding checklist, volunteer task sign-up, camera footage requests | — | S–M | Nice to have |
+| **P8** | Google Play release: upload-key signing, `bundleRelease` AAB, permission cleanup, `/privacy`, `/delete-account`, `PLAY_STORE_LISTING.md` | — (current app) | S–M | Sideloaded APKs are flagged by Play Protect. Residents install from Play only. No SQL, so it does not wait on G–P7 |
 
 Run **the two-org isolation test** (§14, automated by G7) at the end of every phase.
 
@@ -115,6 +119,8 @@ gantt
   P5 outages + digest                 :p5, after p4, 3
   P6 events / polls / lost & found    :p6, after p5, 10
   P7 onboarding / tasks / cameras     :p7, after p6, 6
+  section Release
+  P8 Google Play readiness            :p8, 0, 3
 ```
 
 ---
@@ -3548,9 +3554,10 @@ Automate the RPC-level checks as a SQL script using `set_config('request.jwt.cla
 
 ## 15. Ready-to-paste Cursor prompts
 
-v2 moved all prompts into a separate, ordered prompt pack: **[`CURSOR_PROMPTS.md`](CURSOR_PROMPTS.md)**. It has 21 prompts (v3), each sized to one reviewable PR:
+v2 moved all prompts into a separate, ordered prompt pack: **[`CURSOR_PROMPTS.md`](CURSOR_PROMPTS.md)**. It has 22 prompts (v4 adds P8; v3 removed the money prompts), each sized to one reviewable PR:
 - gap fixes G1–G7 first;
-- then foundations, every feature phase (needs board P2, equipment P3a–P3d) and the extras.
+- then foundations, every feature phase (needs board P2, equipment P3a–P3d) and the extras;
+- P8 (prompt 22) is Google Play release readiness. It adds no SQL and does not wait on G–P7.
 
 Each prompt lists the files to @-mention, the exact scope, steps, migration file name, constraints, acceptance criteria and manual tests. Each one ends with "stop and show me the diff before committing". The file also has a progress checklist.
 
@@ -3612,7 +3619,137 @@ v1 listed these as open decisions. v2 **applies the recommended default** in the
 5. **Radios**: check with your supplier that the watch's radios are PMR446 type-approved. Otherwise get the frequency licence/permission details on file.
 6. **Committee wording** of the equipment responsibility acknowledgement (D21) and the needs-board offer hint text.
 7. **Dashboard tile for equipment / needs board**: wait until you commit the pending `Dashboard.jsx` change.
+8. **Google Play (P8):** Play Console account, an upload keystore that never enters git, counsel review of the privacy policy before production, and — for a personal developer account — 12 testers opted in for 14 continuous days. The repo work is prompt 22; the Console clicks stay with you (§19.8).
 
 ---
 
-*End of blueprint v3. When a phase ships, tick it off in `CURSOR_PROMPTS.md` and `SCALE_ROADMAP.md`, and add its migrations to the "Apply on Supabase" table.*
+## 19. P8 — Google Play release readiness
+
+Prompt 22 in [`CURSOR_PROMPTS.md`](CURSOR_PROMPTS.md). Effort **S–M**. Depends on nothing in G–P7: it ships a Play build of the app as it is today. No migration and no new edge function.
+
+Residents can only install from Google Play. The build handed out today is a sideloaded APK, and Play Protect flags it. P8 replaces that path with a signed Android App Bundle enrolled in Play App Signing.
+
+### 19.1 What the Android project is today
+
+Checked in the repo on 21 Oct 2026. Capacitor config in `platform/web/capacitor.config.json` sets `appId` `com.watchman.app`, `webDir` `dist`, and `android.path` `../android`. The Gradle project is `platform/android`.
+
+| Item | Current value |
+|---|---|
+| Activity | `com.watchman.app.MainActivity` extends `BridgeActivity` |
+| applicationId / namespace | `com.watchman.app` |
+| versionCode / versionName | `5` / `1.0.4` (`platform/android/app/build.gradle`) |
+| minSdk / compileSdk / targetSdk | `24` / `36` / `36` (`platform/android/variables.gradle`) |
+| Release signing | None. `release` has `minifyEnabled false` and no `signingConfig` |
+| Play target API | From 31 Aug 2026, new apps and updates must target Android 16 (API 36) or higher. 36 already meets that. Re-check [Play's target API help page](https://support.google.com/googleplay/android-developer/answer/11926878) on the day P8 runs, and raise compileSdk and targetSdk together if Play has moved on. Do not lower them |
+| Push | `POST_NOTIFICATIONS`, FCM default-notification meta-data, Google Services plugin applied only when `google-services.json` exists. That file is gitignored |
+
+Manifest permissions today: `INTERNET`, `POST_NOTIFICATIONS`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, `RECORD_AUDIO`, `CAMERA`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, `READ_EXTERNAL_STORAGE` (maxSdk 32), `WRITE_EXTERNAL_STORAGE` (maxSdk 29). No `ACCESS_BACKGROUND_LOCATION` and no foreground service.
+
+Location in the app is foreground. Patrol tracking uses `navigator.geolocation.watchPosition` while a patrol screen is open (`useGPSTracking.js`, `Dashboard.jsx`). `PermissionsPrimerModal` explains location and notifications before the first-run prompts. It is not a background-location disclosure. Voice messages use the microphone (`VoiceRecorder.jsx`, `MessageInput.jsx`). Photos use `<input type="file">` (incidents, chat, avatars), not a media-store scan.
+
+Account deletion already exists in the signed-in app: Profile re-checks the password and calls the `delete-my-account` edge function. There is no public web URL yet. Play requires one. The privacy policy is a draft in `platform/docs/PRIVACY_POLICY_AND_TERMS_OF_SERVICE.md` (placeholders, counsel not yet signed off). It is not served by the web app.
+
+`npm run android:apk:debug` builds a debug APK. There is no `bundleRelease` script. Root `.gitignore` ignores `*.keystore` and `*.jks`. `platform/android/.gitignore` still has those two lines commented out, and nothing ignores `keystore.properties`.
+
+### 19.2 Signing
+
+Use **Play App Signing**. Google holds the app signing key. The repo configures an **upload key** only.
+
+- `bundleRelease` reads `platform/android/keystore.properties` when that file exists, otherwise the env vars `WATCHMAN_UPLOAD_STORE_FILE`, `WATCHMAN_UPLOAD_STORE_PASSWORD`, `WATCHMAN_UPLOAD_KEY_ALIAS`, `WATCHMAN_UPLOAD_KEY_PASSWORD`.
+- `keystore.properties` is gitignored. Commit `keystore.properties.example` with empty values.
+- Uncomment `*.jks` and `*.keystore` in `platform/android/.gitignore`.
+- If neither the file nor the env vars are set, `bundleRelease` fails with a clear error. Release is not signed with the debug key.
+- The owner generates the upload keystore **outside the repo** and keeps the passwords in a password manager. P8 does not run `keytool` and does not commit a keystore, `google-services.json`, or a password.
+- Scripts, matching the existing debug APK pair: `android:aab:release` (`gradlew.bat bundleRelease` after `android:sync`) and `android:aab:release:unix` (`./gradlew bundleRelease`). Play consumes the AAB.
+- Version bump in the same change: `versionCode` 5 → 6, `versionName` 1.0.4 → 1.1.0. `applicationId` stays `com.watchman.app`.
+
+### 19.3 Permissions
+
+Keep `INTERNET`, `POST_NOTIFICATIONS`, coarse and fine location, `CAMERA`, and `RECORD_AUDIO` (voice chat).
+
+Remove `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, `READ_EXTERNAL_STORAGE`, and `WRITE_EXTERNAL_STORAGE` unless a feature reads the gallery without the system picker. Play's Photos and Videos Permissions policy rejects broad media access for one-off file picks. If a plugin manifest merges one of those permissions back in, strip it from the merged manifest only after the picker path is confirmed.
+
+Do **not** add background location. If investigation finds the WebView keeps collecting location after the user leaves the app, stop that collection on background. A foreground service (`foregroundServiceType="location"`), `ACCESS_BACKGROUND_LOCATION`, Play Console justification text, and an in-app prominent disclosure are in scope only when background collection is a real product requirement. The disclosure is inside the app, before the system dialog, names the feature, says location is collected while the app is closed or not in use, and links to `/privacy`. The default outcome is: no background location, and the listing doc says so.
+
+### 19.4 Privacy policy and account deletion
+
+| URL | Who can open it | What it does |
+|---|---|---|
+| `/privacy` | Anyone, logged out | Renders Part A of the existing policy draft, including the draft banner and every `[INSERT …]` placeholder. Does not invent a company number, address, or email. Shows `VITE_PRIVACY_CONTACT_EMAIL` when that env var is set |
+| `/delete-account` | Anyone, logged out | Tells the person to sign in on the web app and use Profile → Delete account (the existing `delete-my-account` function), or to email the privacy contact if they cannot sign in. The logged-out page does not call the function |
+
+Link both from Login, Register, and Profile. Play fetches these URLs in a browser, so they must work on the deployed web app, not only inside the APK. Counsel review before production stays an owner step; P8 does not mark the draft as legally final.
+
+### 19.5 Data safety answers (draft)
+
+Write these into `platform/docs/PLAY_STORE_LISTING.md`. "Collected" means the app transmits the data off the device. Transfers to a processor (Supabase, Vercel, Google FCM) acting for us are collected, not "shared", unless the third party uses the data for its own purposes. Nothing is sold. Nothing is used for advertising. Data is encrypted in transit. Users can request deletion.
+
+| Data | Collected | Purpose | Notes |
+|---|---|---|---|
+| Precise location | Yes, while the app is in use | App functionality | Patrol, incidents, SOS, home pin, chat share-location. Not background, unless §19.3 finds otherwise |
+| Photos and videos | Yes | App functionality | Incident evidence, chat images, avatars |
+| Name, email, phone, address | Yes | App functionality, account management | Profile and account |
+| Audio | Yes, if `RECORD_AUDIO` stays | App functionality | Voice messages in chat |
+| Incident reports and other messages | Yes | App functionality | User-generated content |
+| FCM push token | Yes | App functionality | Device identifier for notifications. Remove `AD_ID` if a dependency merges it and the app shows no ads |
+| Financial info | No | — | Money features were removed in v3 |
+
+### 19.6 Store listing draft
+
+**App name:** Watchman
+
+**Short description** (68 characters):
+
+> Neighbourhood watch for your street: incidents, patrols, and alerts.
+
+**Long description:**
+
+> Watchman helps a neighbourhood watch coordinate the things residents already do in chat groups: report an incident, see who is on patrol, and receive local alerts.
+>
+> Residents can report incidents with a location and photos, see patrol activity for their neighbourhood, receive notifications, save emergency contacts and a home pin, and delete their account from their profile.
+>
+> Watch members can run a patrol with live location while the app is open.
+>
+> Watchman is a tool for your neighbourhood organisation. It does not replace the police or emergency services. In an emergency, contact local emergency services first.
+>
+> The app requires an account. There are no in-app purchases.
+
+**Category:** Social.
+
+**Content rating notes** (for the IARC questionnaire, not a rating by themselves): users write incident reports and chat, and may describe crimes; the app is not a game and does not ship graphic violence. Members of the same neighbourhood see patrol and incident locations. There is no unrestricted browser, no gambling, and no in-app purchases. The app is not directed at children and is not Designed for Families.
+
+**Screenshots the owner captures** from a demo neighbourhood, never from real resident data:
+
+1. Resident home
+2. Report an incident
+3. Patrol map
+4. Alerts or emergency contacts
+5. Profile, including delete account
+
+Play also requires a 1024×500 feature graphic and at least two phone screenshots. Capturing those is an owner task. Do not commit screenshots that contain real personal information.
+
+### 19.7 Closed testing
+
+A **personal** Play Console account must run a closed test with **at least 12 testers opted in for 14 continuous days** before Google will consider a production release. Opt-in is what counts, not the invitation alone. An organisation account is exempt; assume a personal account unless the owner says otherwise.
+
+`PLAY_STORE_LISTING.md` includes a blank tracker (name or email, opt-in date, still opted in on day 14). The agent does not invite testers or open Play Console.
+
+### 19.8 What you do in Play Console (not the agent)
+
+- [ ] Create the app for `com.watchman.app` and enroll in Play App Signing.
+- [ ] Generate the upload keystore outside the repo. Store the passwords in a password manager.
+- [ ] Build with `android:aab:release` (or `android:aab:release:unix`) and upload the AAB to the closed-testing track.
+- [ ] Paste the listing. Set the privacy policy URL to `https://<production host>/privacy` and the account deletion URL to `https://<production host>/delete-account`.
+- [ ] Complete Data safety from §19.5, the content-rating questionnaire from §19.6, and app access (a test resident login, because the app requires an account).
+- [ ] Declare location. Declare a foreground service only if the build actually uses one. Ads, news, government apps, and financial features: no.
+- [ ] Countries: South Africa.
+- [ ] Personal accounts: 12 testers opted in for 14 continuous days, then apply for production access.
+- [ ] Replace the privacy-policy placeholders and have counsel review before production.
+
+### 19.9 Out of scope
+
+New product features, SQL, iOS, a second account-deletion backend, uploading the AAB, and any keystore or secret in git.
+
+---
+
+*End of blueprint v4. When a phase ships, tick it off in `CURSOR_PROMPTS.md` and `SCALE_ROADMAP.md`, and add its migrations to the "Apply on Supabase" table. P8 has no migration.*
