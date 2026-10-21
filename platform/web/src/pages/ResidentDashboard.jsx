@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -28,6 +28,7 @@ import {
   listResidentNeighbourhoodActivity,
 } from "../utils/residentVerification";
 import {
+  applyAreaBroadcastChange,
   areaBroadcastAsActivityRow,
   formatClockTime,
   formatNoticeRemaining,
@@ -140,6 +141,7 @@ export default function ResidentDashboard() {
   const [homeAddress, setHomeAddress] = useState("");
   const [sosBusy, setSosBusy] = useState(false);
   const [broadcasts, setBroadcasts] = useState([]);
+  const broadcastGen = useRef(0);
   const [civic, setCivic] = useState(null);
   const [awayRow, setAwayRow] = useState(null);
   const [showHouseholdIntro, setShowHouseholdIntro] = useState(false);
@@ -187,8 +189,10 @@ export default function ResidentDashboard() {
       }
     };
     const loadBroadcasts = async () => {
+      const gen = ++broadcastGen.current;
       const notices = await listAreaBroadcasts(20);
-      if (!ignore && !notices.error) setBroadcasts(notices.data || []);
+      if (ignore || gen !== broadcastGen.current || notices.error) return;
+      setBroadcasts(notices.data || []);
     };
     void loadProfile();
     void loadActivity({ notifyError: true });
@@ -213,9 +217,12 @@ export default function ResidentDashboard() {
 
   useEffect(() => {
     if (!user?.id) return undefined;
-    const unsubscribe = subscribeAreaBroadcasts(activeOrganizationId, () => {
+    const unsubscribe = subscribeAreaBroadcasts(activeOrganizationId, (payload) => {
+      const gen = ++broadcastGen.current;
+      setBroadcasts((prev) => applyAreaBroadcastChange(prev, payload));
       void (async () => {
         const notices = await listAreaBroadcasts(20);
+        if (gen !== broadcastGen.current) return;
         if (!notices.error) setBroadcasts(notices.data || []);
       })();
     });
@@ -341,6 +348,7 @@ export default function ResidentDashboard() {
                     <p className="font-mono text-[10px] uppercase text-amber-700/80 dark:text-amber-300/80">
                       {formatNoticeRemaining(until)}
                       {until ? ` · until ${formatClockTime(until)}` : ""}
+                      {row.edited_at ? " · edited" : ""}
                     </p>
                   </div>
                   <p className="mb-1 text-base font-semibold text-amber-950 dark:text-white">
@@ -562,6 +570,7 @@ export default function ResidentDashboard() {
                           {row.is_notice && noticeActivityUntil(row)
                             ? ` · until ${formatClockTime(noticeActivityUntil(row))}`
                             : ""}
+                          {row.is_notice && row.edited_at ? " · edited" : ""}
                         </p>
                         {row.description ? (
                           <p className="mt-1 line-clamp-2 text-xs text-gray-600 dark:text-gray-400">
