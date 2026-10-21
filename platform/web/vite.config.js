@@ -93,17 +93,28 @@ export default defineConfig(({ mode }) => {
             ],
           },
           workbox: {
-            navigateFallback: '/index.html',
-            navigateFallbackAllowlist: [/^\/.*$/],
-            navigateFallbackDenylist: [
-              /^\/api/,
-              /^\/supabase/,
-              /\.(?:js|css|png|svg|ico|woff2?|map|json|webmanifest)$/i,
-            ],
+            // Do not bind navigations to a precached index.html. That handler is
+            // cache-first and would keep a stale shell after a deploy. NetworkFirst
+            // below fetches the document, and it does not match /assets/* requests.
+            navigateFallback: null,
             // OSM tiles: do not route through Workbox CacheFirst — cross-origin tile
             // caching often triggers "unexpected error" / opaque response issues; the
             // browser’s HTTP cache still applies. Trade-off: no dedicated offline tile pack.
-            runtimeCaching: [],
+            // index.html is not precached. Navigations are network-first so an old shell
+            // does not survive a deploy.
+            globIgnores: ['**/index.html'],
+            runtimeCaching: [
+              {
+                urlPattern: ({ request, url }) =>
+                  request.mode === 'navigate' || url.pathname === '/index.html',
+                handler: 'NetworkFirst',
+                options: {
+                  cacheName: 'html-network-first',
+                  networkTimeoutSeconds: 3,
+                  cacheableResponse: { statuses: [200] },
+                },
+              },
+            ],
             globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webp}'],
             skipWaiting: true,
             clientsClaim: true,
