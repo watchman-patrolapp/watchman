@@ -275,6 +275,7 @@ These files must be applied on the live project if they are not already. The app
 | `20260401141000_chat_messages_retention_purge.sql` | `run_chat_messages_retention_purge()` — **applied** |
 | `sql/schedule_chat_retention_cron.sql` | pg_cron `chat_messages_retention_6mo` jobid **3**, `25 5 * * *` — **confirmed 16 Aug** |
 | `20261003002000_audit_log_hardening.sql` | G2 audit lockdown + org audit viewer. Apply after G1 (`20261003001000`) if that file is pending; G2 does not read G1 objects. Does not delete or rewrite `activity_logs` rows. Redeploy `admin-delete-user` and `delete-my-account`. The 5-year retention delete is **not** scheduled. |
+| `20261022001000_users_privilege_guard.sql` | G5 users privilege guard. Apply after G1 and G2. Does not insert, update, or delete `public.users`. Existing roles stay. Run the read-only pre-check in that file on staging first. |
 
 **Note:** two files share the timestamp `20260815031000`. Apply **both** in the SQL editor (they are independent). If you later use `supabase db push` / CLI migrate, rename one timestamp so they do not collide.
 

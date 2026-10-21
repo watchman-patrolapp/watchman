@@ -38,7 +38,7 @@
 | [ ] | 2 | G2 — Audit log hardening + org audit viewer | `20261003002000_audit_log_hardening.sql` | — |
 | [ ] | 3 | G3 — Emergency directory org scope | `20261003003000_emergency_directory_org_scope.sql` | G2 |
 | [ ] | 4 | G4 — Storage write lockdown + safe path helpers | `20261003004000_storage_write_hardening.sql` | G3 |
-| [ ] | 5 | G5 — Users privilege guard + SQL grant convention doc | `20261003005000_users_privilege_guard.sql` | G1, G2 |
+| [ ] | 5 | G5 — Users privilege guard + SQL grant convention doc | `20261022001000_users_privilege_guard.sql` | G1, G2 |
 | [ ] | 6 | G6 — Notification preferences | `20261003006000_notification_prefs.sql` | — |
 | [ ] | 7 | G7 — Two-org isolation test script | `platform/supabase/sql/isolation_tests_community.sql` | G1–G6 |
 | [ ] | 8 | P0a — Capability grants (backend) | `20261003010000_org_capability_grants.sql` | G2 |
