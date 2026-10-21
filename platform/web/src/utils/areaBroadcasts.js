@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { isRpcNotFoundError } from "./isRpcNotFound";
 import { parsePatrolTime } from "./watchTime";
 
 export const NOTICE_PIN_MS = 12 * 60 * 60 * 1000;
@@ -64,7 +65,49 @@ export function areaBroadcastAsActivityRow(row) {
     resolved_at: null,
     pinned_until: row.pinned_until,
     activity_until: row.activity_until,
+    edited_at: row.edited_at || null,
+    author_id: row.author_id || null,
   };
+}
+
+export function isMissingAreaBroadcastHideSchema(error) {
+  if (!error) return false;
+  if (isRpcNotFoundError(error)) return true;
+  const msg = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase();
+  return (
+    msg.includes("schema cache") ||
+    msg.includes("hide_area_broadcast") ||
+    msg.includes("restore_area_broadcast") ||
+    msg.includes("edit_area_broadcast") ||
+    msg.includes("list_hidden_area_broadcasts") ||
+    (msg.includes("column") && msg.includes("does not exist") && (msg.includes("hidden_") || msg.includes("edited_at")))
+  );
+}
+
+export function areaBroadcastActionError(error, fallback) {
+  if (isMissingAreaBroadcastHideSchema(error)) {
+    return "Run the area broadcast hide SQL in Supabase first.";
+  }
+  const message = String(error?.message || "").replace(/^ERROR:\s*/i, "").trim();
+  return message || fallback;
+}
+
+/** Drop a hidden notice immediately. Edit payloads that include text update in place. */
+export function applyAreaBroadcastChange(rows, payload) {
+  const next = payload?.new;
+  if (!next?.id || !Array.isArray(rows)) return rows;
+  if (next.hidden_at) return rows.filter((row) => row.id !== next.id);
+  if (next.headline == null && next.body == null) return rows;
+  return rows.map((row) => (
+    row.id === next.id
+      ? {
+          ...row,
+          headline: next.headline ?? row.headline,
+          body: next.body ?? row.body,
+          edited_at: next.edited_at ?? row.edited_at,
+        }
+      : row
+  ));
 }
 
 export async function listAreaBroadcasts(limit = 20) {
@@ -80,16 +123,56 @@ export async function postAreaBroadcast({ headline, body }) {
   return { data, error };
 }
 
+export async function hideAreaBroadcast(id, reason) {
+  const { data, error } = await supabase.rpc("hide_area_broadcast", {
+    p_id: id,
+    p_reason: reason ?? null,
+  });
+  return { data, error };
+}
+
+export async function restoreAreaBroadcast(id) {
+  const { data, error } = await supabase.rpc("restore_area_broadcast", { p_id: id });
+  return { data, error };
+}
+
+export async function editAreaBroadcast(id, { headline, body }) {
+  const { data, error } = await supabase.rpc("edit_area_broadcast", {
+    p_id: id,
+    p_headline: headline,
+    p_body: body,
+  });
+  return { data, error };
+}
+
+export async function listHiddenAreaBroadcasts(limit = 30) {
+  const { data, error } = await supabase.rpc("list_hidden_area_broadcasts", { p_limit: limit });
+  return { data: data || [], error };
+}
+
 export function subscribeAreaBroadcasts(organizationId, onChange) {
   const filter = organizationId ? { filter: `organization_id=eq.${organizationId}` } : {};
-  const channel = supabase
-    .channel(`area-broadcasts-${organizationId || "all"}`)
+  const topic = `area-broadcasts-${organizationId || "all"}`;
+  let channel = supabase
+    .channel(topic)
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "area_broadcasts", ...filter },
       onChange
     )
-    .subscribe();
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "area_broadcasts", ...filter },
+      onChange
+    );
+  if (organizationId) {
+    channel = channel.on("broadcast", { event: "UPDATE" }, (message) => {
+      const row = message?.payload || {};
+      if (row.organization_id && row.organization_id !== organizationId) return;
+      onChange({ eventType: "UPDATE", new: row });
+    });
+  }
+  channel.subscribe();
   return () => {
     supabase.removeChannel(channel);
   };
