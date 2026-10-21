@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { isRpcNotFoundError } from "./isRpcNotFound";
 
 export const SECURITY_BRANDING_BUCKET = "security-branding";
 export const MAX_BRANDING_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -29,14 +30,23 @@ export async function saveMySecurityBranding({
   if (error) throw error;
 }
 
+/** Local neighbourhood rows first. Rows with no organization_id stay city-wide. */
+export function sortEmergencyDirectoryRows(rows) {
+  return [...(rows || [])].sort((left, right) => {
+    const leftRank = left?.organization_id ? 0 : 1;
+    const rightRank = right?.organization_id ? 0 : 1;
+    return leftRank - rightRank;
+  });
+}
+
 export async function listEmergencyDirectory() {
   const { data, error } = await supabase.rpc("list_emergency_directory");
   if (error) throw error;
-  return data || [];
+  return sortEmergencyDirectoryRows(data || []);
 }
 
 export async function saveEmergencyDirectoryEntry(entry) {
-  const { data, error } = await supabase.rpc("upsert_emergency_directory_entry", {
+  const payload = {
     p_id: entry.id || null,
     p_kind: entry.kind || "other",
     p_name: entry.name || "",
@@ -49,9 +59,21 @@ export async function saveEmergencyDirectoryEntry(entry) {
     p_active: entry.active !== false,
     p_logo_url: entry.logo_url || null,
     p_banner_url: entry.banner_url || null,
-  });
-  if (error) throw error;
-  return data;
+    p_scope: entry.scope === "global" ? "global" : "org",
+  };
+  const first = await supabase.rpc("upsert_emergency_directory_entry", payload);
+  if (!first.error) return first.data;
+
+  // Before the org-scope migration, PostgREST only has the 12-arg upsert.
+  // Retry edits and city-wide creates on that signature. A new neighbourhood
+  // contact must not fall back: the old RPC would publish it city-wide.
+  const neighbourhoodCreate = !entry.id && payload.p_scope !== "global";
+  if (!isRpcNotFoundError(first.error) || neighbourhoodCreate) throw first.error;
+
+  const { p_scope: _scope, ...legacy } = payload;
+  const second = await supabase.rpc("upsert_emergency_directory_entry", legacy);
+  if (second.error) throw second.error;
+  return second.data;
 }
 
 export async function setEmergencyDirectoryActive(id, active) {

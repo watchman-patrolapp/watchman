@@ -76,6 +76,7 @@ export default function CompanyCoverCard({
   email,
   contactPerson,
   kicker = "Security company",
+  badge = null,
   footer = null,
 }) {
   return (
@@ -105,9 +106,12 @@ export default function CompanyCoverCard({
       <div className="border-b border-gray-100 px-6 pb-5 pt-16 dark:border-gray-800">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">
-              {kicker}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">
+                {kicker}
+              </p>
+              {badge}
+            </div>
             <h3 className="mt-1 break-words text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
               {name || "Security company"}
             </h3>
