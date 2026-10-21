@@ -274,6 +274,7 @@ These files must be applied on the live project if they are not already. The app
 | `20260818071000_petrol_price_save_fix.sql` | Idempotent petrol-price save + global staff for selected org |
 | `20260401141000_chat_messages_retention_purge.sql` | `run_chat_messages_retention_purge()` — **applied** |
 | `sql/schedule_chat_retention_cron.sql` | pg_cron `chat_messages_retention_6mo` jobid **3**, `25 5 * * *` — **confirmed 16 Aug** |
+| `20261003002000_audit_log_hardening.sql` | G2 audit lockdown + org audit viewer. Apply after G1 (`20261003001000`) if that file is pending; G2 does not read G1 objects. Does not delete or rewrite `activity_logs` rows. Redeploy `admin-delete-user` and `delete-my-account`. The 5-year retention delete is **not** scheduled. |
 
 **Note:** two files share the timestamp `20260815031000`. Apply **both** in the SQL editor (they are independent). If you later use `supabase db push` / CLI migrate, rename one timestamp so they do not collide.
 
@@ -353,7 +354,7 @@ Priority is top-down.
 ### 8. Compliance / hardening
 - [x] Chat 180-day purge scheduled on live pg_cron (`chat_messages_retention_6mo`, jobid 3, 05:25 UTC).
 - [ ] Org-scoped storage paths for media and resident documents.
-- [ ] Structured audit log for high-risk admin actions (delete user, role change, share to hub, hub delete).
+- [ ] Structured audit log for high-risk admin actions (delete user, role change, City Hub delete/archive) — shipped in code as `20261003002000_audit_log_hardening.sql` (G2). Apply on staging before production. The optional 5-year retention delete is documented only and is **not** scheduled.
 - [ ] Retention jobs for SOS, memberships, city hub artifacts (chat only so far).
 - [ ] Tenant-isolation regression checklist before every production deploy.
 

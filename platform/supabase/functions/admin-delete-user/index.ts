@@ -20,6 +20,28 @@ async function safeCleanup(
   if (error) console.error(`admin-delete-user cleanup [${label}]:`, error.message || error)
 }
 
+function roleKey(role: unknown): string | null {
+  const value = String(role || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+  return value || null
+}
+
+/** Initials only — the subject's name is being erased (POPIA). */
+function nameInitials(fullName: unknown): string | null {
+  const parts = String(fullName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!parts.length) return null
+  const initials = parts
+    .map((part) => (part[0] || '').toUpperCase())
+    .filter(Boolean)
+    .join('.')
+  return initials || null
+}
+
 Deno.serve(async (req) => {
   const headers = corsHeaders(req)
 
@@ -70,7 +92,7 @@ Deno.serve(async (req) => {
 
     const { data: caller, error: callerErr } = await supabaseAdmin
       .from('users')
-      .select('role')
+      .select('role, full_name, organization_id')
       .eq('id', jwtUser.id)
       .single()
 
@@ -112,6 +134,45 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
+    }
+
+    const { data: target, error: targetErr } = await supabaseAdmin
+      .from('users')
+      .select('role, full_name, organization_id')
+      .eq('id', targetId)
+      .maybeSingle()
+    if (targetErr) {
+      console.error('admin-delete-user: target lookup failed:', targetErr.message || targetErr)
+      return new Response(JSON.stringify({ error: 'Could not load the account to delete' }), {
+        status: 400,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Service-role insert (clients cannot write activity_logs). Initials only for
+    // the person being erased. Written before deletion so a foreign key cannot
+    // drop the row, and so we refuse to delete if the audit row cannot be saved.
+    const { error: auditErr } = await supabaseAdmin.from('activity_logs').insert({
+      organization_id: target?.organization_id || caller.organization_id || null,
+      user_id: jwtUser.id,
+      action: 'user_deleted',
+      details_json: {
+        subject_user_id: targetId,
+        subject_role: roleKey(target?.role),
+        subject_name_initials: nameInitials(target?.full_name),
+        actor_role: roleKey(caller.role),
+        actor_name: String(caller.full_name || '').trim() || null,
+      },
+    })
+    if (auditErr) {
+      console.error('admin-delete-user: audit insert failed:', auditErr.message || auditErr)
+      return new Response(
+        JSON.stringify({ error: 'Could not write the audit log, so the account was not deleted.' }),
+        {
+          status: 500,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        }
+      )
     }
 
     await safeCleanup('active_patrols', () =>

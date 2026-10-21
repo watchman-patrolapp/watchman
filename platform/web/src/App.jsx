@@ -445,7 +445,7 @@ function AppRoutes() {
           path="/admin/staff-activity"
           element={
             <PrivateRoute>
-              <RequireRole allowedRoles={GLOBAL_APP_ROLES} allowPlatformConsole>
+              <RequireRole allowedRoles={[...GLOBAL_APP_ROLES, "nw_admin"]} allowPlatformConsole>
                 <RequireActiveOrganization>
                   <AdminWatchStaffActivity />
                 </RequireActiveOrganization>

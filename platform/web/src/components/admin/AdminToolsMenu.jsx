@@ -86,6 +86,7 @@ export default function AdminToolsMenu({
   canOpenHousehold = false,
   canEditEmergencyContacts = false,
   canSendAreaNotice = false,
+  canOpenAuditLog = false,
   onNavigate,
   onRetryCounts,
 }) {
@@ -126,11 +127,11 @@ export default function AdminToolsMenu({
       },
       {
         id: "staff-activity",
-        label: "NW admin activity",
+        label: isGlobalAppUser ? "NW admin activity" : "Audit log",
         to: "/admin/staff-activity",
         icon: FaHistory,
         tone: "bg-slate-600",
-        show: isGlobalAppUser,
+        show: isGlobalAppUser || canOpenAuditLog,
       },
       {
         id: "feedback",
@@ -255,6 +256,7 @@ export default function AdminToolsMenu({
     pendingFeedbackCount,
     pendingPatrollerCount,
     canSendAreaNotice,
+    canOpenAuditLog,
     canEditEmergencyContacts,
     isFeedbackReviewer,
     canOpenResidentPreview,

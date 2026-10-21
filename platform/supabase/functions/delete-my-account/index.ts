@@ -20,6 +20,28 @@ async function safeCleanup(
   if (error) console.error(`delete-my-account cleanup [${label}]:`, error.message || error)
 }
 
+function roleKey(role: unknown): string | null {
+  const value = String(role || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+  return value || null
+}
+
+/** Initials only — this person's name is being erased (POPIA). */
+function nameInitials(fullName: unknown): string | null {
+  const parts = String(fullName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!parts.length) return null
+  const initials = parts
+    .map((part) => (part[0] || '').toUpperCase())
+    .filter(Boolean)
+    .join('.')
+  return initials || null
+}
+
 Deno.serve(async (req) => {
   const headers = corsHeaders(req)
 
@@ -83,6 +105,43 @@ Deno.serve(async (req) => {
 
     const targetId = jwtUser.id
     const uidText = targetId
+
+    const { data: profile, error: profileLookupErr } = await supabaseAdmin
+      .from('users')
+      .select('role, full_name, organization_id')
+      .eq('id', targetId)
+      .maybeSingle()
+    if (profileLookupErr) {
+      console.error('delete-my-account: profile lookup failed:', profileLookupErr.message || profileLookupErr)
+      return new Response(JSON.stringify({ error: 'Could not load your account' }), {
+        status: 400,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const initials = nameInitials(profile?.full_name)
+    const { error: auditErr } = await supabaseAdmin.from('activity_logs').insert({
+      organization_id: profile?.organization_id || null,
+      user_id: targetId,
+      action: 'account_self_deleted',
+      details_json: {
+        subject_user_id: targetId,
+        subject_role: roleKey(profile?.role),
+        subject_name_initials: initials,
+        actor_role: roleKey(profile?.role),
+        actor_name: initials,
+      },
+    })
+    if (auditErr) {
+      console.error('delete-my-account: audit insert failed:', auditErr.message || auditErr)
+      return new Response(
+        JSON.stringify({ error: 'Could not write the audit log, so the account was not deleted.' }),
+        {
+          status: 500,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        }
+      )
+    }
 
     await safeCleanup('active_patrols', () =>
       supabaseAdmin.from('active_patrols').delete().eq('user_id', targetId)
