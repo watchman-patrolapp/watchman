@@ -5,7 +5,7 @@ import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
 import { canAccessAdminPanel, canReviewFeedback } from "../auth/staffRoles";
 import { canAccessPlatformConsole } from "../auth/platformRoles";
-import { canPreviewResidentHome, canManageEmergencyDirectory, canPostAreaBroadcast, canUseHouseholdMode, isGlobalAppRole, isHouseholdModeRole, canReviewPatrollerRequests } from "../auth/roleMatrix";
+import { canPreviewResidentHome, canManageEmergencyDirectory, canPostAreaBroadcast, canUseHouseholdMode, isGlobalAppRole, isHouseholdModeRole, canReviewPatrollerRequests, normalizeAppRole } from "../auth/roleMatrix";
 import { supabase } from "../supabase/client";
 import { useSupabaseQuery } from "../hooks/useSupabaseQuery";
 import ExcelJS from 'exceljs';
@@ -162,6 +162,7 @@ export default function AdminDashboard() {
   const canOpenHousehold = isHouseholdModeRole(user?.role) && canUseHouseholdMode(user?.role);
   const canEditEmergencyContacts = canManageEmergencyDirectory(user?.role, user?.platformRole);
   const canSendAreaNotice = canPostAreaBroadcast(user?.role, user?.platformRole);
+  const canOpenAuditLog = isGlobalAppUser || normalizeAppRole(user?.role) === "nw_admin";
 
   // ---------------------------------------------------------------------------
   // useSupabaseQuery hooks
@@ -661,6 +662,7 @@ export default function AdminDashboard() {
           canOpenHousehold={canOpenHousehold}
           canEditEmergencyContacts={canEditEmergencyContacts}
           canSendAreaNotice={canSendAreaNotice}
+          canOpenAuditLog={canOpenAuditLog}
           onNavigate={(to) => navigate(to)}
           onRetryCounts={() => {
             if (pendingError) void refetchPending();
