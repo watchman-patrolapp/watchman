@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FaTimes, FaExpand, FaCompress, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { getInitials } from '../../chat/utils/formatters';
+import { useCriminalPhotoSrcList } from '../../utils/criminalPhotos';
 
 /**
  * Full-screen overlay (default compact height, toggle full) centered on screen.
@@ -27,8 +28,10 @@ export default function PatrollerPhotoPreview({
     return [];
   }, [imageUrl, imageUrls]);
 
+  const displayUrls = useCriminalPhotoSrcList(urls);
   const hasGallery = urls.length > 1;
-  const currentUrl = urls[slideIndex];
+  const sourceUrl = urls[slideIndex];
+  const currentUrl = displayUrls[slideIndex];
   const headerLabel =
     hasGallery && name
       ? `${name} · ${slideIndex + 1} / ${urls.length}`
@@ -157,6 +160,11 @@ export default function PatrollerPhotoPreview({
               src={currentUrl}
               alt=""
               className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg"
+            />
+          ) : sourceUrl ? (
+            <div
+              className="h-10 w-10 rounded-full border-2 border-white/30 border-t-white animate-spin"
+              aria-label="Loading photograph"
             />
           ) : (
             <div

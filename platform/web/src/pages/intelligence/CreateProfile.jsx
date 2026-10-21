@@ -22,6 +22,8 @@ import toast from 'react-hot-toast';
 import { FaPlus, FaTimes, FaUpload, FaArrowLeft, FaExpand } from 'react-icons/fa';
 import ThemeToggle from '../../components/ThemeToggle';
 import PatrollerPhotoPreview from '../../components/patrol/PatrollerPhotoPreview';
+import CriminalPhotoImg from '../../components/intelligence/CriminalPhotoImg';
+import { removeCriminalPhoto } from '../../utils/criminalPhotos';
 import SightingsLogEditor from '../../components/intelligence/SightingsLogEditor';
 import {
   emptySightingTemplate,
@@ -293,7 +295,7 @@ export default function CreateProfile() {
 
         if (uploadError) throw uploadError;
 
-        // Get public URL
+        // Stable object URL stored on the profile. The screen signs it for display.
         const { data: { publicUrl } } = supabase.storage
           .from('criminal-photos')
           .getPublicUrl(filePath);
@@ -326,10 +328,7 @@ export default function CreateProfile() {
 
     if (photo.url && !photo.uploading && photo.file && photo.url.includes('/criminal-photos/')) {
       try {
-        const path = photo.url.split('/criminal-photos/')[1];
-        if (path) {
-          await supabase.storage.from('criminal-photos').remove([path]);
-        }
+        await removeCriminalPhoto(photo.url);
       } catch (err) {
         console.error('Error deleting file:', err);
       }
@@ -1131,7 +1130,7 @@ export default function CreateProfile() {
                           className="group/btn relative h-full w-full border-0 bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
                           aria-label={`View photo ${index + 1} full size`}
                         >
-                          <img
+                          <CriminalPhotoImg
                             src={photo.preview || photo.url}
                             alt={`Upload ${index + 1}`}
                             className="h-full w-full object-cover object-top transition group-hover/btn:opacity-90"

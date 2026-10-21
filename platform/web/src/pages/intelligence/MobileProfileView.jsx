@@ -36,6 +36,7 @@ import QuickSightingButton from '../../components/patrol/QuickSightingButton';
 import ThemeToggle from '../../components/ThemeToggle';
 import BrandedLoader from '../../components/layout/BrandedLoader';
 import PatrollerPhotoPreview from '../../components/patrol/PatrollerPhotoPreview';
+import CriminalPhotoImg from '../../components/intelligence/CriminalPhotoImg';
 import { connectionTypeLabel } from '../../data/profileIncidentLinkTaxonomy';
 
 const MobileProfileView = () => {
@@ -117,7 +118,7 @@ const MobileProfileView = () => {
             className="absolute inset-0 h-full w-full cursor-zoom-in border-0 bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
             aria-label="View photographs full screen"
           >
-            <img
+            <CriminalPhotoImg
               src={heroPhotoUrls[0]}
               className="h-full w-full object-cover object-top"
               alt={`${profile.primary_name}'s profile`}

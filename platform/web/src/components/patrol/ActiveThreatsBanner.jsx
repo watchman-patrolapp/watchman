@@ -6,6 +6,7 @@ import { mergedSightingsForDisplay } from '../../utils/criminalProfileSightings'
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 import { parsePatrolTime } from '../../utils/watchTime';
+import CriminalPhotoImg from '../intelligence/CriminalPhotoImg';
 
 /** Haversine distance in km */
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -225,7 +226,7 @@ export default function ActiveThreatsBanner({
               className="bg-white/20 backdrop-blur-sm rounded-lg p-3 flex items-center gap-3 cursor-pointer hover:bg-white/30 transition"
             >
               {profile.photo_urls?.[0] ? (
-                <img src={profile.photo_urls[0]} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                <CriminalPhotoImg src={profile.photo_urls[0]} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
               ) : (
                 <div className="w-12 h-12 rounded-lg bg-gray-300 flex items-center justify-center flex-shrink-0">
                   <FaMapMarkerAlt className="text-gray-500" />

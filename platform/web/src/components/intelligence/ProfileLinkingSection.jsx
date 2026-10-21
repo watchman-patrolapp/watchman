@@ -9,6 +9,7 @@ import {
   PROFILE_INCIDENT_CONFIDENCE_EXPLAINER,
 } from '../../data/profileIncidentLinkTaxonomy';
 import BrandedLoader from '../layout/BrandedLoader';
+import CriminalPhotoImg from './CriminalPhotoImg';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 
@@ -288,7 +289,7 @@ const ProfileLinkingSection = ({ entry, onUpdateEntry }) => {
                         >
                           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-600">
                             {profile.photo_urls?.[0] ? (
-                              <img
+                              <CriminalPhotoImg
                                 src={profile.photo_urls[0]}
                                 alt=""
                                 className="h-full w-full object-cover"
