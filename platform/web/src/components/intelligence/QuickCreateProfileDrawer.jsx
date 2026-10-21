@@ -6,6 +6,7 @@ import { supabase } from '../../supabase/client';
 import { useAuth } from '../../auth/useAuth';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import toast from 'react-hot-toast';
+import CriminalPhotoImg from './CriminalPhotoImg';
 
 const RISK_OPTIONS = [
   { value: 'critical', label: 'Critical' },
@@ -120,6 +121,7 @@ export default function QuickCreateProfileDrawer({
 
         if (uploadError) throw uploadError;
 
+        // Stable object URL stored on the profile. The screen signs it for display.
         const {
           data: { publicUrl },
         } = supabase.storage.from('criminal-photos').getPublicUrl(filePath);
@@ -372,7 +374,7 @@ export default function QuickCreateProfileDrawer({
                   {photos.map((p) => (
                     <li key={p.id} className="flex items-center gap-2 text-xs">
                       <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded border border-gray-200 dark:border-gray-600">
-                        <img src={p.preview || p.url} alt="" className="h-full w-full object-cover" />
+                        <CriminalPhotoImg src={p.preview || p.url} alt="" className="h-full w-full object-cover" />
                       </div>
                       <span className="flex-1 truncate text-gray-600 dark:text-gray-400">
                         {p.uploading ? 'Uploading…' : p.file?.name || 'Photo'}

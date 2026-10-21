@@ -42,6 +42,8 @@ import {
   mergedSightingsForDisplay,
 } from '../utils/criminalProfileSightings';
 import PatrollerPhotoPreview from '../components/patrol/PatrollerPhotoPreview';
+import CriminalPhotoImg from '../components/intelligence/CriminalPhotoImg';
+import { removeCriminalPhoto } from '../utils/criminalPhotos';
 import ProfileRecordAudit from '../components/intelligence/ProfileRecordAudit';
 import { collectUserIdsFromProfiles, fetchUserLabelMap } from '../utils/profileUserLabels';
 import { useActiveOrganization } from '../auth/useActiveOrganization';
@@ -68,7 +70,7 @@ function AssociateFaceThumb({ profile, className = 'h-10 w-10' }) {
       className={`shrink-0 overflow-hidden rounded-lg bg-gray-200 ring-1 ring-gray-200 dark:bg-gray-600 dark:ring-gray-600 ${className}`}
     >
       {url ? (
-        <img
+        <CriminalPhotoImg
           src={url}
           alt=""
           className="h-full w-full object-cover object-top"
@@ -455,6 +457,7 @@ export default function CriminalProfileDetail() {
 
         if (uploadError) throw uploadError;
 
+        // Stable object URL stored on the profile. The screen signs it for display.
         const { data: { publicUrl } } = supabase.storage
           .from('criminal-photos')
           .getPublicUrl(filePath);
@@ -478,8 +481,7 @@ export default function CriminalProfileDetail() {
     const url = urls[index];
     if (url && url.includes('/criminal-photos/')) {
       try {
-        const path = url.split('/criminal-photos/')[1]?.split('?')[0];
-        if (path) await supabase.storage.from('criminal-photos').remove([path]);
+        await removeCriminalPhoto(url);
       } catch (err) {
         console.error('Error deleting file:', err);
       }
@@ -823,7 +825,7 @@ export default function CriminalProfileDetail() {
                         className="group relative block w-full cursor-zoom-in overflow-hidden rounded-lg border-0 bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
                         aria-label={`View photograph ${index + 1} full size`}
                       >
-                        <img
+                        <CriminalPhotoImg
                           src={url}
                           alt={`Profile ${index + 1}`}
                           className="h-32 w-full object-cover object-top transition group-hover:opacity-90"

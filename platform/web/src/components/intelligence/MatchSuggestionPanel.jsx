@@ -1,6 +1,7 @@
 import React from 'react';
 import { FaRobot, FaCheck, FaTimes, FaUserPlus, FaPercentage } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import CriminalPhotoImg from './CriminalPhotoImg';
 
 export default function MatchSuggestionPanel({ matches, onConfirm, onReject }) {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ export default function MatchSuggestionPanel({ matches, onConfirm, onReject }) {
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg bg-gray-200 overflow-hidden">
                 {match.profile?.photo_urls?.[0] ? (
-                  <img src={match.profile.photo_urls[0]} alt="" className="w-full h-full object-cover" />
+                  <CriminalPhotoImg src={match.profile.photo_urls[0]} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-gray-300 text-gray-500">
                     <FaUserPlus />

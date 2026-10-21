@@ -4,6 +4,7 @@ import { supabase } from '../../supabase/client';
 import { FaSearch, FaUserSecret, FaExclamationTriangle, FaEye } from 'react-icons/fa';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
+import CriminalPhotoImg from '../intelligence/CriminalPhotoImg';
 
 const GlobalSearch = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,7 +128,7 @@ const GlobalSearch = () => {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex-shrink-0 overflow-hidden">
                   {result.photo ? (
-                    <img src={result.photo} alt="" className="w-full h-full object-cover" />
+                    <CriminalPhotoImg src={result.photo} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-500">
                       <FaUserSecret className="w-5 h-5" />

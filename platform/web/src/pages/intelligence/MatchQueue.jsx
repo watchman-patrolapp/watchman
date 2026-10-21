@@ -9,6 +9,7 @@ import BrandedLoader from '../../components/layout/BrandedLoader';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { belongsToActiveOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 import { formatWatchDateTime } from '../../utils/watchTime';
+import CriminalPhotoImg from '../../components/intelligence/CriminalPhotoImg';
 
 function formatSourceType(sourceType) {
   if (!sourceType) return 'Unknown';
@@ -224,7 +225,7 @@ export default function MatchQueue() {
                     <div className="flex items-start gap-4">
                       <div className="w-16 h-16 bg-gray-200 dark:bg-gray-600 rounded-full flex-shrink-0 overflow-hidden">
                         {match.profile?.photo_urls?.[0] ? (
-                          <img src={match.profile.photo_urls[0]} alt="" className="w-full h-full object-cover" />
+                          <CriminalPhotoImg src={match.profile.photo_urls[0]} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-500">
                             <FaUserSecret className="w-8 h-8" />

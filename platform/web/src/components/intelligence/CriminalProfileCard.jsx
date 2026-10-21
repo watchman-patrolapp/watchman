@@ -20,6 +20,7 @@ import { fetchAssociatesBidirectional } from '../../utils/profileAssociates';
 import { formatMoMatchConfidence, moMatchCardTitle } from '../../utils/moMatchDisplay';
 import { mergedSightingsForDisplay } from '../../utils/criminalProfileSightings';
 import PatrollerPhotoPreview from '../patrol/PatrollerPhotoPreview';
+import CriminalPhotoImg from './CriminalPhotoImg';
 import BrandedLoader from '../layout/BrandedLoader';
 import ProfileRecordAudit from './ProfileRecordAudit';
 import { formatWatchDate, formatWatchDateTime } from '../../utils/watchTime';
@@ -107,7 +108,7 @@ function AssociateMiniRow({ a, onNavigate }) {
     <div className="flex gap-3 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-600 dark:bg-gray-800/80">
       <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-100 dark:border-gray-600 dark:bg-gray-700">
         {a.photo_urls?.[0] ? (
-          <img src={a.photo_urls[0]} alt="" className="h-full w-full object-cover object-top" />
+          <CriminalPhotoImg src={a.photo_urls[0]} alt="" className="h-full w-full object-cover object-top" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <FaUserSecret className="h-6 w-6 text-gray-400" />
@@ -238,7 +239,7 @@ export default function CriminalProfileCard({ profile, stats = {}, associatesPre
                 className="group relative h-full w-full border-0 bg-transparent p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-800"
                 aria-label="View subject photographs"
               >
-                <img
+                <CriminalPhotoImg
                   src={profile.photo_urls[0]}
                   alt=""
                   className="h-full w-full object-cover object-top transition group-hover:opacity-90"
