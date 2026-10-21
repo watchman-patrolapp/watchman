@@ -34,22 +34,25 @@ export async function removeIncidentStorageFolder(incidentId) {
 }
 
 /**
- * Hard-delete incident via admin_delete_incident RPC, then storage cleanup.
+ * Hard-delete incident via admin_delete_incident RPC, after storage cleanup.
+ * The incident-photos delete policy allows a moderator only while the incident
+ * row still exists, so objects are removed first. Cleanup failure is logged
+ * and does not skip the row delete.
  * @returns {{ ok: boolean, error?: string }}
  */
 export async function deleteIncidentFully(incidentId) {
+  try {
+    await removeIncidentStorageFolder(incidentId);
+  } catch (e) {
+    console.warn('Pre-delete storage cleanup:', e);
+  }
+
   const { error: rpcError } = await supabase.rpc('admin_delete_incident', {
     p_incident_id: incidentId,
   });
 
   if (rpcError) {
     return { ok: false, error: rpcError.message };
-  }
-
-  try {
-    await removeIncidentStorageFolder(incidentId);
-  } catch (e) {
-    console.warn('Post-delete storage cleanup:', e);
   }
 
   return { ok: true };
