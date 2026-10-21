@@ -31,6 +31,7 @@ import {
 } from "../utils/emergencyDirectory";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import { canManageEmergencyDirectory, homeBackNav, isGlobalOperatorUser } from "../auth/roleMatrix";
+import { useActiveOrganization } from "../auth/useActiveOrganization";
 import { useAuth } from "../auth/useAuth";
 
 export const DIRECTORY_KINDS = [
@@ -413,6 +414,7 @@ function ContactForm({ form, saving, uploading, canChooseCityScope, onChange, on
 export default function EmergencyContacts() {
   const { pathname } = useLocation();
   const { user } = useAuth();
+  const { activeOrganizationId } = useActiveOrganization();
   const canManage = canManageEmergencyDirectory(user?.role, user?.platformRole);
   const canChooseCityScope = isGlobalOperatorUser(user);
   const residentView = pathname.startsWith("/resident");
@@ -467,10 +469,16 @@ export default function EmergencyContacts() {
   }, [canManage]);
 
   const uploadMedia = async (kind, file) => {
-    if (!file) return;
+    if (!file || !form) return;
+    const scope = form.id
+      ? (form.organization_id ? "org" : "global")
+      : (canChooseCityScope && form.scope === "global" ? "global" : "org");
     setUploading(true);
     try {
-      const url = await uploadEmergencyDirectoryImage(user?.id, kind, file);
+      const url = await uploadEmergencyDirectoryImage(kind, file, {
+        scope,
+        activeOrganizationId: form.organization_id || activeOrganizationId,
+      });
       setForm((prev) => (prev ? { ...prev, [`${kind}_url`]: url } : prev));
     } catch (err) {
       toast.error(

@@ -15,6 +15,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { supabase } from './supabase/client';
 import { initSentry } from './utils/initSentry';
+import { installChunkLoadRecovery } from './utils/chunkLoadRecovery';
+
+installChunkLoadRecovery();
 
 function vitePwaRegisterScriptPresent() {
   if (typeof document === 'undefined') return false;

@@ -1,4 +1,5 @@
 import React from 'react';
+import { isChunkLoadError, reloadOnceForChunkError } from '../utils/chunkLoadRecovery';
 
 const isDev = import.meta.env?.DEV ?? process.env.NODE_ENV === 'development';
 
@@ -9,16 +10,19 @@ class ErrorBoundary extends React.Component {
       hasError: false,
       error: null,
       errorInfo: null,
+      reloading: false,
     };
     this.handleReset = this.handleReset.bind(this);
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    const reloading = isChunkLoadError(error) && reloadOnceForChunkError();
+    return { hasError: true, error, reloading };
   }
 
   componentDidCatch(error, errorInfo) {
     this.setState({ errorInfo });
+    if (this.state.reloading) return;
     console.error('ErrorBoundary caught:', error, errorInfo);
 
     // Hook for external error reporting (e.g. Sentry) — add when ready:
@@ -27,12 +31,16 @@ class ErrorBoundary extends React.Component {
 
   handleReset() {
     // Try recovering without a full page reload first
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    this.setState({ hasError: false, error: null, errorInfo: null, reloading: false });
   }
 
   render() {
     if (!this.state.hasError) {
       return this.props.children;
+    }
+
+    if (this.state.reloading) {
+      return null;
     }
 
     const { error, errorInfo } = this.state;

@@ -92,22 +92,35 @@ export async function listDirectorySecurityCompanies() {
 
 export const EMERGENCY_DIRECTORY_BUCKET = "emergency-directory";
 
-export async function uploadEmergencyDirectoryImage(userId, kind, file) {
+const ORG_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** New objects live at global/… or {org_id}/…. Legacy {uploader}/… files are left in place. */
+export function emergencyDirectoryObjectFolder({ scope, activeOrganizationId } = {}) {
+  if (scope === "global") return "global";
+  const orgId = String(activeOrganizationId || "").trim();
+  if (!ORG_ID_RE.test(orgId)) {
+    throw new Error("Select a neighbourhood before uploading a directory image.");
+  }
+  return orgId;
+}
+
+export async function uploadEmergencyDirectoryImage(kind, file, { scope = "org", activeOrganizationId } = {}) {
   if (!file?.type?.startsWith("image/")) {
     throw new Error("Choose a JPEG, PNG, or WebP image.");
   }
   if (file.size > MAX_BRANDING_IMAGE_BYTES) {
     throw new Error("That image is larger than 8MB.");
   }
-  const owner = String(userId || "anon").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) || "anon";
+  const folder = emergencyDirectoryObjectFolder({ scope, activeOrganizationId });
+  const safeKind = String(kind || "image").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 24) || "image";
   const ext = String(file.name?.split(".").pop() || "jpg")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "")
     .slice(0, 8) || "jpg";
-  const filePath = `${owner}/${kind}_${Date.now()}.${ext}`;
+  const filePath = `${folder}/${safeKind}_${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from(EMERGENCY_DIRECTORY_BUCKET).upload(filePath, file, {
     contentType: file.type,
-    upsert: true,
+    upsert: false,
   });
   if (error) {
     throw new Error(error.message || "Could not upload. Run the emergency directory media SQL if the bucket is missing.");
