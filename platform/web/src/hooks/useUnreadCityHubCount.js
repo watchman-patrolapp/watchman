@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "../supabase/client";
-import { CITY_HUB_READ_EVENT, isCityHubPath, readCityHubLastSeen } from "../utils/cityHubUnread";
+import {
+  CITY_HUB_READ_EVENT,
+  hydrateCityHubLastSeen,
+  isCityHubPath,
+  readCityHubLastSeen,
+} from "../utils/cityHubUnread";
 
 /**
  * Published City Hub posts newer than this user's last visit.
  * City Hub is cross-neighborhood, so this is not scoped to the working area.
+ * Last-seen is cached in localStorage and persisted on the server so the badge
+ * stays cleared after sign-in (and across web / Android).
  */
 export function useUnreadCityHubCount(enabled, userId) {
   const { pathname } = useLocation();
@@ -18,6 +25,7 @@ export function useUnreadCityHubCount(enabled, userId) {
       return;
     }
     try {
+      await hydrateCityHubLastSeen(userId);
       const lastSeen = readCityHubLastSeen(userId);
       let query = supabase
         .from("city_hub_posts")
