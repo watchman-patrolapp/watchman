@@ -647,16 +647,22 @@ export default function Dashboard() {
       ) {
         ({ error: rpcError } = await supabase.rpc('end_patrol', { p_user_id: user.id }));
       }
-      if (rpcError) throw rpcError;
+      // Pre-idempotent migration: double-end / admin force-end raises P0001.
+      const alreadyEnded = rpcError && /no active patrol/i.test(String(rpcError.message || rpcError));
+      if (rpcError && !alreadyEnded) throw rpcError;
       setAllActivePatrols(prev => prev.filter(p => p.user_id !== user.id));
       setActivePatrol(null);
       setStartTime(null);
       setShowWarning(false);
       setAutoCloseAt(null);
       warningTriggeredRef.current = false;
-      toast.success(autoClosed ? "Patrol auto-ended (time limit reached)." : "Patrol ended. Log saved.");
-      if (autoClosed) playPatrolAutoEnd();
-      else playPatrolEnd();
+      if (alreadyEnded) {
+        toast.success("Patrol already ended.");
+      } else {
+        toast.success(autoClosed ? "Patrol auto-ended (time limit reached)." : "Patrol ended. Log saved.");
+        if (autoClosed) playPatrolAutoEnd();
+        else playPatrolEnd();
+      }
     } catch (err) {
       console.error("Check-out failed:", err);
       toast.error("Check-out failed: " + err.message);
