@@ -100,7 +100,7 @@ Weighted against the original phase map: Phases 0–3 and 5b are the bulk of wha
   - Main admin and Technical support: any post.
   - NW admin: only posts they authored or shared.
   - Archive hides the post and allows the incident to be shared again; delete is permanent. The source incident stays in the neighborhood.
-- **Unread badges** on dashboard / admin City Hub tiles (last-seen in localStorage; no push). Opening City Hub highlights new posts, then marks them read.
+- **Unread badges** on dashboard / admin City Hub tiles (last-seen in `city_hub_read_state` + localStorage cache; no push). Opening City Hub highlights new posts, then marks them read. Apply `20261027010000_city_hub_read_state.sql`.
 - **Photo + PDF attachments** on publish (`20260815034000`, `20260815035000`): up to 6 images and 4 PDFs. Thumbnails show the **full original aspect ratio** (`object-contain`); click opens a lightbox. Vertical images are not cropped to width.
 - **Author name next to the time**, clickable contact card (role, neighbourhood, email, phone) so another area can reach the publisher (`20260815036000`, `20260815037000`). Visible to City Hub viewers including **NW admin and patrollers**, not only global admin / tech support.
 - **System vs author copy:** Neighborhood / Date / Type sit in a muted metadata box **above** the title; the write-up is the main text; the briefing note is a small italic footer.
@@ -451,3 +451,4 @@ Do **not** turn on paid security-company access until isolation tests pass and a
 **Homes:** resident → `/resident` (households only). security company → `/security` (SOS → `/security/sos`; profile → `/security/profile`). City admin / police → `/city-admin`. Watch members → `/dashboard`. Main admin / Technical support may preview `/resident` from Admin. Emergency contacts: `/resident/contacts`, `/intelligence/contacts`, `/admin/contacts`.
 
 **Security vs city admin:** security admin = private security partner (no patrols; view intel; hotspot write). City admin = municipal / police coordination (no patrols; moderate incidents + intel; city-wide briefing home).
+
