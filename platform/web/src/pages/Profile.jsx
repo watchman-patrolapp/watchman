@@ -30,6 +30,7 @@ import {
 } from '../utils/securityMembershipActions';
 import HomePinPicker from '../components/profile/HomePinPicker';
 import EmergencyContactSection from '../components/profile/EmergencyContactSection';
+import NotificationPrefs from '../components/profile/NotificationPrefs';
 import { hasHomePin, setMyHomePin } from '../utils/homePin';
 import { ensureMyHouseholdProfile } from '../utils/householdProfile';
 import { HOUSEHOLD_MODE_INTRO, markHouseholdIntroSeen } from '../utils/householdModeIntro';
@@ -1053,6 +1054,8 @@ export default function Profile() {
               <EmergencyContactSection slot={2} user={user} onSaved={() => void refreshUser()} />
             </div>
           ) : null}
+
+          <NotificationPrefs user={user} />
 
           <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-4">
             <div className="flex items-start gap-3">

@@ -20,6 +20,30 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { SignJWT, importPKCS8 } from 'https://esm.sh/jose@5.2.3'
 
+// G6: drop recipients who muted this kind (or are in quiet hours). Mandatory
+// kinds always pass server-side. Fails open (sends to everyone) if the
+// notification_prefs SQL isn't applied yet or the rpc errors.
+// deno-lint-ignore no-explicit-any
+async function filterByNotifyPrefs(supabase: any, userIds: string[], kind: string): Promise<string[]> {
+  if (!userIds.length) return userIds
+  const { data, error } = await supabase.rpc('filter_notify_recipients', {
+    p_user_ids: userIds,
+    p_kind: kind,
+    p_channel: 'push',
+  })
+  if (error) {
+    console.warn('filter_notify_recipients unavailable - sending to all:', error.message)
+    return userIds
+  }
+  const allowed = new Set(
+    // deno-lint-ignore no-explicit-any
+    ((data ?? []) as any[]).map((row) =>
+      String(typeof row === 'string' ? row : row?.filter_notify_recipients ?? row?.id ?? '')
+    )
+  )
+  return userIds.filter((id) => allowed.has(id))
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
@@ -219,6 +243,13 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     console.warn('notify-chat-message: role filter skipped', e)
+  }
+
+  // G6: per-user notification prefs (SOS/critical is mandatory server-side).
+  {
+    const prefIds = [...new Set(recipientRows.map((r) => String(r.user_id || '')).filter(Boolean))]
+    const allowed = new Set(await filterByNotifyPrefs(supabase, prefIds, isCritical ? 'sos' : 'chat'))
+    recipientRows = recipientRows.filter((r) => allowed.has(String(r.user_id)))
   }
 
   const tokens = recipientRows.map((r) => r.token as string).filter(Boolean)

@@ -98,6 +98,30 @@ async function sendPush(
   return { sent, dead };
 }
 
+// G6: drop recipients who muted this kind (or are in quiet hours). Mandatory
+// kinds always pass server-side. Fails open (sends to everyone) if the
+// notification_prefs SQL isn't applied yet or the rpc errors.
+// deno-lint-ignore no-explicit-any
+async function filterByNotifyPrefs(supabase: any, userIds: string[], kind: string): Promise<string[]> {
+  if (!userIds.length) return userIds;
+  const { data, error } = await supabase.rpc("filter_notify_recipients", {
+    p_user_ids: userIds,
+    p_kind: kind,
+    p_channel: "push",
+  });
+  if (error) {
+    console.warn("filter_notify_recipients unavailable - sending to all:", error.message);
+    return userIds;
+  }
+  const allowed = new Set(
+    // deno-lint-ignore no-explicit-any
+    ((data ?? []) as any[]).map((row) =>
+      String(typeof row === "string" ? row : row?.filter_notify_recipients ?? row?.id ?? "")
+    )
+  );
+  return userIds.filter((id) => allowed.has(id));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -259,6 +283,14 @@ Deno.serve(async (req) => {
   } else {
     return new Response(JSON.stringify({ error: "Unknown type" }), {
       status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  recipientIds = await filterByNotifyPrefs(supabase, recipientIds, type);
+  if (!recipientIds.length) {
+    return new Response(JSON.stringify({ ok: true, sent: 0, reason: "muted" }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

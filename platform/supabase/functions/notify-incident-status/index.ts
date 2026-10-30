@@ -27,6 +27,30 @@ function toLabel(status: string) {
   return s ? s[0].toUpperCase() + s.slice(1) : "Updated";
 }
 
+// G6: drop recipients who muted this kind (or are in quiet hours). Mandatory
+// kinds always pass server-side. Fails open (sends to everyone) if the
+// notification_prefs SQL isn't applied yet or the rpc errors.
+// deno-lint-ignore no-explicit-any
+async function filterByNotifyPrefs(supabase: any, userIds: string[], kind: string): Promise<string[]> {
+  if (!userIds.length) return userIds;
+  const { data, error } = await supabase.rpc("filter_notify_recipients", {
+    p_user_ids: userIds,
+    p_kind: kind,
+    p_channel: "push",
+  });
+  if (error) {
+    console.warn("filter_notify_recipients unavailable - sending to all:", error.message);
+    return userIds;
+  }
+  const allowed = new Set(
+    // deno-lint-ignore no-explicit-any
+    ((data ?? []) as any[]).map((row) =>
+      String(typeof row === "string" ? row : row?.filter_notify_recipients ?? row?.id ?? "")
+    )
+  );
+  return userIds.filter((id) => allowed.has(id));
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
@@ -86,6 +110,14 @@ Deno.serve(async (req) => {
     details: `Your report is now marked as ${statusLabel}.`,
     actor_user_id: record.approved_by ?? record.rejected_by ?? null,
   });
+
+  const prefRecipients = await filterByNotifyPrefs(supabase, [reporterId], "incident_status");
+  if (!prefRecipients.length) {
+    return new Response(JSON.stringify({ ok: true, sent: 0, reason: "muted" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const { data: tokenRows, error: tokenErr } = await supabase
     .from("user_push_tokens")
