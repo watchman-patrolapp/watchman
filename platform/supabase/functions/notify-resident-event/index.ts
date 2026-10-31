@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
     }
     const { data: broadcast } = await supabase
       .from("area_broadcasts")
-      .select("id, organization_id, author_id, headline, body")
+      .select("id, organization_id, author_id, headline, body, author_badge")
       .eq("id", broadcastId)
       .maybeSingle();
     if (!broadcast || String(broadcast.author_id) !== callerId) {
@@ -219,6 +219,26 @@ Deno.serve(async (req) => {
       });
     }
     const orgId = String(broadcast.organization_id);
+    // P1: resident street reps / moderators post with author_badge set. Re-check the grant is
+    // still active in this org so a revoked rep cannot push an old notice.
+    const badge = String(broadcast.author_badge || "");
+    if (badge) {
+      const { data: grants } = await supabase
+        .from("org_capability_grants")
+        .select("id, expires_at")
+        .eq("user_id", callerId)
+        .eq("organization_id", orgId)
+        .in("capability", ["resident_broadcaster", "resident_moderator"])
+        .is("revoked_at", null);
+      const now = Date.now();
+      const active = (grants || []).some((g) => !g.expires_at || new Date(g.expires_at).getTime() > now);
+      if (!active) {
+        return new Response(JSON.stringify({ error: "forbidden" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
     const ids = new Set<string>();
     const { data: orgUsers } = await supabase.from("users").select("id").eq("organization_id", orgId);
     for (const u of orgUsers || []) ids.add(String(u.id));
@@ -230,6 +250,8 @@ Deno.serve(async (req) => {
     for (const m of members || []) ids.add(String(m.user_id));
     ids.delete(callerId);
     title = String(broadcast.headline || "").trim() || "Neighbourhood notice";
+    if (badge === "street_rep") title = `Street rep: ${title}`;
+    else if (badge === "moderator") title = `Moderator: ${title}`;
     bodyText = String(broadcast.body || "").replace(/\s+/g, " ").trim().slice(0, 160);
     path = "/resident";
     tag = "broadcast";

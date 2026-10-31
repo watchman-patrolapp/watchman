@@ -2,7 +2,11 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { normalizeAppRole, canAccessAdminPanel } from "../auth/staffRoles";
-import { isGlobalAppRole, isResidentAppRole, canStaffVerifyResident, canReviewPatrollerRequests } from "../auth/roleMatrix";
+import { isGlobalAppRole, isResidentAppRole, canStaffVerifyResident, canReviewPatrollerRequests, canManageCapabilities } from "../auth/roleMatrix";
+import CapabilityBadge from "../components/community/CapabilityBadge";
+import ResidentCapabilityDialog from "../components/admin/ResidentCapabilityDialog";
+import ResidentCapabilityList from "../components/admin/ResidentCapabilityList";
+import { listCapabilityBadges } from "../utils/orgCapabilities";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import AreaContextBar from "../components/layout/AreaContextBar";
 import { supabase } from "../supabase/client";
@@ -166,12 +170,27 @@ export default function AdminResidents() {
   const [sortBy, setSortBy] = useState("name");
   const [search, setSearch] = useState("");
   const [awayByUser, setAwayByUser] = useState({});
+  const [capTarget, setCapTarget] = useState(null);
+  const [capReloadKey, setCapReloadKey] = useState(0);
+  const [badgesByUser, setBadgesByUser] = useState(() => new Map());
 
   const currentRole = normalizeAppRole(currentUser?.role);
   const canDeleteUsers = currentRole === "admin" || currentRole === "technical_support";
   const canPromote = canAccessAdminPanel(currentRole);
   const canVerify = canStaffVerifyResident(currentRole);
   const canReviewPatroller = canReviewPatrollerRequests(currentRole);
+  const canManageCaps = canManageCapabilities(currentRole, currentUser?.platform_role);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = users.map((u) => u.uid);
+    void listCapabilityBadges(ids).then(({ data }) => {
+      if (!cancelled) setBadgesByUser(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [users, capReloadKey]);
   const backTo = canPromote ? "/admin" : "/dashboard";
   const backLabel = canPromote ? "← Back to Admin Dashboard" : "← Back to dashboard";
 
@@ -748,6 +767,22 @@ export default function AdminResidents() {
                   <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">
                     <p>{u.fullName || "—"}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Joined {formatJoined(u.createdAt)}</p>
+                    {(badgesByUser.get(u.uid) || []).length ? (
+                      <p className="mt-1 flex flex-wrap gap-1">
+                        {badgesByUser.get(u.uid).map((b) => (
+                          <CapabilityBadge key={b.capability} capability={b.capability} title={b.title} />
+                        ))}
+                      </p>
+                    ) : null}
+                    {canManageCaps && linkedToArea && verified ? (
+                      <button
+                        type="button"
+                        onClick={() => setCapTarget(u)}
+                        className="mt-1 text-xs font-medium text-teal-700 hover:underline dark:text-teal-400"
+                      >
+                        Resident roles
+                      </button>
+                    ) : null}
                     {!linkedToArea ? (
                       <div className="mt-2 space-y-1.5">
                         <p className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
@@ -1005,6 +1040,14 @@ export default function AdminResidents() {
           </tbody>
         </table>
       </div>
+      {canManageCaps ? (
+        <ResidentCapabilityList reloadKey={capReloadKey} onChanged={() => setCapReloadKey((k) => k + 1)} />
+      ) : null}
+      <ResidentCapabilityDialog
+        target={capTarget}
+        onClose={() => setCapTarget(null)}
+        onGranted={() => setCapReloadKey((k) => k + 1)}
+      />
     </div>
   );
 }

@@ -67,6 +67,7 @@ export function areaBroadcastAsActivityRow(row) {
     activity_until: row.activity_until,
     edited_at: row.edited_at || null,
     author_id: row.author_id || null,
+    author_badge: row.author_badge || null,
   };
 }
 
@@ -134,6 +135,22 @@ export async function hideAreaBroadcast(id, reason) {
 export async function restoreAreaBroadcast(id) {
   const { data, error } = await supabase.rpc("restore_area_broadcast", { p_id: id });
   return { data, error };
+}
+
+export const AUTHOR_BADGE_LABELS = Object.freeze({
+  street_rep: "Street rep",
+  moderator: "Moderator",
+});
+
+export function authorBadgeLabel(badge) {
+  return AUTHOR_BADGE_LABELS[badge] || "";
+}
+
+/** Notices left today for a street rep / moderator. null = unlimited (staff) or unknown. */
+export async function getMyAreaBroadcastQuota() {
+  const { data, error } = await supabase.rpc("my_area_broadcast_quota");
+  if (error) return { data: null, error: isRpcNotFoundError(error) ? null : error };
+  return { data: typeof data === "number" ? data : null, error: null };
 }
 
 export async function editAreaBroadcast(id, { headline, body }) {

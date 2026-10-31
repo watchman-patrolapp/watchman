@@ -230,9 +230,25 @@ export const CITY_HUB_VIEW_ROLES = [
 export const CITY_HUB_PUBLISH_ROLES = ["admin", "technical_support", "nw_admin", "city_admin", "security_admin"];
 export const AREA_BROADCAST_ROLES = ["admin", "technical_support", "nw_admin", "committee"];
 
-export function canPostAreaBroadcast(role, platformRole) {
+const BROADCAST_CAPABILITIES = ["resident_broadcaster", "resident_moderator"];
+
+/**
+ * Staff roles always; residents too when they hold a street rep / moderator
+ * capability in the working org. The default `caps = []` keeps existing callers working.
+ */
+export function canPostAreaBroadcast(role, platformRole, caps = []) {
   if (canAccessPlatformConsole(platformRole)) return true;
-  return AREA_BROADCAST_ROLES.includes(normalizeAppRole(role));
+  if (AREA_BROADCAST_ROLES.includes(normalizeAppRole(role))) return true;
+  return Array.isArray(caps)
+    && caps.some((cap) => BROADCAST_CAPABILITIES.includes(String(cap ?? "").trim().toLowerCase().replace(/-/g, "_")));
+}
+
+/** Who may assign / revoke resident capabilities (server: can_manage_org_capabilities). */
+export const CAPABILITY_MANAGER_ROLES = ["admin", "technical_support", "nw_admin"];
+
+export function canManageCapabilities(role, platformRole) {
+  if (canAccessPlatformConsole(platformRole)) return true;
+  return CAPABILITY_MANAGER_ROLES.includes(normalizeAppRole(role));
 }
 
 export function canSetAreaPetrolPrice(role, platformRole) {

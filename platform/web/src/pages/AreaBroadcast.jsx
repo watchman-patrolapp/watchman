@@ -5,13 +5,17 @@ import { useAuth } from "../auth/useAuth";
 import { canPostAreaBroadcast, homeBackNav } from "../auth/roleMatrix";
 import PageHeader from "../components/layout/PageHeader";
 import ThemeToggle from "../components/ThemeToggle";
+import ReportContentButton from "../components/community/ReportContentButton";
+import { useOrgCapabilities } from "../hooks/useOrgCapabilities";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import {
   applyAreaBroadcastChange,
   areaBroadcastActionError,
+  authorBadgeLabel,
   editAreaBroadcast,
   formatClockTime,
   formatNoticeRemaining,
+  getMyAreaBroadcastQuota,
   hideAreaBroadcast,
   isActivityAreaBroadcast,
   isMissingAreaBroadcastHideSchema,
@@ -31,7 +35,12 @@ import { useScopedOrganization } from "../utils/organizationScope";
 export default function AreaBroadcast() {
   const { user } = useAuth();
   const { activeOrganizationId } = useScopedOrganization();
-  const allowed = canPostAreaBroadcast(user?.role, user?.platformRole);
+  const { capabilities, has: hasCap } = useOrgCapabilities();
+  const isStaff = canPostAreaBroadcast(user?.role, user?.platformRole);
+  const allowed = canPostAreaBroadcast(user?.role, user?.platformRole, capabilities);
+  const isModerator = hasCap("resident_moderator");
+  const canSeeHidden = isStaff || isModerator;
+  const [quota, setQuota] = useState(null);
   const [headline, setHeadline] = useState("");
   const [body, setBody] = useState("");
   const [rows, setRows] = useState([]);
@@ -48,6 +57,19 @@ export default function AreaBroadcast() {
   const loadGen = useRef(0);
   const showHiddenRef = useRef(false);
   const back = homeBackNav(user?.role);
+
+  const loadQuota = useCallback(async () => {
+    if (isStaff || !allowed) {
+      setQuota(null);
+      return;
+    }
+    const { data } = await getMyAreaBroadcastQuota();
+    setQuota(data);
+  }, [isStaff, allowed]);
+
+  useEffect(() => {
+    void loadQuota();
+  }, [loadQuota]);
 
   useEffect(() => {
     showHiddenRef.current = showHidden;
@@ -107,8 +129,14 @@ export default function AreaBroadcast() {
         void notifyResidentEvent({ type: "broadcast", broadcastId: data.id });
       }
       await load();
+      void loadQuota();
     } catch (err) {
-      toast.error(err.message || "Could not send notice.");
+      const msg = String(err?.message || "");
+      toast.error(
+        /daily notice limit/i.test(msg)
+          ? "You've reached today's limit of 3 notices. Try again later."
+          : msg || "Could not send notice."
+      );
     } finally {
       setBusy(false);
     }
@@ -251,6 +279,13 @@ export default function AreaBroadcast() {
               <FaBullhorn className="h-3.5 w-3.5" aria-hidden />
               {busy ? "Sending…" : "Send notice"}
             </button>
+            {!isStaff && quota != null ? (
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                {quota > 0
+                  ? `You can send ${quota} more notice${quota === 1 ? "" : "s"} in the next 24 hours.`
+                  : "You've used today's 3 notices. The limit resets 24 hours after each notice."}
+              </p>
+            ) : null}
           </form>
         ) : (
           <p className="text-sm text-gray-500">You cannot post neighbourhood notices.</p>
@@ -261,7 +296,7 @@ export default function AreaBroadcast() {
             <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
               {showHidden ? "Hidden notices" : "Recent notices"}
             </h2>
-            {allowed ? (
+            {canSeeHidden ? (
               <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
                 <button
                   type="button"
@@ -290,6 +325,8 @@ export default function AreaBroadcast() {
           ) : (
             visibleRows.map((row) => {
               const mine = Boolean(user?.id) && row.author_id === user.id;
+              const canModerate = isStaff || (isModerator && Boolean(row.author_badge));
+              const badgeLabel = authorBadgeLabel(row.author_badge);
               const editing = editingId === row.id;
               return (
                 <article
@@ -297,7 +334,12 @@ export default function AreaBroadcast() {
                   className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 >
                   <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    {row.author_name} · {formatWatchDateTime(row.created_at) || "—"}
+                    {row.author_name}
+                    {badgeLabel ? (
+                      <span className="ml-1 rounded-full bg-teal-100 px-1.5 py-0.5 normal-case text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">
+                        {badgeLabel}
+                      </span>
+                    ) : null}{" "}· {formatWatchDateTime(row.created_at) || "—"}
                     {row.edited_at ? " · edited" : ""}
                     {showHidden
                       ? ""
@@ -356,9 +398,9 @@ export default function AreaBroadcast() {
                           Hidden · {row.hidden_reason}
                         </p>
                       ) : null}
-                      {allowed || mine ? (
+                      {canModerate || mine ? (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {showHidden && allowed ? (
+                          {showHidden && canModerate ? (
                             <button
                               type="button"
                               onClick={() => restore(row)}
@@ -368,7 +410,7 @@ export default function AreaBroadcast() {
                               {pendingId === row.id ? "Restoring…" : "Restore"}
                             </button>
                           ) : null}
-                          {!showHidden && (allowed || mine) ? (
+                          {!showHidden && (canModerate || mine) ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -390,6 +432,11 @@ export default function AreaBroadcast() {
                               Edit
                             </button>
                           ) : null}
+                        </div>
+                      ) : null}
+                      {!showHidden && !mine && !isStaff ? (
+                        <div className="mt-2">
+                          <ReportContentButton contentType="area_broadcast" contentId={row.id} />
                         </div>
                       ) : null}
                     </>
