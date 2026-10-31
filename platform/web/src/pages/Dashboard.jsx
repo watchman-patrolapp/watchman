@@ -50,6 +50,7 @@ import { useActiveOrganization } from '../auth/useActiveOrganization';
 import { useScopedOrganization, belongsToActiveOrganization } from '../utils/organizationScope';
 import { useUnreadCityHubCount } from '../hooks/useUnreadCityHubCount';
 import { parsePatrolTime, formatWatchDate } from '../utils/watchTime';
+import { chatNotificationTag } from '../utils/chatNotificationGuard';
 import PatrolShareSheet from '../components/patrol/share/PatrolShareSheet';
 import PatrolShareBanner from '../components/patrol/share/PatrolShareBanner';
 import { fetchPatrolShare } from '../utils/sharePatrol';
@@ -184,6 +185,7 @@ export default function Dashboard() {
       new Notification(title, {
         body: `${message.sender_name}: ${message.text?.substring(0, 50)}...`,
         icon: '/favicon.ico',
+        tag: chatNotificationTag(message),
       });
     }
   }, [refetchUnread]);
