@@ -24,7 +24,8 @@
     "android:apk:debug:unix": "npm run android:sync && cd ../android && ./gradlew assembleDebug",
     "sounds:placeholders": "node scripts/generate-placeholder-sounds.mjs",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:unit": "node --test src/utils/__tests__/*.test.js"
   },
   "dependencies": {
     "@babel/runtime-corejs2": "^7.28.6",
@@ -33,9 +34,11 @@
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
+    "@capacitor/filesystem": "^8.1.5",
     "@capacitor/geolocation": "^8.1.0",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/push-notifications": "^8.0.3",
+    "@capacitor/share": "^8.0.3",
     "@firebase/storage": "^0.14.0",
     "@sentry/react": "^8.55.1",
     "@supabase/supabase-js": "^2.99.3",
@@ -47,6 +50,7 @@
     "dompurify": "^3.3.3",
     "exceljs": "^4.1.1",
     "firebase": "^11.10.0",
+    "html-to-image": "^1.11.13",
     "html2pdf.js": "^0.14.0",
     "leaflet": "^1.9.4",
     "react": "^19.2.0",

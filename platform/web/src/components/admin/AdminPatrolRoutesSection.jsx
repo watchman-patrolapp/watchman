@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import ShareStatusBadge from '../patrol/share/ShareStatusBadge';
 import { FaMapMarkedAlt, FaChevronUp, FaFilter } from 'react-icons/fa';
 import { supabase } from '../../supabase/client';
 import { displayPatrolZone } from '../../config/neighborhoodRegions';
@@ -35,6 +36,11 @@ function formatPatrolPeriod(log) {
   return { title: dateStr, sub: timeStr };
 }
 
+/** Only rows created after the share feature shipped are tracked. */
+function isNotShared(log) {
+  return Boolean(log.share_tracked) && (!log.start_shared_at || !log.end_shared_at);
+}
+
 function matchesVolunteerFilter(log, filterId) {
   if (!filterId) return true;
   if (log.user_id != null && String(log.user_id).length > 0) {
@@ -47,6 +53,7 @@ function matchesVolunteerFilter(log, filterId) {
 export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOptions = [] }) {
   const { scope } = useScopedOrganization();
   const [volunteerFilter, setVolunteerFilter] = useState('');
+  const [notSharedOnly, setNotSharedOnly] = useState(false);
   const [expandedKey, setExpandedKey] = useState(null);
   const [loadingKey, setLoadingKey] = useState(null);
   const [errorKey, setErrorKey] = useState(null);
@@ -129,10 +136,10 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
 
   const sorted = useMemo(() => {
     return [...(patrolLogs || [])]
-      .filter((log) => log.end_time && matchesVolunteerFilter(log, volunteerFilter))
+      .filter((log) => log.end_time && matchesVolunteerFilter(log, volunteerFilter) && (!notSharedOnly || isNotShared(log)))
       .sort((a, b) => (parsePatrolTime(b.start_time)?.getTime() || 0) - (parsePatrolTime(a.start_time)?.getTime() || 0))
       .slice(0, MAX_ROWS);
-  }, [patrolLogs, volunteerFilter]);
+  }, [patrolLogs, volunteerFilter, notSharedOnly]);
 
   const groupedByDay = useMemo(() => {
     const groups = new Map();
@@ -251,8 +258,17 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
             ))}
           </select>
         </label>
+        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={notSharedOnly}
+            onChange={(e) => setNotSharedOnly(e.target.checked)}
+            className="accent-teal-600"
+          />
+          <span className="whitespace-nowrap">Not shared</span>
+        </label>
         <span className="text-xs text-gray-500 dark:text-gray-400">
-          Showing up to {MAX_ROWS} most recent {volunteerFilter ? 'filtered ' : ''}patrols.
+          Showing up to {MAX_ROWS} most recent {volunteerFilter || notSharedOnly ? 'filtered ' : ''}patrols.
         </span>
       </div>
 
@@ -341,6 +357,13 @@ export default function AdminPatrolRoutesSection({ patrolLogs = [], volunteerOpt
                         <span className="text-gray-500 dark:text-gray-400">Auto-closed</span>
                       )}
                     </div>
+                    {log.share_tracked && log.share_ref ? (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className="font-mono text-xs text-gray-500 dark:text-gray-400">Ref {log.share_ref}</span>
+                        <ShareStatusBadge label="Sign-on" sharedAt={log.start_shared_at} />
+                        <ShareStatusBadge label="Sign-off" sharedAt={log.end_shared_at} />
+                      </div>
+                    ) : null}
                     {canMap && expanded && routeCache[key]?.length >= 2 && (
                       <div className="mt-2 space-y-0.5 text-xs text-gray-600 dark:text-gray-300 border-t border-gray-100 dark:border-gray-700/80 pt-2">
                         <p>
