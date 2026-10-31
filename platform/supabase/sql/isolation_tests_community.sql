@@ -599,6 +599,96 @@ SELECT pg_temp.expect_error('ROLE', 'A committee appoints nw_admin -> refused (D
 SELECT pg_temp.expect_error('ROLE', 'A nw_admin changes own role -> refused',
   pg_temp.id('a_admin'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_admin'), 'resident'),
   'own role');
+-- -----------------------------------------------------------------------------
+-- P1 - resident street reps / moderators. Needs migrations
+-- 20261031050000_area_broadcast_moderators.sql and
+-- 20261031060000_capability_auto_revoke_on_move.sql applied first.
+-- -----------------------------------------------------------------------------
+SELECT pg_temp.check('P1', 'control: A admin re-grants resident_broadcaster to A resident',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.grant_org_capability(%L, %L, %L)', pg_temp.id('a_res'), 'resident_broadcaster', 'G7 street rep'));
+SELECT pg_temp.check('P1', 'control: A street rep posts notice 1 of 3',
+  pg_temp.id('a_res'), 'ok', 'SELECT public.post_area_broadcast(''G7 rep 1'', ''body'')');
+SELECT pg_temp.check('P1', 'control: A street rep posts notice 2 of 3',
+  pg_temp.id('a_res'), 'ok', 'SELECT public.post_area_broadcast(''G7 rep 2'', ''body'')');
+SELECT pg_temp.check('P1', 'control: A street rep posts notice 3 of 3',
+  pg_temp.id('a_res'), 'ok', 'SELECT public.post_area_broadcast(''G7 rep 3'', ''body'')');
+SELECT pg_temp.expect_error('P1', 'A street rep 4th notice in 24h -> daily limit',
+  pg_temp.id('a_res'), 'SELECT public.post_area_broadcast(''G7 rep 4'', ''body'')', 'daily notice limit');
+SELECT pg_temp.assert('P1', 'street rep notices saved in Org A with author_badge = street_rep',
+  (SELECT count(*) FROM public.area_broadcasts WHERE author_id = pg_temp.id('a_res')
+     AND organization_id = pg_temp.id('org_a') AND author_badge = 'street_rep') = 3,
+  'checked as postgres');
+SELECT pg_temp.check('P1', 'A street rep my_area_broadcast_quota() = 0',
+  pg_temp.id('a_res'), 'true', 'SELECT public.my_area_broadcast_quota() = 0');
+SELECT pg_temp.check('P1', 'control: B street rep posts a notice',
+  pg_temp.id('b_res'), 'ok', 'SELECT public.post_area_broadcast(''G7 B rep'', ''body'')');
+SELECT pg_temp.expect_rows('2', 'B resident list_area_broadcasts sees 0 A street-rep notices',
+  pg_temp.id('b_res'), format('SELECT * FROM public.list_area_broadcasts(50) WHERE author_id = %L', pg_temp.id('a_res')), 0);
+SELECT pg_temp.expect_rows('2', 'B resident reads 0 A street-rep notices (table)',
+  pg_temp.id('b_res'), format('SELECT 1 FROM public.area_broadcasts WHERE author_id = %L', pg_temp.id('a_res')), 0);
+SELECT pg_temp.expect_error('P1', 'A street rep (no moderator) list_hidden_area_broadcasts -> forbidden',
+  pg_temp.id('a_res'), 'SELECT * FROM public.list_hidden_area_broadcasts()', 'forbidden');
+SELECT pg_temp.expect_error('P1', 'A street rep (no moderator) list_community_reports -> forbidden',
+  pg_temp.id('a_res'), 'SELECT * FROM public.list_community_reports()', 'forbidden');
+SELECT pg_temp.check('P1', 'control: A admin grants resident_moderator to A resident',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('a_res'), 'resident_moderator'));
+SELECT pg_temp.expect_error('P1', 'A moderator hides B street-rep notice -> not found',
+  pg_temp.id('a_res'), format('SELECT public.hide_area_broadcast(%L)',
+    (SELECT id FROM public.area_broadcasts WHERE author_id = pg_temp.id('b_res') LIMIT 1)),
+  'notice not found');
+SELECT pg_temp.expect_error('P1', 'A moderator hides staff notice -> forbidden',
+  pg_temp.id('a_res'), format('SELECT public.hide_area_broadcast(%L)', pg_temp.id('a_notice')), 'forbidden');
+SELECT pg_temp.check('P1', 'control: A moderator hides an A street-rep notice',
+  pg_temp.id('a_res'), 'ok', format('SELECT public.hide_area_broadcast(%L, %L)',
+    (SELECT id FROM public.area_broadcasts WHERE author_id = pg_temp.id('a_res') AND headline = 'G7 rep 1'), 'G7 test'));
+SELECT pg_temp.assert('P1', 'moderator hide logged with capability key',
+  EXISTS (SELECT 1 FROM public.activity_logs l WHERE l.organization_id = pg_temp.id('org_a')
+          AND l.user_id = pg_temp.id('a_res') AND l.details_json ? 'capability'),
+  'checked as postgres');
+SELECT pg_temp.expect_rows('P1', 'A moderator list_hidden_area_broadcasts -> 1 badge notice',
+  pg_temp.id('a_res'), 'SELECT * FROM public.list_hidden_area_broadcasts()', 1);
+SELECT pg_temp.expect_error('P1', 'A unverified resident list_hidden_area_broadcasts -> forbidden',
+  pg_temp.id('a_unv'), 'SELECT * FROM public.list_hidden_area_broadcasts()', 'forbidden');
+SELECT pg_temp.check('P1', 'A moderator list_community_reports -> 1 grouped row, reporter_ids hidden',
+  pg_temp.id('a_res'), 'true',
+  format('SELECT count(*) = 1 AND bool_and(reporter_ids IS NULL) FROM public.list_community_reports() WHERE content_id = %L', pg_temp.id('a_notice')));
+SELECT pg_temp.check('P1', 'A nw_admin list_community_reports -> reporter_ids visible',
+  pg_temp.id('a_admin'), 'true',
+  format('SELECT bool_and(reporter_ids IS NOT NULL) FROM public.list_community_reports() WHERE content_id = %L', pg_temp.id('a_notice')));
+SELECT pg_temp.expect_rows('P1', 'B nw_admin list_community_reports sees 0 Org A reports',
+  pg_temp.id('b_admin'), format('SELECT * FROM public.list_community_reports() WHERE content_id = %L', pg_temp.id('a_notice')), 0);
+SELECT pg_temp.expect_error('P1', 'B nw_admin resolve A report -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.resolve_community_report(%L, %L)',
+    (SELECT id FROM public.community_content_reports WHERE content_id = pg_temp.id('a_notice') AND status = 'open' LIMIT 1), 'dismissed'),
+  'report not found');
+SELECT pg_temp.check('P1', 'control: A moderator dismisses the A report',
+  pg_temp.id('a_res'), 'ok', format('SELECT public.resolve_community_report(%L, %L, %L)',
+    (SELECT id FROM public.community_content_reports WHERE content_id = pg_temp.id('a_notice') AND status = 'open' LIMIT 1), 'dismissed', 'G7 test'));
+SELECT pg_temp.assert('P1', 'report dismissed + content_report_resolved logged',
+  NOT EXISTS (SELECT 1 FROM public.community_content_reports WHERE content_id = pg_temp.id('a_notice') AND status = 'open')
+  AND EXISTS (SELECT 1 FROM public.activity_logs l WHERE l.action = 'content_report_resolved' AND l.organization_id = pg_temp.id('org_a')),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P1', 'resolve same report again -> already handled',
+  pg_temp.id('a_res'), format('SELECT public.resolve_community_report(%L, %L)',
+    (SELECT id FROM public.community_content_reports WHERE content_id = pg_temp.id('a_notice') LIMIT 1), 'actioned'),
+  'already handled');
+SELECT pg_temp.expect_error('P1', 'authenticated cannot call revoke_capabilities_outside_org',
+  pg_temp.id('a_res'), format('SELECT public.revoke_capabilities_outside_org(%L, %L)', pg_temp.id('b_res'), 'x'),
+  'permission denied');
+-- Auto-revoke (as postgres): A resident leaves Org A and moves to Org B.
+DELETE FROM public.organization_members WHERE user_id = pg_temp.id('a_res') AND organization_id = pg_temp.id('org_a');
+UPDATE public.users SET organization_id = pg_temp.id('org_b') WHERE id = pg_temp.id('a_res');
+SELECT pg_temp.assert('10', 'moving A resident to Org B auto-revokes both Org A grants',
+  NOT EXISTS (SELECT 1 FROM public.org_capability_grants WHERE user_id = pg_temp.id('a_res') AND revoked_at IS NULL)
+  AND (SELECT count(*) FROM public.activity_logs l WHERE l.action = 'capability_revoked'
+         AND l.details_json->>'target_user_id' = pg_temp.id('a_res')::text
+         AND (l.details_json->>'automatic')::boolean) = 2,
+  'checked as postgres');
+SELECT pg_temp.assert('P1', 'B grant untouched by A move',
+  EXISTS (SELECT 1 FROM public.org_capability_grants WHERE user_id = pg_temp.id('b_res') AND revoked_at IS NULL),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P1', 'moved resident can no longer post as street rep',
+  pg_temp.id('a_res'), 'SELECT public.post_area_broadcast(''G7 after move'', ''body'')', 'forbidden|daily notice');
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2

@@ -4,6 +4,7 @@ import { Suspense, lazy } from "react";
 import { useAuth } from "./auth/useAuth";
 import RequireRole from "./components/RequireRole";
 import RequirePlatformRole from "./components/RequirePlatformRole";
+import RequireCapability from "./components/RequireCapability";
 import RequireActiveOrganization from "./components/RequireActiveOrganization";
 import { ADMIN_PANEL_ROLES } from "./auth/staffRoles";
 import {
@@ -95,6 +96,7 @@ const SecurityBranding = lazy(() => import("./pages/SecurityBranding"));
 const EmergencyContacts = lazy(() => import("./pages/EmergencyContacts"));
 const ResidentGuide = lazy(() => import("./pages/ResidentGuide"));
 const AreaBroadcast = lazy(() => import("./pages/AreaBroadcast"));
+const ResidentModeration = lazy(() => import("./pages/ResidentModeration"));
 const CityAdminDashboard = lazy(() => import("./pages/CityAdminDashboard"));
 const SosEscalationBoard = lazy(() => import("./pages/SosEscalationBoard"));
 const PilotReadiness = lazy(() => import("./pages/PilotReadiness"));
@@ -236,6 +238,36 @@ function AppRoutes() {
               <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
                 <ResidentDashboard />
               </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/broadcast"
+          element={
+            <NeighborhoodRoute>
+              <RequireCapability
+                anyCapabilities={["resident_broadcaster", "resident_moderator"]}
+                allowedRoles={AREA_BROADCAST_ROLES}
+                allowPlatformConsole
+              >
+                <AreaBroadcast />
+              </RequireCapability>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/moderate"
+          element={
+            <NeighborhoodRoute>
+              <RequireCapability
+                anyCapabilities={["resident_moderator"]}
+                allowedRoles={INCIDENT_STAFF_ROLES}
+                allowPlatformConsole
+              >
+                <ResidentModeration />
+              </RequireCapability>
             </NeighborhoodRoute>
           }
         />

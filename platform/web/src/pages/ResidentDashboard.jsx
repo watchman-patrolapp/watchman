@@ -11,11 +11,15 @@ import {
   FaArrowLeft,
   FaPhone,
   FaLightbulb,
+  FaBullhorn,
+  FaUserShield,
 } from "react-icons/fa";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
 import { canPreviewResidentHome, canUseHouseholdMode, isHouseholdModeRole } from "../auth/roleMatrix";
 import SosHoldButton from "../components/resident/SosHoldButton";
+import ReportContentButton from "../components/community/ReportContentButton";
+import { useOrgCapabilities } from "../hooks/useOrgCapabilities";
 import ResidentHomeHero from "../components/resident/ResidentHomeHero";
 import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
 import { useScopedOrganization } from "../utils/organizationScope";
@@ -30,6 +34,7 @@ import {
 import {
   applyAreaBroadcastChange,
   areaBroadcastAsActivityRow,
+  authorBadgeLabel,
   formatClockTime,
   formatNoticeRemaining,
   isActivityAreaBroadcast,
@@ -135,6 +140,9 @@ export default function ResidentDashboard() {
   const householdUser = canUseHouseholdMode(user?.role);
   const watchHousehold = isHouseholdModeRole(user?.role);
   const staffPreview = canPreviewResidentHome(user?.role) && !householdUser;
+  const { has: hasCap } = useOrgCapabilities();
+  const isResidentModerator = hasCap("resident_moderator");
+  const isStreetRep = hasCap("resident_broadcaster");
   const [activity, setActivity] = useState([]);
   const [verification, setVerification] = useState("unknown");
   const [pendingCount, setPendingCount] = useState(0);
@@ -344,6 +352,11 @@ export default function ResidentDashboard() {
                   <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
                       Neighbourhood notice
+                      {authorBadgeLabel(row.author_badge) ? (
+                        <span className="ml-2 rounded-full bg-amber-200/70 px-1.5 py-0.5 normal-case text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">
+                          {authorBadgeLabel(row.author_badge)}
+                        </span>
+                      ) : null}
                     </p>
                     <p className="font-mono text-[10px] uppercase text-amber-700/80 dark:text-amber-300/80">
                       {formatNoticeRemaining(until)}
@@ -357,6 +370,11 @@ export default function ResidentDashboard() {
                   <p className="text-sm leading-relaxed text-amber-800/90 dark:text-amber-200/85">
                     {row.body}
                   </p>
+                  {row.author_id && row.author_id !== user?.id ? (
+                    <div className="mt-2 whitespace-normal text-right">
+                      <ReportContentButton contentType="area_broadcast" contentId={row.id} />
+                    </div>
+                  ) : null}
                 </article>
               );
             })}
@@ -458,6 +476,27 @@ export default function ResidentDashboard() {
             Immediate danger only. For anything else, report activity below.
           </p>
         </section>
+
+        {isResidentModerator || isStreetRep ? (
+          <div className="grid grid-cols-2 gap-3">
+            <ActionCard
+              icon={FaBullhorn}
+              tone="neighbours"
+              title="Post a notice"
+              subtitle="Up to 3 a day for this neighbourhood"
+              onClick={() => navigate("/resident/broadcast")}
+            />
+            {isResidentModerator ? (
+              <ActionCard
+                icon={FaUserShield}
+                tone="guide"
+                title="Moderator tools"
+                subtitle="Reports and hidden notices"
+                onClick={() => navigate("/resident/moderate")}
+              />
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <ActionCard
