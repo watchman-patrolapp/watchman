@@ -506,6 +506,64 @@ SELECT pg_temp.assert('P0a', 'B grant untouched by A actions',
   EXISTS (SELECT 1 FROM public.org_capability_grants WHERE user_id = pg_temp.id('b_res') AND revoked_at IS NULL),
   'checked as postgres');
 
+-- -----------------------------------------------------------------------------
+-- P0b - content reports + community storage buckets. Needs migrations
+-- 20261031020000_community_content_reports.sql and
+-- 20261031030000_community_storage_buckets.sql applied first.
+-- -----------------------------------------------------------------------------
+SELECT pg_temp.check('P0b', 'control: A resident reports A notice once',
+  pg_temp.id('a_res'), 'ok', format('SELECT public.report_community_content(%L, %L, %L, %L)',
+    'area_broadcast', pg_temp.id('a_notice'), 'spam', 'G7 report'));
+SELECT pg_temp.expect_error('P0b', 'A resident reports same notice again -> already reported',
+  pg_temp.id('a_res'), format('SELECT public.report_community_content(%L, %L, %L)',
+    'area_broadcast', pg_temp.id('a_notice'), 'offensive'),
+  'already reported');
+SELECT pg_temp.expect_error('P0b', 'B resident reports A notice -> not found',
+  pg_temp.id('b_res'), format('SELECT public.report_community_content(%L, %L, %L)',
+    'area_broadcast', pg_temp.id('a_notice'), 'spam'),
+  'content not found');
+SELECT pg_temp.expect_error('P0b', 'unsupported content type -> friendly error',
+  pg_temp.id('a_res'), format('SELECT public.report_community_content(%L, %L, %L)',
+    'service_listing', pg_temp.id('a_notice'), 'spam'),
+  'cannot be reported yet');
+SELECT pg_temp.expect_rows('P0b', 'A nw_admin (moderator) sees the A report',
+  pg_temp.id('a_admin'), format('SELECT 1 FROM public.community_content_reports WHERE content_id = %L', pg_temp.id('a_notice')), 1);
+SELECT pg_temp.expect_rows('P0b', 'B nw_admin sees 0 Org A reports',
+  pg_temp.id('b_admin'), format('SELECT 1 FROM public.community_content_reports WHERE organization_id = %L', pg_temp.id('org_a')), 0);
+SELECT pg_temp.expect_rows('P0b', 'B resident sees 0 reports',
+  pg_temp.id('b_res'), 'SELECT 1 FROM public.community_content_reports', 0);
+SELECT pg_temp.expect_error('P0b', 'A resident direct INSERT community_content_reports -> denied',
+  pg_temp.id('a_res'), format('INSERT INTO public.community_content_reports (organization_id, content_type, content_id, reporter_user_id, reason) VALUES (%L, %L, %L, %L, %L)',
+    pg_temp.id('org_a'), 'area_broadcast', pg_temp.id('a_notice'), pg_temp.id('a_res'), 'other'),
+  'permission denied|row-level security');
+
+-- Storage (metadata rows only, rolled back).
+SELECT pg_temp.check('P0b', 'control: A resident upload community-media/<org A>/needs/... ok',
+  pg_temp.id('a_res'), 'ok',
+  format('INSERT INTO storage.objects (bucket_id, name, owner) VALUES (%L, %L, %L)',
+         'community-media', pg_temp.id('org_a') || '/needs/' || pg_temp.id('a_notice') || '/1_0.jpg', pg_temp.id('a_res')));
+SELECT pg_temp.expect_error('P0b', 'A resident upload community-media/<org B>/... -> denied',
+  pg_temp.id('a_res'),
+  format('INSERT INTO storage.objects (bucket_id, name, owner) VALUES (%L, %L, %L)',
+         'community-media', pg_temp.id('org_b') || '/needs/x/1_0.jpg', pg_temp.id('a_res')),
+  'row-level security|permission denied');
+SELECT pg_temp.expect_error('P0b', 'A resident upload community-media/<not a uuid>/... -> denied',
+  pg_temp.id('a_res'),
+  format('INSERT INTO storage.objects (bucket_id, name, owner) VALUES (%L, %L, %L)',
+         'community-media', 'not-a-uuid/needs/x/1_0.jpg', pg_temp.id('a_res')),
+  'row-level security|permission denied');
+SELECT pg_temp.check('P0b', 'control: A patroller upload community-private/<org A>/equipment/... ok',
+  pg_temp.id('a_pat'), 'ok',
+  format('INSERT INTO storage.objects (bucket_id, name, owner) VALUES (%L, %L, %L)',
+         'community-private', pg_temp.id('org_a') || '/equipment/x/invoice/1_0.pdf', pg_temp.id('a_pat')));
+SELECT pg_temp.expect_error('P0b', 'B resident upload community-private/<org A>/... -> denied',
+  pg_temp.id('b_res'),
+  format('INSERT INTO storage.objects (bucket_id, name, owner) VALUES (%L, %L, %L)',
+         'community-private', pg_temp.id('org_a') || '/equipment/x/invoice/1_0.pdf', pg_temp.id('b_res')),
+  'row-level security|permission denied');
+SELECT pg_temp.expect_rows('P0b', 'B resident cannot read community-private objects (no SELECT policy yet)',
+  pg_temp.id('b_res'), 'SELECT 1 FROM storage.objects WHERE bucket_id = ''community-private''', 0);
+
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2
