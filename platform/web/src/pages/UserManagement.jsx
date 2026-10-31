@@ -12,6 +12,7 @@ import { FaTrash } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { assignResidentToNeighborhood } from "../utils/residentVerification";
+import { setUserRole } from "../utils/setUserRole";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
 import { parsePatrolTime } from "../utils/watchTime";
 
@@ -161,36 +162,43 @@ export default function UserManagement() {
   }, [activeOrganizationId]);
 
   const handleRoleChange = async (uid, newRole) => {
+    if (busyUid) return;
+    const current = users.find((u) => u.uid === uid);
+    if (!current || normalizeAppRole(current.role) === normalizeAppRole(newRole)) return;
     if (isGlobalAppRole(newRole)) {
       toast.error("Main admin and technical support are global and cannot be assigned here.");
       return;
     }
+    setBusyUid(uid);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ role: newRole })
-        .eq('id', uid);
-
-      if (error) throw error;
-
-      setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
-      if (isResidentAppRole(newRole)) {
-        toast.success("Moved to Residents.");
-      } else if (activeOrganizationId) {
-        const { error: assignErr } = await assignResidentToNeighborhood(uid, activeOrganizationId);
-        if (!assignErr) {
-          setMemberUserIds((prev) => new Set(prev).add(uid));
-          setUsers((prev) =>
-            prev.map((u) => (u.uid === uid ? { ...u, role: newRole, organizationId: activeOrganizationId } : u))
-          );
+      const result = await setUserRole(uid, newRole);
+      if (!result.ok) {
+        toast.error(`Not saved: ${result.error?.message || "role change failed"}`);
+        return;
+      }
+      const savedRole = result.role || newRole;
+      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role: savedRole } : u)));
+      if (isResidentAppRole(savedRole)) {
+        toast.success("Role saved. Moved to Residents.");
+      } else {
+        toast.success("Role saved.");
+        if (activeOrganizationId) {
+          const { error: assignErr } = await assignResidentToNeighborhood(uid, activeOrganizationId);
+          if (!assignErr) {
+            setMemberUserIds((prev) => new Set(prev).add(uid));
+            setUsers((prev) =>
+              prev.map((u) => (u.uid === uid ? { ...u, organizationId: activeOrganizationId } : u))
+            );
+          }
         }
       }
     } catch (err) {
       console.error("Error updating role:", err);
-      alert("Failed to update role. Check console.");
+      toast.error(`Not saved: ${err?.message || "role change failed"}`);
+    } finally {
+      setBusyUid(null);
     }
   };
-
   const handleAssignToNeighborhood = async (uid, organizationId) => {
     if (busyUid) return;
     const orgId = organizationId || activeOrganizationId;
@@ -486,6 +494,7 @@ export default function UserManagement() {
                     onChange={(e) => handleRoleChange(u.uid, e.target.value)}
                     className="border rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     disabled={
+                      busyUid === u.uid ||
                       u.uid === currentUser?.id ||
                       String(u.role || '').toLowerCase() === 'technical_support'
                     }

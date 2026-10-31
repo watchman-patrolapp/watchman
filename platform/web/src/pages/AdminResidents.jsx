@@ -7,6 +7,7 @@ import { useActiveOrganization } from "../auth/useActiveOrganization";
 import AreaContextBar from "../components/layout/AreaContextBar";
 import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
+import { setUserRole } from "../utils/setUserRole";
 import {
   RESIDENT_VOUCH_THRESHOLD,
   fetchResidentVouchers,
@@ -529,6 +530,7 @@ export default function AdminResidents() {
 
   const handleRoleChange = async (uid, newRole) => {
     if (busyUid) return;
+    if (!newRole || newRole === "resident") return;
     if (isGlobalAppRole(newRole)) {
       toast.error("Main admin and technical support are global and cannot be assigned here.");
       return;
@@ -548,9 +550,13 @@ export default function AdminResidents() {
           markLinkedToOrg(uid, orgId);
         }
       }
-      const { error } = await supabase.from("users").update({ role: newRole }).eq("id", uid);
-      if (error) throw error;
-      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role: newRole } : u)));
+      const result = await setUserRole(uid, newRole);
+      if (!result.ok) {
+        toast.error(`Not saved: ${result.error?.message || "role change failed"}`);
+        return;
+      }
+      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role: result.role || newRole } : u)));
+      if (isResidentAppRole(newRole)) toast.success("Role saved.");
       if (!isResidentAppRole(newRole)) {
         if (orgId) {
           const { error: syncErr } = await assignResidentToNeighborhood(uid, orgId);
@@ -560,7 +566,7 @@ export default function AdminResidents() {
       }
     } catch (err) {
       console.error("Error updating role:", err);
-      toast.error("Failed to update role.");
+      toast.error(`Not saved: ${err?.message || "role change failed"}`);
     } finally {
       setBusyUid(null);
     }
@@ -946,7 +952,7 @@ export default function AdminResidents() {
                       value="resident"
                       onChange={(e) => handleRoleChange(u.uid, e.target.value)}
                       className="border rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      disabled={u.uid === currentUser?.id}
+                      disabled={busyUid === u.uid || u.uid === currentUser?.id}
                     >
                       <option value="resident" className="dark:bg-gray-700">
                         Keep as resident
