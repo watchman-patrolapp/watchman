@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import VehicleIcon, { COLOR_HEX, normalizeVehicleType, PatrolInfoIcon } from '../components/VehicleIcon';
 import LivePatrolMap from '../components/LivePatrolMap';
+import ShareStatusBadge from '../components/patrol/share/ShareStatusBadge';
 import AdminPatrolRoutesSection from '../components/admin/AdminPatrolRoutesSection';
 import HouseholdsAwayCard from '../components/patrol/HouseholdsAwayCard';
 import { getVehicleDisplayText } from '../utils/vehicleDisplay';
@@ -749,6 +750,12 @@ export default function AdminDashboard() {
                           <PatrolInfoIcon icon={FaStopwatch} colorKey={vehicleColor} />
                           <span>Elapsed: {formatElapsed(elapsedSec)}</span>
                         </div>
+                        {p.share_tracked && p.share_ref ? (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{p.share_ref}</span>
+                            <ShareStatusBadge label="Sign-on" sharedAt={p.start_shared_at} />
+                          </div>
+                        ) : null}
                       </div>
                       <div className="absolute top-3 right-3">
                         {confirmEnd === p.user_id ? (

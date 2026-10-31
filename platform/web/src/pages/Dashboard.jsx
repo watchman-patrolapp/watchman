@@ -50,6 +50,10 @@ import { useActiveOrganization } from '../auth/useActiveOrganization';
 import { useScopedOrganization, belongsToActiveOrganization } from '../utils/organizationScope';
 import { useUnreadCityHubCount } from '../hooks/useUnreadCityHubCount';
 import { parsePatrolTime, formatWatchDate } from '../utils/watchTime';
+import PatrolShareSheet from '../components/patrol/share/PatrolShareSheet';
+import PatrolShareBanner from '../components/patrol/share/PatrolShareBanner';
+import { fetchPatrolShare } from '../utils/sharePatrol';
+import { DEFAULT_SHARE_TIME_ZONE } from '../utils/patrolFormat';
 
 // --- Constants ---
 /** Warn after this many seconds on patrol (2h). */
@@ -100,6 +104,9 @@ export default function Dashboard() {
 
   // --- Patrol state ---
   const [activePatrol, setActivePatrol] = useState(null);
+  // WhatsApp share sheet: { kind: 'start' | 'end', patrol } (patrol = DB row incl. share_ref)
+  const [shareTarget, setShareTarget] = useState(null);
+  const [shareRefreshKey, setShareRefreshKey] = useState(0);
   const [startTime, setStartTime] = useState(null);
   const [loadingPatrol, setLoadingPatrol] = useState(true);
   const [allActivePatrols, setAllActivePatrols] = useState([]);
@@ -553,6 +560,8 @@ export default function Dashboard() {
         toast.success("Patrol started!");
         playPatrolStart();
         startTracking();
+        if (newPatrol.share_ref) setShareTarget({ kind: 'start', patrol: newPatrol });
+        setShareRefreshKey((k) => k + 1);
       }
     } catch (err) {
       console.error("Check-in failed:", err);
@@ -600,6 +609,8 @@ export default function Dashboard() {
         toast.success("Patrol started!");
         playPatrolStart();
         startTracking();
+        if (newPatrol.share_ref) setShareTarget({ kind: 'start', patrol: newPatrol });
+        setShareRefreshKey((k) => k + 1);
       }
     } catch (err) {
       console.error("Check-in failed:", err);
@@ -630,6 +641,7 @@ export default function Dashboard() {
   const handleCheckOut = useCallback(async (autoClosed = false) => {
     if (!activePatrol || isEndingRef.current) return;
     isEndingRef.current = true;
+    const endedShareRef = activePatrol.share_ref || null;
     try {
       // Stop GPS tracking before ending patrol
       await stopTracking();
@@ -662,6 +674,17 @@ export default function Dashboard() {
         toast.success(autoClosed ? "Patrol auto-ended (time limit reached)." : "Patrol ended. Log saved.");
         if (autoClosed) playPatrolAutoEnd();
         else playPatrolEnd();
+      }
+      // Offer the sign-off share (sign-off time comes from the server-written log row).
+      if (endedShareRef && !autoClosed) {
+        fetchPatrolShare(endedShareRef)
+          .then((row) => {
+            if (row?.end_time) setShareTarget({ kind: 'end', patrol: row });
+          })
+          .catch((err) => console.warn('get_patrol_share failed', err))
+          .finally(() => setShareRefreshKey((k) => k + 1));
+      } else {
+        setShareRefreshKey((k) => k + 1);
       }
     } catch (err) {
       console.error("Check-out failed:", err);
@@ -767,6 +790,24 @@ export default function Dashboard() {
       {userLocation && (
         <ActiveThreatsBanner userLocation={userLocation} maxDistanceKm={2} />
       )}
+      {shareTarget ? (
+        <PatrolShareSheet
+          kind={shareTarget.kind}
+          patrol={shareTarget.patrol}
+          organizationName={activeOrganization?.name || ''}
+          timeZone={activeOrganization?.timezone || DEFAULT_SHARE_TIME_ZONE}
+          phone={user?.phone || ''}
+          location={userLocation}
+          onClose={() => setShareTarget(null)}
+          onShared={(sharedAt) => {
+            const ref = shareTarget.patrol?.share_ref;
+            if (shareTarget.kind === 'start' && ref) {
+              setActivePatrol((prev) => (prev && prev.share_ref === ref ? { ...prev, start_shared_at: sharedAt } : prev));
+            }
+            setShareRefreshKey((k) => k + 1);
+          }}
+        />
+      ) : null}
 
       <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
 
@@ -915,6 +956,9 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-8 items-stretch">
         {/* Patrol column: status + upcoming schedule (fills height beside profile on large screens) */}
         <div className={`lg:col-span-7 flex flex-col gap-4 min-h-0 h-full ${activePatrol ? 'lg:row-span-2' : ''}`}>
+          {canDoPatrolOps ? (
+            <PatrolShareBanner refreshKey={shareRefreshKey} onOpen={setShareTarget} />
+          ) : null}
           <div className="shrink-0 min-h-0">
           <div className={`relative overflow-hidden rounded-2xl p-6 motion-safe:transition-all motion-safe:duration-300
             ${activePatrol 

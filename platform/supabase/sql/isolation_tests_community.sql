@@ -1147,6 +1147,112 @@ SELECT pg_temp.expect_error('P2.5', 'resident cannot list alert recipients',
 SELECT pg_temp.check('P2.5', 'format_rands groups thousands',
   pg_temp.id('a_unv'), 'true',
   'SELECT public.format_rands(100000) = ''R 1 000'' AND public.format_rands(50000) = ''R 500''');
+
+-- -----------------------------------------------------------------------------
+-- WS - Share to WhatsApp (patrol share refs). Needs 20261101010000_patrol_share.sql.
+-- Fresh Org A patroller 'ws_pat' + resident 'ws_res' (a_pat / a_res moved to
+-- Org B earlier). The active patrol is a postgres fixture row.
+-- -----------------------------------------------------------------------------
+DO $ws_fx$
+DECLARE
+  sfx text := left(replace(gen_random_uuid()::text, '-', ''), 10);
+  r record;
+BEGIN
+  INSERT INTO g7_ids VALUES ('ws_pat', gen_random_uuid()), ('ws_res', gen_random_uuid());
+  FOR r IN SELECT * FROM (VALUES ('ws_pat', 'patroller'), ('ws_res', 'resident')) t(k, role)
+  LOOP
+    INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
+    VALUES (pg_temp.id(r.k), '00000000-0000-0000-0000-000000000000', 'authenticated',
+            'authenticated', 'g7-' || r.k || '-' || sfx || '@example.invalid', now(), now());
+    EXECUTE format(
+      'INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
+       VALUES (%L, %L, %L, %L, %L, true, %L)
+       ON CONFLICT (id) DO UPDATE
+         SET role = EXCLUDED.role, organization_id = EXCLUDED.organization_id,
+             full_name = EXCLUDED.full_name, verified = true, status = EXCLUDED.status',
+      pg_temp.id(r.k), 'g7-' || r.k || '-' || sfx || '@example.invalid',
+      'G7 ' || r.k, r.role, pg_temp.id('org_a'), 'active');
+    INSERT INTO public.organization_members (organization_id, user_id, member_role, status)
+    VALUES (pg_temp.id('org_a'), pg_temp.id(r.k), r.role, 'active')
+    ON CONFLICT (organization_id, user_id) DO NOTHING;
+  END LOOP;
+END
+$ws_fx$;
+
+INSERT INTO public.active_patrols (user_id, user_name, vehicle_type, vehicle_make_model, vehicle_reg,
+                                   vehicle_color, start_time, zone, organization_id, share_ref, start_shared_at)
+VALUES (pg_temp.id('ws_pat'), 'G7 ws_pat', 'car', 'G7 Test Bakkie', 'G7 123 EC', 'gray',
+        now() - interval '90 minutes', 'G7 Zone', pg_temp.id('org_a'), 'PT-AAAA', now());
+CREATE TEMP TABLE g7_ws (k text PRIMARY KEY, v text) ON COMMIT DROP;
+INSERT INTO g7_ws SELECT 'ref', share_ref FROM public.active_patrols WHERE user_id::text = pg_temp.id('ws_pat')::text;
+
+SELECT pg_temp.assert('WS', 'sign-on gets a server ref PT-xxxx (client ref + shared time ignored)',
+  (SELECT ap.share_ref ~ '^PT-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$' AND ap.share_tracked AND ap.start_shared_at IS NULL
+   FROM public.active_patrols ap WHERE ap.user_id::text = pg_temp.id('ws_pat')::text),
+  'checked as postgres');
+SELECT pg_temp.assert('WS', '300 generated refs use only the 31-char alphabet',
+  (SELECT bool_and(r ~ '^PT-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{4}$') FROM (SELECT public.random_patrol_share_ref() AS r FROM generate_series(1, 300)) g),
+  'checked as postgres');
+SELECT pg_temp.assert('WS', 'share_ref unique per org (both tables indexed)',
+  (SELECT count(*) = 2 FROM pg_indexes WHERE schemaname = 'public'
+     AND indexname IN ('active_patrols_org_share_ref_uniq', 'patrol_logs_org_share_ref_uniq')),
+  'checked as postgres');
+SELECT pg_temp.expect_error('WS', 'resident cannot call the ref generator',
+  pg_temp.id('ws_res'), 'SELECT public.next_patrol_share_ref(NULL)', 'permission denied');
+SELECT pg_temp.expect_error('WS', 'bad kind -> invalid kind',
+  pg_temp.id('ws_pat'), format('SELECT public.mark_patrol_shared(%L, %L)', (SELECT v FROM g7_ws WHERE k = 'ref'), 'middle'), 'invalid kind');
+SELECT pg_temp.expect_error('WS', 'B nw_admin marks A sign-on -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.mark_patrol_shared(%L, %L)', (SELECT v FROM g7_ws WHERE k = 'ref'), 'start'), 'patrol not found');
+SELECT pg_temp.expect_error('WS', 'A resident (not owner, not staff) marks sign-on -> forbidden',
+  pg_temp.id('ws_res'), format('SELECT public.mark_patrol_shared(%L, %L)', (SELECT v FROM g7_ws WHERE k = 'ref'), 'start'), 'forbidden');
+SELECT pg_temp.expect_error('WS', 'sign-off mark before the patrol ends -> not found',
+  pg_temp.id('ws_pat'), format('SELECT public.mark_patrol_shared(%L, %L)', (SELECT v FROM g7_ws WHERE k = 'ref'), 'end'), 'patrol not found');
+SELECT pg_temp.check('WS', 'control: owner marks sign-on shared',
+  pg_temp.id('ws_pat'), 'true', format('SELECT public.mark_patrol_shared(%L, %L) IS NOT NULL', (SELECT v FROM g7_ws WHERE k = 'ref'), 'start'));
+-- Pin the first share time in the past, then prove a second mark keeps it.
+SELECT set_config('app.patrol_share_write', 'on', true);
+UPDATE public.active_patrols SET start_shared_at = '2026-01-01 08:00:00+02'
+WHERE user_id::text = pg_temp.id('ws_pat')::text;
+SELECT set_config('app.patrol_share_write', 'off', true);
+SELECT pg_temp.check('WS', 'mark is idempotent (A nw_admin re-mark keeps the first time)',
+  pg_temp.id('a_admin'), 'true',
+  format('SELECT public.mark_patrol_shared(%L, %L) = %L::timestamptz', (SELECT v FROM g7_ws WHERE k = 'ref'), 'start', '2026-01-01 08:00:00+02'));
+SELECT pg_temp.check('WS', 'client UPDATE cannot clear start_shared_at (guard trigger)',
+  pg_temp.id('ws_pat'), 'ok',
+  format('UPDATE public.active_patrols SET start_shared_at = NULL, share_ref = %L WHERE user_id::text = %L', 'PT-ZZZZ', pg_temp.id('ws_pat')));
+SELECT pg_temp.assert('WS', 'share fields unchanged after client UPDATE',
+  (SELECT ap.start_shared_at = '2026-01-01 08:00:00+02'::timestamptz AND ap.share_ref = (SELECT v FROM g7_ws WHERE k = 'ref')
+   FROM public.active_patrols ap WHERE ap.user_id::text = pg_temp.id('ws_pat')::text),
+  'checked as postgres');
+SELECT pg_temp.check('WS', 'control room: A nw_admin reads the sign-on share',
+  pg_temp.id('a_admin'), 'true',
+  format('SELECT source = %L AND start_shared_at IS NOT NULL FROM public.get_patrol_share(%L)', 'active', (SELECT v FROM g7_ws WHERE k = 'ref')));
+SELECT pg_temp.expect_rows('WS', 'B nw_admin cannot read A share',
+  pg_temp.id('b_admin'), format('SELECT 1 FROM public.get_patrol_share(%L)', (SELECT v FROM g7_ws WHERE k = 'ref')), 0);
+SELECT pg_temp.expect_rows('WS', 'A resident cannot read another patroller share',
+  pg_temp.id('ws_res'), format('SELECT 1 FROM public.get_patrol_share(%L)', (SELECT v FROM g7_ws WHERE k = 'ref')), 0);
+SELECT pg_temp.check('WS', 'control: owner ends the patrol (end_patrol unchanged)',
+  pg_temp.id('ws_pat'), 'ok', format('SELECT public.end_patrol(%L::uuid, false)', pg_temp.id('ws_pat')));
+SELECT pg_temp.assert('WS', 'log carries ref, sign-on share time and vehicle type',
+  (SELECT count(*) = 1 AND bool_and(pl.share_tracked AND pl.start_shared_at IS NOT NULL AND pl.end_shared_at IS NULL
+                                     AND pl.vehicle_type = 'car' AND pl.vehicle_reg = 'G7 123 EC')
+   FROM public.patrol_logs pl WHERE pl.share_ref = (SELECT v FROM g7_ws WHERE k = 'ref') AND pl.organization_id = pg_temp.id('org_a')),
+  'checked as postgres');
+SELECT pg_temp.check('WS', 'owner sees the unshared sign-off as pending',
+  pg_temp.id('ws_pat'), 'true',
+  format('SELECT EXISTS (SELECT 1 FROM public.list_my_pending_patrol_shares() WHERE source = %L AND share_ref = %L)', 'log', (SELECT v FROM g7_ws WHERE k = 'ref')));
+SELECT pg_temp.check('WS', 'control: owner marks sign-off shared',
+  pg_temp.id('ws_pat'), 'true', format('SELECT public.mark_patrol_shared(%L, %L) IS NOT NULL', (SELECT v FROM g7_ws WHERE k = 'ref'), 'end'));
+SELECT pg_temp.check('WS', 'sign-off no longer pending',
+  pg_temp.id('ws_pat'), 'true',
+  format('SELECT NOT EXISTS (SELECT 1 FROM public.list_my_pending_patrol_shares() WHERE share_ref = %L)', (SELECT v FROM g7_ws WHERE k = 'ref')));
+SELECT pg_temp.check('WS', 'second end_patrol is still a no-op (idempotent)',
+  pg_temp.id('ws_pat'), 'ok', format('SELECT public.end_patrol(%L::uuid, false)', pg_temp.id('ws_pat')));
+SELECT pg_temp.assert('WS', 'still exactly one log for the ref after the second end',
+  (SELECT count(*) = 1 FROM public.patrol_logs WHERE share_ref = (SELECT v FROM g7_ws WHERE k = 'ref')
+     AND organization_id = pg_temp.id('org_a')),
+  'checked as postgres');
+
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2

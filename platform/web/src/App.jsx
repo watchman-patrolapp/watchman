@@ -106,6 +106,8 @@ const SosEscalationBoard = lazy(() => import("./pages/SosEscalationBoard"));
 const PilotReadiness = lazy(() => import("./pages/PilotReadiness"));
 const RoleAccessGuide = lazy(() => import("./pages/RoleAccessGuide"));
 const ChooseArea = lazy(() => import("./pages/ChooseArea"));
+// Dev-only share card fixtures; tree-shaken from production builds.
+const ShareCardFixtures = import.meta.env.DEV ? lazy(() => import("./pages/dev/ShareCardFixtures")) : null;
 
 /** Don’t render login/register until INITIAL_SESSION finished — avoids faded sign-in flash on refresh */
 function AuthBootstrapGate({ children }) {
@@ -137,6 +139,7 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageSkeleton message="Loading…" />}>
       <Routes>
+        {ShareCardFixtures ? <Route path="/dev/share-card" element={<ShareCardFixtures />} /> : null}
         <Route
           path="/login"
           element={
