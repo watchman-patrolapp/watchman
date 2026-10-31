@@ -29,6 +29,7 @@ import { requestNotificationPermission } from '../services/fcmRegistration';
 import BrandedLoader from '../../components/layout/BrandedLoader';
 import { ChatIncomingOverlay } from './ChatIncomingOverlay';
 import { getIncomingPreviewText, reduceIncomingOverlayEnqueue } from '../utils/inAppUrgency';
+import { chatNotificationTag } from '../../utils/chatNotificationGuard';
 import { formatWatchDateTime, parsePatrolTime } from '../../utils/watchTime';
 import { getWorkingOrganizationId } from '../../utils/organizationScope';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
@@ -508,6 +509,7 @@ export default function ChatContainer() {
             const n = new Notification(title, {
               body: `${newMessage.sender_name}: ${preview.slice(0, 100)}`,
               icon: '/favicon.ico',
+              tag: chatNotificationTag(newMessage),
             });
             browserNotificationsRef.current.push(n);
           } catch {
