@@ -13,6 +13,7 @@ import {
   FaLightbulb,
   FaBullhorn,
   FaUserShield,
+  FaBoxOpen,
 } from "react-icons/fa";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
@@ -20,6 +21,7 @@ import { canPreviewResidentHome, canUseHouseholdMode, isHouseholdModeRole } from
 import SosHoldButton from "../components/resident/SosHoldButton";
 import ReportContentButton from "../components/community/ReportContentButton";
 import { useOrgCapabilities } from "../hooks/useOrgCapabilities";
+import { listWishlistItems } from "../utils/equipmentWishlist";
 import ResidentHomeHero from "../components/resident/ResidentHomeHero";
 import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
 import { useScopedOrganization } from "../utils/organizationScope";
@@ -145,6 +147,19 @@ export default function ResidentDashboard() {
   const isStreetRep = hasCap("resident_broadcaster");
   const [activity, setActivity] = useState([]);
   const [verification, setVerification] = useState("unknown");
+  // D16: conditional tile, only when the needs board has open items. Missing RPC reads as 0.
+  const [neededCount, setNeededCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let cancelled = false;
+    void listWishlistItems({ status: "needed" }).then(({ data, error }) => {
+      if (!cancelled) setNeededCount(error ? 0 : data.length);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, activeOrganizationId]);
   const [pendingCount, setPendingCount] = useState(0);
   const [homeAddress, setHomeAddress] = useState("");
   const [sosBusy, setSosBusy] = useState(false);
@@ -496,6 +511,16 @@ export default function ResidentDashboard() {
               />
             ) : null}
           </div>
+        ) : null}
+
+        {neededCount > 0 ? (
+          <ActionCard
+            icon={FaBoxOpen}
+            tone="safe"
+            title={`Your Neighbourhood Watch Needs (${neededCount})`}
+            subtitle="Equipment your Neighbourhood Watch needs - offer to help"
+            onClick={() => navigate("/resident/needs")}
+          />
         ) : null}
 
         <div className="grid grid-cols-2 gap-3">
