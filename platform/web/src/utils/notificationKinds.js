@@ -27,6 +27,7 @@ export const NOTIFICATION_KINDS = [
   { kind: "incident_status", label: "Report updates", description: "Status changes on incidents you reported." },
   { kind: "vouch", label: "Neighbour vouches", description: "When a neighbour vouches for you." },
   { kind: "membership", label: "Security membership", description: "Verified, rejected or transferred client claims." },
+  { kind: "wishlist", label: "Neighbourhood Watch Needs", description: "Offers to help and updates on Neighbourhood Watch Needs." },
   { kind: "moderation", label: "Moderation", description: "When something you posted is hidden or restored." },
   { kind: "info", label: "Other updates", description: "General app notices." },
 ];

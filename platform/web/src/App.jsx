@@ -5,6 +5,7 @@ import { useAuth } from "./auth/useAuth";
 import RequireRole from "./components/RequireRole";
 import RequirePlatformRole from "./components/RequirePlatformRole";
 import RequireCapability from "./components/RequireCapability";
+import { WISHLIST_MANAGER_ROLES } from "./utils/equipmentWishlist";
 import RequireActiveOrganization from "./components/RequireActiveOrganization";
 import { ADMIN_PANEL_ROLES } from "./auth/staffRoles";
 import {
@@ -97,6 +98,9 @@ const EmergencyContacts = lazy(() => import("./pages/EmergencyContacts"));
 const ResidentGuide = lazy(() => import("./pages/ResidentGuide"));
 const AreaBroadcast = lazy(() => import("./pages/AreaBroadcast"));
 const ResidentModeration = lazy(() => import("./pages/ResidentModeration"));
+const NeedsBoard = lazy(() => import("./pages/NeedsBoard"));
+const NeedsItemPage = lazy(() => import("./pages/NeedsItemPage"));
+const NeedsAdmin = lazy(() => import("./pages/admin/NeedsAdmin"));
 const CityAdminDashboard = lazy(() => import("./pages/CityAdminDashboard"));
 const SosEscalationBoard = lazy(() => import("./pages/SosEscalationBoard"));
 const PilotReadiness = lazy(() => import("./pages/PilotReadiness"));
@@ -268,6 +272,50 @@ function AppRoutes() {
               >
                 <ResidentModeration />
               </RequireCapability>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/needs"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES} allowPlatformConsole>
+                <NeedsBoard />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/needs/:id"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES} allowPlatformConsole>
+                <NeedsItemPage />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/needs"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES} allowPlatformConsole>
+                <NeedsBoard />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/needs/:id"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES} allowPlatformConsole>
+                <NeedsItemPage />
+              </RequireRole>
             </NeighborhoodRoute>
           }
         />
@@ -579,6 +627,23 @@ function AppRoutes() {
                   <EmergencyContacts />
                 </RequireActiveOrganization>
               </RequireRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/needs"
+          element={
+            <PrivateRoute>
+              <RequireCapability
+                anyCapabilities={["equipment_custodian"]}
+                allowedRoles={WISHLIST_MANAGER_ROLES}
+                allowPlatformConsole
+              >
+                <RequireActiveOrganization>
+                  <NeedsAdmin />
+                </RequireActiveOrganization>
+              </RequireCapability>
             </PrivateRoute>
           }
         />

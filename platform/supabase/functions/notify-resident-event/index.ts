@@ -1,5 +1,6 @@
 /**
- * Lock-screen pushes for household events: neighbour vouch, area broadcast.
+ * Lock-screen pushes for household events: neighbour vouch, area broadcast,
+ * new Needs offer (type "wishlist_offer" -> the org's Needs managers).
  *
  * Deploy: supabase functions deploy notify-resident-event
  *
@@ -302,6 +303,57 @@ Deno.serve(async (req) => {
     path = "/profile";
     tag = "membership";
     recipientIds = [residentId];
+  } else if (type === "wishlist_offer") {
+    // Server-verified: only the offerer, only once per offer, only within 15 min of creating it.
+    const offerId = String(body.offerId || "").trim();
+    if (!offerId) {
+      return new Response(JSON.stringify({ error: "Missing offer" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: claimed } = await supabase
+      .from("equipment_wishlist_offers")
+      .update({ push_notified_at: new Date().toISOString() })
+      .eq("id", offerId)
+      .eq("user_id", callerId)
+      .is("push_notified_at", null)
+      .gt("created_at", since)
+      .select("id, organization_id, wishlist_item_id, kind, pledged_amount_cents")
+      .maybeSingle();
+    if (!claimed) {
+      return new Response(JSON.stringify({ ok: true, sent: 0, reason: "not_claimable" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: item } = await supabase
+      .from("equipment_wishlist_items")
+      .select("title")
+      .eq("id", claimed.wishlist_item_id)
+      .maybeSingle();
+    const { data: who } = await supabase.from("users").select("full_name").eq("id", callerId).maybeSingle();
+    const itemTitle = String(item?.title || "a need").trim();
+    const name = String(who?.full_name || "").trim() || "A neighbour";
+    const cents = Number(claimed.pledged_amount_cents || 0);
+    if (claimed.kind === "contribute_cost" && cents > 0) {
+      const rands = Math.floor(cents / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+      title = `New pledge: R ${rands} towards ${itemTitle}`;
+    } else if (claimed.kind === "contribute_cost") {
+      title = `New cost contribution offer: ${itemTitle}`;
+    } else {
+      title = `New offer to help: ${itemTitle}`;
+    }
+    title = title.slice(0, 120);
+    bodyText = `${name} offered to help. Open Neighbourhood Watch Needs to respond.`;
+    path = "/admin/needs?tab=offers";
+    tag = "wishlist";
+    const { data: ids } = await supabase.rpc("wishlist_offer_notify_ids", { p_org_id: claimed.organization_id });
+    recipientIds = ((ids ?? []) as unknown[])
+      // deno-lint-ignore no-explicit-any
+      .map((row: any) => String(typeof row === "string" ? row : row?.wishlist_offer_notify_ids ?? ""))
+      .filter((id) => id && id !== callerId);
   } else {
     return new Response(JSON.stringify({ error: "Unknown type" }), {
       status: 400,
@@ -309,7 +361,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  recipientIds = await filterByNotifyPrefs(supabase, recipientIds, type);
+  recipientIds = await filterByNotifyPrefs(supabase, recipientIds, type === "wishlist_offer" ? "wishlist" : type);
   if (!recipientIds.length) {
     return new Response(JSON.stringify({ ok: true, sent: 0, reason: "muted" }), {
       status: 200,

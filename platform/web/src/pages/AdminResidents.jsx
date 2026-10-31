@@ -179,7 +179,7 @@ export default function AdminResidents() {
   const canPromote = canAccessAdminPanel(currentRole);
   const canVerify = canStaffVerifyResident(currentRole);
   const canReviewPatroller = canReviewPatrollerRequests(currentRole);
-  const canManageCaps = canManageCapabilities(currentRole, currentUser?.platform_role);
+  const canManageCaps = canManageCapabilities(currentRole, currentUser?.platformRole);
 
   useEffect(() => {
     let cancelled = false;

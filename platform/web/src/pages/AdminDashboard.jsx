@@ -35,6 +35,8 @@ import { periodStartDate, logOverlapsSince, watchDayStamp, addCalendarDays, pars
 import { fetchAllQueryPages } from '../utils/fetchPagedRows';
 import AreaContextBar from '../components/layout/AreaContextBar';
 import AdminToolsMenu from '../components/admin/AdminToolsMenu';
+import { canManageWishlist } from '../utils/equipmentWishlist';
+import { useNewWishlistOffersCount } from '../hooks/useNewWishlistOffersCount';
 import { countPendingPatrollerRequests } from '../utils/residentVerification';
 
 // ---------------------------------------------------------------------------
@@ -162,6 +164,8 @@ export default function AdminDashboard() {
   const canOpenHousehold = isHouseholdModeRole(user?.role) && canUseHouseholdMode(user?.role);
   const canEditEmergencyContacts = canManageEmergencyDirectory(user?.role, user?.platformRole);
   const canSendAreaNotice = canPostAreaBroadcast(user?.role, user?.platformRole);
+  const canManageNeeds = canManageWishlist(user?.role, user?.platformRole);
+  const { count: newOffersCount } = useNewWishlistOffersCount(canManageNeeds, user?.id, activeOrganizationId);
   const canOpenAuditLog = isGlobalAppUser || normalizeAppRole(user?.role) === "nw_admin";
 
   // ---------------------------------------------------------------------------
@@ -662,6 +666,8 @@ export default function AdminDashboard() {
           canOpenHousehold={canOpenHousehold}
           canEditEmergencyContacts={canEditEmergencyContacts}
           canSendAreaNotice={canSendAreaNotice}
+          canManageNeeds={canManageNeeds}
+          newOffersCount={newOffersCount}
           canOpenAuditLog={canOpenAuditLog}
           onNavigate={(to) => navigate(to)}
           onRetryCounts={() => {
