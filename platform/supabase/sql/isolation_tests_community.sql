@@ -404,8 +404,110 @@ SELECT pg_temp.check('PT', 'control: end_patrol(self) with no active patrol is a
   pg_temp.id('a_res'), 'ok', format('SELECT public.end_patrol(%L::uuid, false)', pg_temp.id('a_res')));
 
 -- -----------------------------------------------------------------------------
+-- -----------------------------------------------------------------------------
+-- P0a - capability grants (rows 1, 13 + acceptance criteria). Needs migration
+-- 20261031010000_org_capability_grants.sql applied first.
+-- -----------------------------------------------------------------------------
+DO $p0a_fx$
+DECLARE
+  sfx text := left(replace(gen_random_uuid()::text, '-', ''), 10);
+  r record;
+BEGIN
+  INSERT INTO g7_ids VALUES ('a_unv', gen_random_uuid()), ('a_comm', gen_random_uuid()), ('a_pat', gen_random_uuid());
+  FOR r IN SELECT * FROM (VALUES
+      ('a_unv', 'resident', false), ('a_comm', 'committee', true), ('a_pat', 'patroller', true)) t(k, role, ver)
+  LOOP
+    INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
+    VALUES (pg_temp.id(r.k), '00000000-0000-0000-0000-000000000000', 'authenticated',
+            'authenticated', 'g7-' || r.k || '-' || sfx || '@example.invalid', now(), now());
+    EXECUTE format(
+      'INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
+       VALUES (%L, %L, %L, %L, %L, %L, %L)
+       ON CONFLICT (id) DO UPDATE
+         SET role = EXCLUDED.role, organization_id = EXCLUDED.organization_id,
+             verified = EXCLUDED.verified, status = EXCLUDED.status',
+      pg_temp.id(r.k), 'g7-' || r.k || '-' || sfx || '@example.invalid',
+      'G7 ' || r.k, r.role, pg_temp.id('org_a'), r.ver, 'active');
+    INSERT INTO public.organization_members (organization_id, user_id, member_role, status)
+    VALUES (pg_temp.id('org_a'), pg_temp.id(r.k), r.role, 'active')
+    ON CONFLICT (organization_id, user_id) DO NOTHING;
+  END LOOP;
+  -- Make sure the unverified fixture really is unverified.
+  UPDATE public.resident_profiles SET verification_date = NULL WHERE user_id = pg_temp.id('a_unv');
+END
+$p0a_fx$;
+
+SELECT pg_temp.assert('P0a', 'fixture: a_unv is not a verified household',
+  NOT public.is_verified_household(pg_temp.id('a_unv')), 'checked as postgres');
+SELECT pg_temp.expect_error('1', 'B nw_admin grant_org_capability(A resident) -> not in this neighbourhood',
+  pg_temp.id('b_admin'), format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('a_res'), 'resident_broadcaster'),
+  'user is not in this neighbourhood');
+SELECT pg_temp.expect_error('P0a', 'A committee cannot grant (D1) -> forbidden',
+  pg_temp.id('a_comm'), format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('a_res'), 'resident_broadcaster'),
+  'forbidden');
+SELECT pg_temp.expect_error('P0a', 'A resident cannot grant -> forbidden',
+  pg_temp.id('a_res'), format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('a_res'), 'resident_moderator'),
+  'forbidden');
+SELECT pg_temp.expect_error('P0a', 'A admin grant resident cap to unverified resident (D3) -> refused',
+  pg_temp.id('a_admin'), format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('a_unv'), 'resident_broadcaster'),
+  'only verified households');
+SELECT pg_temp.expect_error('P0a', 'A admin grant equipment_custodian to plain resident (D17) -> refused',
+  pg_temp.id('a_admin'), format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('a_res'), 'equipment_custodian'),
+  'must be a watch member');
+SELECT pg_temp.check('P0a', 'control: A admin grants resident_broadcaster to verified A resident',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.grant_org_capability(%L, %L, %L)', pg_temp.id('a_res'), 'resident_broadcaster', 'G7 street rep'));
+SELECT pg_temp.check('P0a', 'control: A admin grants equipment_custodian to A patroller',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('a_pat'), 'equipment_custodian'));
+SELECT pg_temp.check('P0a', 'control: B admin grants resident_broadcaster to B resident',
+  pg_temp.id('b_admin'), 'ok', format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('b_res'), 'resident_broadcaster'));
+SELECT pg_temp.assert('P0a', 'activity_logs row written for A grant',
+  EXISTS (SELECT 1 FROM public.activity_logs l WHERE l.action = 'capability_granted'
+          AND l.organization_id = pg_temp.id('org_a') AND l.details_json->>'target_user_id' = pg_temp.id('a_res')::text),
+  'checked as postgres');
+SELECT pg_temp.expect_rows('P0a', 'A resident reads only own grants (table)',
+  pg_temp.id('a_res'), 'SELECT 1 FROM public.org_capability_grants', 1);
+SELECT pg_temp.expect_rows('P0a', 'A resident cannot list_org_capability_grants',
+  pg_temp.id('a_res'), 'SELECT * FROM public.list_org_capability_grants(true)', 0);
+SELECT pg_temp.expect_rows('P0a', 'B admin sees 0 Org A grants (table)',
+  pg_temp.id('b_admin'), format('SELECT 1 FROM public.org_capability_grants WHERE organization_id = %L', pg_temp.id('org_a')), 0);
+SELECT pg_temp.expect_rows('13', 'A resident list_capability_badges([A res, A pat, B res]) -> A badges only',
+  pg_temp.id('a_res'), format('SELECT * FROM public.list_capability_badges(ARRAY[%L, %L, %L]::uuid[])',
+    pg_temp.id('a_res'), pg_temp.id('a_pat'), pg_temp.id('b_res')), 2);
+SELECT pg_temp.check('P0a', 'A resident has_org_capability(resident_broadcaster) = true',
+  pg_temp.id('a_res'), 'true', 'SELECT public.has_org_capability(''resident_broadcaster'')');
+SELECT pg_temp.expect_error('P0a', 'authenticated cannot call user_has_org_capability',
+  pg_temp.id('a_res'), format('SELECT public.user_has_org_capability(%L, %L, %L)', pg_temp.id('b_res'), 'resident_broadcaster', pg_temp.id('org_b')),
+  'permission denied');
+SELECT pg_temp.expect_error('P0a', 'A resident direct INSERT org_capability_grants -> denied',
+  pg_temp.id('a_res'), format('INSERT INTO public.org_capability_grants (organization_id, user_id, capability) VALUES (%L, %L, %L)',
+    pg_temp.id('org_a'), pg_temp.id('a_res'), 'resident_moderator'),
+  'permission denied|row-level security');
+SELECT pg_temp.expect_error('P0a', 'B admin revoke A grant -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.revoke_org_capability(%L)',
+    (SELECT id FROM public.org_capability_grants WHERE user_id = pg_temp.id('a_res') AND revoked_at IS NULL)),
+  'grant not found');
+SELECT pg_temp.expect_error('P0a', 'A committee revoke A grant -> forbidden',
+  pg_temp.id('a_comm'), format('SELECT public.revoke_org_capability(%L)',
+    (SELECT id FROM public.org_capability_grants WHERE user_id = pg_temp.id('a_pat') AND revoked_at IS NULL)),
+  'forbidden');
+SELECT pg_temp.check('P0a', 'control: A admin revokes A resident grant',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.revoke_org_capability(%L, %L)',
+    (SELECT id FROM public.org_capability_grants WHERE user_id = pg_temp.id('a_res') AND revoked_at IS NULL), 'G7 test'));
+SELECT pg_temp.assert('P0a', 'revoke stamped + activity_logs capability_revoked row',
+  EXISTS (SELECT 1 FROM public.org_capability_grants WHERE user_id = pg_temp.id('a_res') AND revoked_by = pg_temp.id('a_admin'))
+  AND EXISTS (SELECT 1 FROM public.activity_logs l WHERE l.action = 'capability_revoked'
+          AND l.organization_id = pg_temp.id('org_a') AND l.details_json->>'target_user_id' = pg_temp.id('a_res')::text),
+  'checked as postgres');
+SELECT pg_temp.check('P0a', 'A resident get_my_org_capabilities() empty after revoke',
+  pg_temp.id('a_res'), 'true', 'SELECT public.get_my_org_capabilities() = ''{}''::text[]');
+SELECT pg_temp.expect_rows('P0a', 'A admin list_org_capability_grants(true) -> 2 A grants only',
+  pg_temp.id('a_admin'), 'SELECT * FROM public.list_org_capability_grants(true)', 2);
+SELECT pg_temp.assert('P0a', 'B grant untouched by A actions',
+  EXISTS (SELECT 1 FROM public.org_capability_grants WHERE user_id = pg_temp.id('b_res') AND revoked_at IS NULL),
+  'checked as postgres');
+
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
---   P0 capabilities: rows 1, 10, 11, 13
+--   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2
 --   P2 needs board / wishlist: rows 4, 5, 14, 15
 --   P3 equipment: rows 16-23
