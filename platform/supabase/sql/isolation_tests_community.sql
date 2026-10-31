@@ -564,6 +564,41 @@ SELECT pg_temp.expect_error('P0b', 'B resident upload community-private/<org A>/
 SELECT pg_temp.expect_rows('P0b', 'B resident cannot read community-private objects (no SELECT policy yet)',
   pg_temp.id('b_res'), 'SELECT 1 FROM storage.objects WHERE bucket_id = ''community-private''', 0);
 
+-- -----------------------------------------------------------------------------
+-- Role-change fix - admin_set_user_role. Needs migration
+-- 20261031040000_admin_set_user_role.sql applied first.
+-- -----------------------------------------------------------------------------
+SELECT pg_temp.check('ROLE', 'control: A nw_admin demotes A patroller to resident',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_pat'), 'resident'));
+SELECT pg_temp.assert('ROLE', 'A patroller saved as resident and member_role synced',
+  EXISTS (SELECT 1 FROM public.users u WHERE u.id = pg_temp.id('a_pat') AND u.role::text = 'resident')
+  AND EXISTS (SELECT 1 FROM public.organization_members om WHERE om.user_id = pg_temp.id('a_pat')
+              AND om.organization_id = pg_temp.id('org_a') AND om.member_role = 'resident'),
+  'checked as postgres');
+SELECT pg_temp.check('ROLE', 'same role again -> ok, no write',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_pat'), 'resident'));
+SELECT pg_temp.assert('ROLE', 'unchanged role adds no role_changed log row (exactly 1)',
+  (SELECT count(*) FROM public.activity_logs l WHERE l.action = 'role_changed'
+     AND l.details_json->>'subject_user_id' = pg_temp.id('a_pat')::text) = 1,
+  'checked as postgres');
+SELECT pg_temp.expect_error('ROLE', 'A nw_admin changes B resident -> not found',
+  pg_temp.id('a_admin'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('b_res'), 'patroller'),
+  'not found');
+SELECT pg_temp.expect_error('ROLE', 'A resident changes another A user -> forbidden',
+  pg_temp.id('a_res'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_unv'), 'patroller'),
+  'forbidden');
+SELECT pg_temp.expect_error('ROLE', 'A nw_admin sets admin -> refused',
+  pg_temp.id('a_admin'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_res'), 'admin'),
+  'cannot be assigned');
+SELECT pg_temp.expect_error('ROLE', 'A nw_admin sets city_admin -> platform staff only',
+  pg_temp.id('a_admin'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_res'), 'city_admin'),
+  'only platform staff');
+SELECT pg_temp.expect_error('ROLE', 'A committee appoints nw_admin -> refused (D1)',
+  pg_temp.id('a_comm'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_res'), 'nw_admin'),
+  'only an NW admin');
+SELECT pg_temp.expect_error('ROLE', 'A nw_admin changes own role -> refused',
+  pg_temp.id('a_admin'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_admin'), 'resident'),
+  'own role');
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2
