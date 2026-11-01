@@ -10,7 +10,7 @@
 import { toBlob } from "html-to-image";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "../supabase/client";
-import { buildShareCaption } from "./patrolFormat";
+import { buildShareCaption, shareImageFileName } from "./patrolFormat";
 
 export const SHARE_PIXEL_RATIO = 3;
 
@@ -184,3 +184,56 @@ export async function fetchMyPendingPatrolShares() {
 }
 
 export { buildShareCaption };
+
+/**
+ * True when this device can hand an image file to the share sheet
+ * (Capacitor native, or Web Share Level 2 with files: Android Chrome, iOS Safari).
+ * Desktop browsers usually return false; the sheet then offers Copy/Download.
+ */
+export function canShareImageFiles() {
+  try {
+    if (Capacitor.isNativePlatform()) return true;
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    if (!nav?.share || !nav?.canShare || typeof File === "undefined") return false;
+    const probe = new File([new Uint8Array([0])], "probe.png", { type: "image/png" });
+    return Boolean(nav.canShare({ files: [probe] }));
+  } catch {
+    return false;
+  }
+}
+
+/** Async Clipboard API with image support (Chrome/Edge, Safari, Firefox 127+), secure context only. */
+export function canCopyImageToClipboard() {
+  return (
+    typeof window !== "undefined" &&
+    window.isSecureContext !== false &&
+    typeof window.ClipboardItem !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    typeof navigator.clipboard?.write === "function"
+  );
+}
+
+/** Put the PNG on the clipboard. Does not mark the patrol as shared. */
+export async function copyImageToClipboard(blob) {
+  if (!blob) throw new Error("Image is not ready");
+  if (!canCopyImageToClipboard()) throw new Error("Copying images is not supported in this browser");
+  const png = blob.type === "image/png" ? blob : new Blob([blob], { type: "image/png" });
+  await navigator.clipboard.write([new window.ClipboardItem({ "image/png": png })]);
+}
+
+/** Save the PNG through a temporary link. Does not mark the patrol as shared. */
+export function downloadImage(blob, fileName) {
+  if (!blob) throw new Error("Image is not ready");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || "watchman-patrol.png";
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+export { shareImageFileName };

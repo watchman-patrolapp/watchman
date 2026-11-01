@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { SHARE_APP_NAME, SHARE_HEADER_TITLE } from "../../../utils/patrolFormat";
 
 /**
  * E1 share card (4:5). Inline styles + inline SVG only so html-to-image
@@ -8,7 +9,8 @@ import { forwardRef } from "react";
 export const SHARE_CARD_WIDTH = 400;
 export const SHARE_CARD_HEIGHT = 500;
 
-const FONT = "-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+const FONT = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+const NUM = { fontVariantNumeric: "tabular-nums", fontFeatureSettings: "'tnum' 1" };
 const MONO = "'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
 
 // react-icons/fa FaCar (same glyph as components/VehicleIcon.jsx), inlined for capture.
@@ -79,16 +81,39 @@ function Shield({ size, color, strokeWidth }) {
 }
 
 function Label({ children, color }) {
-  return <div style={{ fontSize: 11.5, color, fontWeight: 700, letterSpacing: "0.07em" }}>{children}</div>;
+  return <div style={{ fontSize: 10.5, color, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase" }}>{children}</div>;
 }
 
-function Cell({ label, value, color, size = 24, p }) {
+/**
+ * Step the font down for long values so typical names fit without ellipsis.
+ * Budget is tuned for a half-width box (~150px of text at weight 800).
+ */
+export function fitFontSize(value, base) {
+  const len = String(value ?? "").length;
+  if (len <= 11) return base;
+  if (len <= 14) return Math.min(base, 18);
+  if (len <= 18) return Math.min(base, 16);
+  if (len <= 22) return Math.min(base, 15);
+  return Math.min(base, 12);
+}
+
+function Cell({ label, value, color, size = 20, p, wrap = false }) {
+  const valueStyle = wrap
+    ? {
+        fontSize: fitFontSize(value, size),
+        lineHeight: 1.15,
+        display: "-webkit-box",
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical",
+        overflow: "hidden",
+        overflowWrap: "anywhere",
+        wordBreak: "break-word",
+      }
+    : { fontSize: size, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
   return (
-    <div style={{ background: p.cell, borderRadius: 14, padding: "10px 14px", minWidth: 0 }}>
+    <div style={{ background: p.cell, borderRadius: 12, padding: "12px 14px", minWidth: 0 }}>
       <Label color={p.muted}>{label}</Label>
-      <div style={{ fontSize: size, fontWeight: 800, color, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {value}
-      </div>
+      <div style={{ fontWeight: 600, color, marginTop: 3, letterSpacing: "-0.01em", ...NUM, ...valueStyle }}>{value}</div>
     </div>
   );
 }
@@ -100,7 +125,10 @@ const PatrolShareCard = forwardRef(function PatrolShareCard({ model, style }, re
   const start = model.kind !== "end";
   const p = palette(model.kind, model.theme);
   const vehicle = model.vehicle;
-  const header = [model.appName, model.areaName ? `${model.areaName} Watch` : null].filter(Boolean).join(" · ");
+  // Avoid "… Neighbourhood Watch Watch" when the area name already says Watch.
+  const dateMatch = /^(.*\S)\s+(\d{4})$/.exec(model.dateLabel || "");
+  const dateMain = dateMatch ? dateMatch[1] : model.dateLabel;
+  const dateYear = dateMatch ? dateMatch[2] : "";
 
   return (
     <div
@@ -137,53 +165,49 @@ const PatrolShareCard = forwardRef(function PatrolShareCard({ model, style }, re
           boxSizing: "border-box",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 13, color: p.muted, fontWeight: 600 }}>
-          <span style={{ display: "flex", gap: 6, alignItems: "center", color: p.fg, fontWeight: 700, minWidth: 0, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <span style={{ flex: "none", display: "flex" }}>
-              <Shield size={18} color={p.ac} strokeWidth={1.9} />
+              <Shield size={30} color={p.ac} strokeWidth={1.8} />
             </span>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{header}</span>
-          </span>
-          <span style={{ flex: "none", whiteSpace: "nowrap" }}>{model.dateLabel}</span>
+            <div style={{ minWidth: 0, lineHeight: 1.15 }}>
+              <div style={{ fontSize: 17.5, fontWeight: 650, color: p.fg, letterSpacing: "-0.01em" }}>{model.appName || SHARE_APP_NAME}</div>
+              <div style={{ fontSize: 10.5, fontWeight: 500, color: p.muted, letterSpacing: "0.09em", textTransform: "uppercase", marginTop: 3, whiteSpace: "nowrap" }}>{SHARE_HEADER_TITLE}</div>
+            </div>
+          </div>
+          <div style={{ flex: "none", textAlign: "right", lineHeight: 1.2, ...NUM }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: p.fg }}>{dateMain}</div>
+            {dateYear ? <div style={{ fontSize: 12, fontWeight: 500, color: p.muted, marginTop: 2 }}>{dateYear}</div> : null}
+          </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
-          <div style={{ width: 50, height: 50, borderRadius: "50%", background: p.ac, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, fontWeight: 800, flex: "none" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
+          <div style={{ width: 46, height: 46, borderRadius: "50%", background: p.ac, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 600, letterSpacing: "0.02em", flex: "none" }}>
             {model.initials}
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{model.name}</div>
-            <div style={{ fontSize: 13, color: p.muted }}>Patroller</div>
+            <div style={{ fontSize: model.name.length > 26 ? 15.5 : model.name.length > 20 ? 17 : 19, fontWeight: 600, lineHeight: 1.2, letterSpacing: "-0.015em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{model.name}</div>
+            <div style={{ fontSize: 12.5, color: p.muted, fontWeight: 400, marginTop: 1 }}>Patroller</div>
           </div>
         </div>
 
-        <div style={{ marginTop: 12, display: "inline-flex", alignItems: "center", gap: 10, background: p.acSoft, color: p.pillText, padding: "8px 16px 8px 10px", borderRadius: 99, fontSize: 21, fontWeight: 900, letterSpacing: "0.04em" }}>
-          <span style={{ width: 28, height: 28, borderRadius: "50%", background: p.ac, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {start ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M5 12.5l4.5 4.5L19 7.5" />
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="4" y="4" width="16" height="16" rx="3" fill="#fff" />
-              </svg>
-            )}
-          </span>
-          {start ? "SIGNED ON" : "SIGNED OFF"}
+        <div style={{ marginTop: 15, display: "inline-flex", alignItems: "center", gap: 8, background: p.acSoft, color: p.pillText, padding: "6px 14px 6px 11px", borderRadius: 99, fontSize: 15, fontWeight: 600, letterSpacing: "-0.005em" }}>
+          <span style={{ width: 9, height: 9, borderRadius: "50%", background: p.ac, boxShadow: `0 0 0 3px ${p.ac}33`, flex: "none" }} />
+          {start ? "Signed on" : "Signed off"}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
-          <Cell p={p} label="TIME ON" value={model.timeOn} color={p.fg} />
-          <Cell p={p} label="TIME OFF" value={model.timeOff} color={start ? p.muted : p.fg} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 15 }}>
+          <Cell p={p} label="Time on" value={model.timeOn} color={p.fg} />
+          <Cell p={p} label="Time off" value={model.timeOff} color={start ? p.muted : p.fg} />
           {start ? (
-            <Cell p={p} label="DURATION" value={model.duration} color={p.durationOn} size={20} />
+            <Cell p={p} label="Duration" value={model.duration} color={p.durationOn} size={16.5} />
           ) : (
-            <Cell p={p} label="DURATION" value={model.duration} color={p.durationOff} />
+            <Cell p={p} label="Duration" value={model.duration} color={p.durationOff} />
           )}
-          <Cell p={p} label="AREA" value={model.area} color={p.fg} size={20} />
+          <Cell p={p} label="Area" value={model.area} color={p.fg} size={16.5} wrap />
 
           {vehicle ? (
-            <div style={{ gridColumn: "1 / 3", background: p.cell, borderRadius: 14, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+            <div style={{ gridColumn: "1 / 3", background: p.cell, borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                 <span style={{ width: 34, height: 34, borderRadius: 10, background: p.acSoft, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                   <svg width="18" height="18" viewBox="0 0 512 512" fill={p.pillText} aria-hidden="true">
@@ -192,14 +216,14 @@ const PatrolShareCard = forwardRef(function PatrolShareCard({ model, style }, re
                 </span>
                 {vehicle.name ? (
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>
+                    <div style={{ fontSize: vehicle.name.length > 28 ? 12 : 14, fontWeight: 600, lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: vehicle.name.length > 28 ? 3 : 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>
                       {vehicle.name}
                     </div>
                   </div>
                 ) : null}
               </div>
               {vehicle.plate ? (
-                <span style={{ background: "#FFD200", color: "#111", border: `2px solid ${p.plateBorder}`, outline: "1.5px solid #111", borderRadius: 6, padding: "3px 8px 3px 4px", display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", flex: "none" }}>
+                <span style={{ background: "#FFD200", color: "#111", border: `2px solid ${p.plateBorder}`, outline: "1.5px solid #111", borderRadius: 6, padding: "3px 8px 3px 4px", display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", flex: "none" }}>
                   <span style={{ background: "#1F2937", color: "#FFD200", fontSize: 9, padding: "2px 3px", borderRadius: 3, fontFamily: FONT }}>ZA</span>
                   {vehicle.plate}
                 </span>
@@ -208,18 +232,18 @@ const PatrolShareCard = forwardRef(function PatrolShareCard({ model, style }, re
           ) : null}
         </div>
 
-        <div style={{ margin: "14px -18px -16px", padding: "11px 18px 12px", borderTop: `1.5px dashed ${p.tear}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ margin: "16px -18px -16px", padding: "12px 18px 13px", borderTop: `1.5px dashed ${p.tear}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <Label color={p.muted}>REF</Label>
-            <div style={{ fontFamily: MONO, fontWeight: 500, fontSize: 17, letterSpacing: "0.1em", color: p.ref }}>{model.shareRef || "—"}</div>
+            <Label color={p.muted}>Ref</Label>
+            <div style={{ fontFamily: MONO, fontWeight: 500, fontSize: 16, letterSpacing: "0.08em", marginTop: 2, color: p.ref }}>{model.shareRef || "—"}</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: p.muted, textAlign: "right", lineHeight: 1.3 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11.5, color: p.muted, fontWeight: 400, textAlign: "right", lineHeight: 1.35 }}>
             <span>
               Server-stamped
               <br />
               by {model.appName}
             </span>
-            <svg width="34" height="34" viewBox="0 0 28 28" aria-hidden="true">
+            <svg width="30" height="30" viewBox="0 0 28 28" aria-hidden="true" style={{ opacity: 0.85 }}>
               {DOT_CELLS.map(([x, y]) => (
                 <rect key={`${x}-${y}`} x={x * 4} y={y * 4} width="3.4" height="3.4" rx="0.8" fill={p.fg} />
               ))}
