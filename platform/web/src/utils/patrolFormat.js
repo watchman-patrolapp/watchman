@@ -142,9 +142,20 @@ export function mapsLink(lat, lng) {
   return `https://maps.google.com/?q=${la.toFixed(4)},${ln.toFixed(4)}`;
 }
 
-/** Area label from the DB zone, else the organisation name. No hardcoded areas. */
+/** Generic card header subtitle under the app name (no suburb). */
+export const SHARE_HEADER_TITLE = "Neighbourhood Watch";
+
+/** Drops a trailing "Neighbourhood Watch" / "Neighborhood Watch" / "NW" (case-insensitive). */
+export function shortAreaName(name) {
+  const text = cleanText(name);
+  if (!text) return "";
+  const short = text.replace(/[\s,·-]+(neighbou?rhood\s+watch|nw)$/i, "").trim();
+  return short || text;
+}
+
+/** Area label from the DB zone, else the organisation name, without a NW suffix. No hardcoded areas. */
 export function shareAreaName(patrol, organizationName) {
-  return cleanText(patrol?.zone) || cleanText(organizationName) || "";
+  return shortAreaName(patrol?.zone) || shortAreaName(organizationName) || "";
 }
 
 /** Everything the card renders, derived from DB fields only. */
@@ -216,4 +227,59 @@ export function parseSharePrefs(raw) {
   } catch {
     return { ...DEFAULT_SHARE_PREFS };
   }
+}
+
+/** "watchman-PT-7KQ3-on.png" / "watchman-PT-7KQ3-off.png"; safe characters only. */
+export function shareImageFileName(shareRef, kind) {
+  const ref = String(shareRef ?? "").trim().replace(/[^A-Za-z0-9-]/g, "") || "patrol";
+  return `watchman-${ref}-${kind === "end" ? "off" : "on"}.png`;
+}
+
+/** The patroller's "not shared yet" banner only nags for this long after the event. */
+export const SHARE_REMINDER_WINDOW_MS = 30 * 60 * 1000;
+
+/** Event time (ms) from DB timestamps: sign-on counts from start_time, sign-off from end_time. NaN if missing. */
+export function shareReminderEventMs(row) {
+  const ts = row?.source === "active" ? row?.start_time : row?.end_time || row?.start_time;
+  const ms = ts ? Date.parse(ts) : NaN;
+  return Number.isFinite(ms) ? ms : NaN;
+}
+
+/** Pending shares still inside the reminder window at nowMs (rows without a valid timestamp are dropped). */
+export function filterFreshPendingShares(rows, nowMs, windowMs = SHARE_REMINDER_WINDOW_MS) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row) => {
+    const ms = shareReminderEventMs(row);
+    return Number.isFinite(ms) && nowMs - ms <= windowMs;
+  });
+}
+
+/** Ms until the next fresh row expires (for a timer), or null when none. */
+export function msUntilNextShareExpiry(rows, nowMs, windowMs = SHARE_REMINDER_WINDOW_MS) {
+  const left = filterFreshPendingShares(rows, nowMs, windowMs).map((r) => shareReminderEventMs(r) + windowMs - nowMs);
+  return left.length ? Math.max(0, Math.min(...left)) : null;
+}
+
+function nameWords(v) {
+  return cleanText(v).split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Snapshot user_name on old patrol rows can be just a first name. When the patrol
+ * belongs to the signed-in user, prefer their fuller name (profile full_name, or
+ * auth metadata first + last) if it extends the stored name. Never swaps in a different person.
+ */
+export function withFullPatrollerName(patrol, { viewerUid, viewerFullName, viewerNameParts } = {}) {
+  if (!patrol) return patrol;
+  const owner = cleanText(patrol.user_id);
+  if (!owner || !viewerUid || owner !== cleanText(viewerUid)) return patrol;
+  const current = nameWords(patrol.user_name);
+  const candidates = [viewerFullName, (viewerNameParts || []).map(cleanText).filter(Boolean).join(" ")];
+  let best = current;
+  for (const c of candidates) {
+    const w = nameWords(c);
+    const extends_ = current.length === 0 || current.every((part, i) => w[i] && w[i].toLowerCase() === part.toLowerCase());
+    if (extends_ && w.length > best.length) best = w;
+  }
+  return best === current ? patrol : { ...patrol, user_name: best.join(" ") };
 }

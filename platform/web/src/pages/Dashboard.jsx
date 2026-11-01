@@ -799,6 +799,9 @@ export default function Dashboard() {
           organizationName={activeOrganization?.name || ''}
           timeZone={activeOrganization?.timezone || DEFAULT_SHARE_TIME_ZONE}
           phone={user?.phone || ''}
+          viewerUid={user?.uid || ''}
+          viewerFullName={user?.fullName || ''}
+          viewerNameParts={[user?.user_metadata?.first_name, user?.user_metadata?.last_name]}
           location={userLocation}
           onClose={() => setShareTarget(null)}
           onShared={(sharedAt) => {

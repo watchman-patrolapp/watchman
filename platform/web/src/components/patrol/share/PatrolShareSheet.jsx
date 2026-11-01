@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FaWhatsapp, FaTimes, FaCar, FaPhone, FaMapMarkerAlt } from "react-icons/fa";
+import { FaWhatsapp, FaTimes, FaCar, FaPhone, FaMapMarkerAlt, FaCopy, FaDownload } from "react-icons/fa";
 import toast from "react-hot-toast";
 import PatrolShareCard, { SHARE_CARD_HEIGHT, SHARE_CARD_WIDTH } from "./PatrolShareCard";
 import {
@@ -9,9 +9,19 @@ import {
   SHARE_PREFS_KEY,
   buildShareCaption,
   buildShareCardModel,
+  withFullPatrollerName,
   parseSharePrefs,
 } from "../../../utils/patrolFormat";
-import { markPatrolShared, renderShareCardBlob, sharePatrolToWhatsApp } from "../../../utils/sharePatrol";
+import {
+  canCopyImageToClipboard,
+  canShareImageFiles,
+  copyImageToClipboard,
+  downloadImage,
+  markPatrolShared,
+  renderShareCardBlob,
+  shareImageFileName,
+  sharePatrolToWhatsApp,
+} from "../../../utils/sharePatrol";
 
 const PREVIEW_WIDTH = 248;
 const PREVIEW_SCALE = PREVIEW_WIDTH / SHARE_CARD_WIDTH;
@@ -51,11 +61,20 @@ function Toggle({ icon: Icon, label, hint, checked, onChange, disabled }) {
  * props: kind 'start'|'end', patrol (DB row incl. share_ref), organizationName,
  * timeZone, phone, location {lat,lng}|null, onClose(), onShared(sharedAt)
  */
-export default function PatrolShareSheet({ kind, patrol, organizationName, timeZone, phone, location, onClose, onShared }) {
+export default function PatrolShareSheet({ kind, patrol: rawPatrol, organizationName, timeZone, phone, location, onClose, onShared, viewerUid, viewerFullName, viewerNameParts }) {
+  const patrol = useMemo(
+    () => withFullPatrollerName(rawPatrol, { viewerUid, viewerFullName, viewerNameParts }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawPatrol, viewerUid, viewerFullName, viewerNameParts?.[0], viewerNameParts?.[1]]
+  );
   const [prefs, setPrefs] = useState(readPrefs);
   const [busy, setBusy] = useState(false);
   const [blob, setBlob] = useState(null);
   const captureRef = useRef(null);
+  // Desktop (no file share): offer Copy / Download so the card can be pasted into WhatsApp.
+  const [showImageTools] = useState(() => !canShareImageFiles());
+  const [canCopyImage] = useState(() => canCopyImageToClipboard());
+  const [toolBusy, setToolBusy] = useState(null);
   const tz = timeZone || DEFAULT_SHARE_TIME_ZONE;
 
   const model = useMemo(
@@ -125,6 +144,36 @@ export default function PatrolShareSheet({ kind, patrol, organizationName, timeZ
     }
   };
 
+  const getBlob = async () => blob || (await renderShareCardBlob(captureRef.current));
+
+  // Neither action marks the patrol as shared; only the WhatsApp button does.
+  const handleCopyImage = async () => {
+    if (toolBusy) return;
+    setToolBusy("copy");
+    try {
+      await copyImageToClipboard(await getBlob());
+      toast.success("Image copied, paste it into WhatsApp with Ctrl+V");
+    } catch (err) {
+      console.warn("Copy image failed", err);
+      toast.error("Could not copy the image. Use Download image instead.");
+    } finally {
+      setToolBusy(null);
+    }
+  };
+
+  const handleDownloadImage = async () => {
+    if (toolBusy) return;
+    setToolBusy("download");
+    try {
+      downloadImage(await getBlob(), shareImageFileName(model.shareRef, kind));
+    } catch (err) {
+      console.warn("Download image failed", err);
+      toast.error("Could not save the image.");
+    } finally {
+      setToolBusy(null);
+    }
+  };
+
   const hasPhone = Boolean(phone);
   const hasLocation = Boolean(location && Number.isFinite(Number(location.lat)));
   const title = kind === "end" ? "Share sign-off" : "Share sign-on";
@@ -158,6 +207,38 @@ export default function PatrolShareSheet({ kind, patrol, organizationName, timeZ
               <PatrolShareCard model={model} style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: "top left" }} />
             </div>
           </div>
+
+          {showImageTools ? (
+            <div className="mt-3">
+              <div className="flex flex-wrap justify-center gap-2">
+                {canCopyImage ? (
+                  <button
+                    type="button"
+                    onClick={handleCopyImage}
+                    disabled={Boolean(toolBusy)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
+                  >
+                    <FaCopy className="w-3.5 h-3.5" aria-hidden />
+                    {toolBusy === "copy" ? "Copying…" : "Copy image"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleDownloadImage}
+                  disabled={Boolean(toolBusy)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
+                >
+                  <FaDownload className="w-3.5 h-3.5" aria-hidden />
+                  {toolBusy === "download" ? "Saving…" : "Download image"}
+                </button>
+              </div>
+              <p className="mt-1.5 text-center text-[11px] text-gray-500 dark:text-gray-400">
+                {canCopyImage
+                  ? "This browser can't attach images. Copy or download the card, then add it in WhatsApp."
+                  : "This browser can't attach or copy images. Download the card, then add it in WhatsApp."}
+              </p>
+            </div>
+          ) : null}
 
           <div className="mt-3 divide-y divide-gray-100 dark:divide-gray-700">
             <Toggle icon={FaCar} label="Vehicle" hint="Make, model and plate" checked={prefs.vehicle} onChange={(v) => updatePref("vehicle", v)} />

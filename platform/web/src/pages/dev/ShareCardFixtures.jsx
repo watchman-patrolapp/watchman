@@ -18,6 +18,9 @@ const NIGHT_ON = "2026-10-31T20:31:00+02:00";
 const NIGHT_OFF = "2026-10-31T23:03:00+02:00";
 
 const FIXTURES = [
+  { label: "Long area · sign-off · dark", kind: "end", patrol: { ...base, zone: "Theescombe Neighbourhood Watch", user_name: "Khurshid", vehicle_make_model: "Suzuki Baleno", vehicle_reg: "KKG 643 EC", start_time: NIGHT_ON, end_time: NIGHT_OFF } },
+  { label: "Long area · sign-on · light", kind: "start", patrol: { ...base, zone: "Theescombe Neighbourhood Watch", start_time: DAY_ON } },
+  { label: "Area 'Theescombe'", kind: "end", patrol: { ...base, zone: "Theescombe", start_time: DAY_ON, end_time: DAY_OFF } },
   { label: "Sign-on · light", kind: "start", patrol: { ...base, start_time: DAY_ON } },
   { label: "Sign-on · dark", kind: "start", patrol: { ...base, start_time: NIGHT_ON } },
   { label: "Sign-off · light", kind: "end", patrol: { ...base, start_time: DAY_ON, end_time: DAY_OFF } },
