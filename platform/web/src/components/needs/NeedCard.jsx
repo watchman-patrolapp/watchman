@@ -52,31 +52,6 @@ export function StoreLink({ url }) {
 }
 
 export const GRADIENT_BTN = "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm hover:from-teal-700 hover:to-emerald-700";
-/**
- * Card top strip: amber base (still needed) with an emerald fill from the left
- * for acquired/needed. Cancelled = slate. Same % as AcquiredProgress.
- */
-function AcquiredStrip({ item }) {
-  const { acquired, needed, pct } = wishlistAcquiredPct(item.quantity_acquired, item.quantity_needed);
-  if (item.status === "cancelled") {
-    return <div className="h-1.5 w-full bg-gradient-to-r from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-500" role="img" aria-label="Cancelled" />;
-  }
-  const shown = item.status === "acquired" ? 100 : pct;
-  return (
-    <div
-      className="relative h-1.5 w-full overflow-hidden bg-gradient-to-r from-amber-300 to-orange-400 dark:from-amber-500 dark:to-orange-600"
-      role="img"
-      aria-label={`${acquired} of ${needed} acquired (${pct}%)`}
-    >
-      <div
-        className={`absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-emerald-600 transition-[width] duration-700 ease-out dark:from-emerald-500 dark:to-emerald-400 ${
-          shown > 0 && shown < 100 ? "shadow-[2px_0_6px_rgba(16,185,129,0.85)]" : ""
-        }`}
-        style={{ width: `${shown}%` }}
-      />
-    </div>
-  );
-}
 
 /** "R X of R Y covered" from the public ledger (shown once anything is recorded). */
 function CoveredBar({ item }) {
@@ -108,8 +83,13 @@ function CoveredBar({ item }) {
   );
 }
 
-/** Gradient page banner shared by the resident and admin needs pages. */
-export function NeedsBanner({ title, subtitle, children }) {
+const STAT_COLS = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4" };
+
+/**
+ * Gradient page banner shared by the resident and admin needs pages.
+ * stats = [{ key, label, value, onClick?, active? }]: tappable figures under the title.
+ */
+export function NeedsBanner({ title, subtitle, stats, children }) {
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-600 via-emerald-600 to-cyan-600 p-4 text-white shadow-md sm:p-5 dark:from-teal-800 dark:via-emerald-800 dark:to-cyan-900">
       <FaBoxOpen className="pointer-events-none absolute -right-3 -top-3 h-24 w-24 text-white/10" aria-hidden />
@@ -120,6 +100,52 @@ export function NeedsBanner({ title, subtitle, children }) {
         </div>
         {children}
       </div>
+      {stats?.length ? (
+        <div className={`relative mt-3 grid grid-cols-2 gap-2 ${STAT_COLS[stats.length] || "sm:grid-cols-4"}`}>
+          {stats.map((s) => {
+            const body = (
+              <>
+                <span className="block text-[11px] font-semibold uppercase tracking-wide text-teal-50/90">{s.label}</span>
+                <span className="block text-lg font-extrabold leading-tight">{s.value}</span>
+              </>
+            );
+            const tone = `rounded-xl px-3 py-2 text-left ring-1 backdrop-blur-sm ${s.active ? "bg-white/30 ring-white/60" : "bg-white/15 ring-white/25"}`;
+            return s.onClick ? (
+              <button key={s.key} type="button" onClick={s.onClick} aria-pressed={Boolean(s.active)} className={`${tone} transition hover:bg-white/25`}>
+                {body}
+              </button>
+            ) : (
+              <div key={s.key} className={tone}>
+                {body}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Pill segmented control used for the needs filters. options = [{ key, label, count?, ariaLabel? }]. */
+export function Segmented({ options, value, onChange, label }) {
+  return (
+    <div role="group" aria-label={label} className="inline-flex max-w-full overflow-x-auto rounded-lg border border-gray-200 bg-white p-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          aria-pressed={value === o.key}
+          aria-label={o.ariaLabel}
+          title={o.ariaLabel}
+          onClick={() => onChange(o.key)}
+          className={`shrink-0 rounded-md px-3 py-1.5 font-medium ${
+            value === o.key ? `${GRADIENT_BTN}` : "text-gray-600 hover:text-teal-700 dark:text-gray-300 dark:hover:text-teal-300"
+          }`}
+        >
+          {o.label}
+          {o.count != null ? <span className={`ml-1.5 rounded-full px-1.5 text-[10px] font-bold ${value === o.key ? "bg-white/25" : "bg-gray-100 dark:bg-gray-700"}`}>{o.count}</span> : null}
+        </button>
+      ))}
     </div>
   );
 }
@@ -183,7 +209,7 @@ const MY_OFFER_PILL = {
   withdrawn: { Icon: FaBan, tone: "bg-gray-200 text-gray-700 ring-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:ring-gray-600" },
 };
 
-export default function NeedCard({ item, onOpen, onOffer, fullscreenPhotos = false, children }) {
+export default function NeedCard({ item, onOpen, onOffer, fullscreenPhotos = false, showProductCode = false, children }) {
   const [expanded, setExpanded] = useState(false);
   const status = WISHLIST_STATUS_META[item.status] || WISHLIST_STATUS_META.needed;
   const priority = WISHLIST_PRIORITY_META[item.priority];
@@ -193,6 +219,10 @@ export default function NeedCard({ item, onOpen, onOffer, fullscreenPhotos = fal
   const myOpen = item.my_offer_status && OPEN_OFFER_STATUSES.includes(item.my_offer_status);
   const myMeta = item.my_offer_status ? OFFER_STATUS_META[item.my_offer_status] : null;
   const store = storeHost(item.store_url);
+  const productCode = showProductCode ? item.product_code : null;
+  const acquiredOn = item.acquired_at
+    ? new Date(item.acquired_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+    : null;
   const longReason = (item.reason || "").length > 160 || (item.reason || "").split("\n").length > 3;
   const showOffer = onOffer && item.status === "needed" && !myOpen;
   const myPill = myMeta && onOffer ? MY_OFFER_PILL[item.my_offer_status] || MY_OFFER_PILL.new : null;
@@ -202,7 +232,6 @@ export default function NeedCard({ item, onOpen, onOffer, fullscreenPhotos = fal
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
-      <AcquiredStrip item={item} />
       <div
         className={`flex-1 ${onOpen ? "cursor-pointer" : ""}`}
         onClick={onOpen}
@@ -210,12 +239,12 @@ export default function NeedCard({ item, onOpen, onOffer, fullscreenPhotos = fal
         role={onOpen ? "button" : undefined}
         tabIndex={onOpen ? 0 : undefined}
       >
-        <NeedGallery paths={photoPaths} title={item.title} fullscreen={fullscreenPhotos} />
+        <NeedGallery paths={photoPaths} title={item.title} fullscreen={fullscreenPhotos} compact={!fullscreenPhotos} />
 
         <div className="space-y-3 p-4">
           <div className="flex flex-wrap items-center gap-1.5">
             <Chip tone={status.tone}>{status.label}</Chip>
-            {priority?.tone ? <Chip tone={priority.tone}>{priority.label}</Chip> : null}
+            {priority?.tone && item.priority !== "normal" ? <Chip tone={priority.tone}>{priority.label}</Chip> : null}
           </div>
           <h3 className="text-base font-semibold leading-snug text-gray-900 dark:text-white">{item.title}</h3>
 
@@ -225,7 +254,7 @@ export default function NeedCard({ item, onOpen, onOffer, fullscreenPhotos = fal
               <p className="text-xl font-extrabold text-teal-900 dark:text-white">
                 {est ? (
                   <>
-                    Est. {est} <span className="text-sm font-medium text-gray-600 dark:text-gray-300">each</span>
+                    {est} <span className="text-sm font-medium text-gray-600 dark:text-gray-300">each</span>
                   </>
                 ) : (
                   <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Price not set</span>
@@ -287,14 +316,14 @@ export default function NeedCard({ item, onOpen, onOffer, fullscreenPhotos = fal
             </div>
           ) : null}
 
-          {item.product_code || store ? (
+          {productCode || store ? (
             <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 border-t border-gray-100 pt-3 text-xs dark:border-gray-700">
-              {item.product_code ? (
+              {productCode ? (
                 <>
                   <dt className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
                     <FaBarcode className="text-violet-500 dark:text-violet-400" aria-hidden /> Product code
                   </dt>
-                  <dd className="break-all font-mono text-gray-800 dark:text-gray-200">{item.product_code}</dd>
+                  <dd className="break-all font-mono text-gray-800 dark:text-gray-200">{productCode}</dd>
                 </>
               ) : null}
               {store ? (
@@ -333,8 +362,13 @@ export default function NeedCard({ item, onOpen, onOffer, fullscreenPhotos = fal
           ) : null}
           {!showOffer && !myPill && onOffer ? (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {item.status === "acquired" ? "All acquired - thank you!" : "No longer needed"}
+              {item.status === "acquired"
+                ? `${acquiredOn ? `Acquired ${acquiredOn}` : "All acquired"} - thank you, neighbours!`
+                : "No longer needed"}
             </span>
+          ) : null}
+          {showOffer && !myPill ? (
+            <span className="text-xs text-gray-500 dark:text-gray-400">Give, lend, source or chip in</span>
           ) : null}
           {showOffer ? (
             <button

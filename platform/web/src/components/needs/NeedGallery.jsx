@@ -75,9 +75,11 @@ function PhotoLightbox({ urls, start, title, onClose }) {
 /**
  * Swipeable photo gallery (CSS scroll-snap, no packages). 4:3, object-contain,
  * dots + "1/5" counter, prev/next arrows on sm+ screens. fullscreen = tap opens a viewer.
+ * compact = shorter frame for grid cards, so the price and progress stay above the fold.
  */
-export default function NeedGallery({ paths, title, fullscreen = false }) {
+export default function NeedGallery({ paths, title, fullscreen = false, compact = false }) {
   const urls = (paths || []).map(wishlistPhotoUrl).filter(Boolean);
+  const frame = compact ? "aspect-[16/10] max-h-52" : "aspect-[4/3]";
   const ref = useRef(null);
   const [idx, setIdx] = useState(0);
   const [open, setOpen] = useState(false);
@@ -92,14 +94,14 @@ export default function NeedGallery({ paths, title, fullscreen = false }) {
 
   if (urls.length === 0) {
     return (
-      <div className="flex aspect-[4/3] w-full items-center justify-center border-b border-gray-200 bg-gray-50 text-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-600">
+      <div className={`flex ${frame} w-full items-center justify-center border-b border-gray-200 bg-gray-50 text-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-600`}>
         <FaBoxOpen className="h-12 w-12" aria-hidden />
       </div>
     );
   }
 
   return (
-    <div className="group relative aspect-[4/3] w-full border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+    <div className={`group relative ${frame} w-full border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900`}>
       <div
         ref={ref}
         onScroll={(e) => setIdx(Math.round(e.currentTarget.scrollLeft / Math.max(e.currentTarget.clientWidth, 1)))}

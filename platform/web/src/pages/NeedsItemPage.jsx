@@ -124,7 +124,7 @@ export default function NeedsItemPage() {
         ) : null}
         {item ? (
           <>
-            <NeedCard item={item} onOffer={() => setOfferOpen(true)} fullscreenPhotos />
+            <NeedCard item={item} onOffer={() => setOfferOpen(true)} fullscreenPhotos showProductCode />
             {myMeta ? (
               <section className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-gray-200 bg-white p-4 text-sm shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <span className="flex items-center gap-2 text-gray-800 dark:text-gray-100">
