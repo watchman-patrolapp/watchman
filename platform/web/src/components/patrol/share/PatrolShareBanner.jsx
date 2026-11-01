@@ -4,6 +4,19 @@ import { fetchMyPendingPatrolShares } from "../../../utils/sharePatrol";
 import { filterFreshPendingShares } from "../../../utils/patrolFormat";
 
 const RECHECK_MS = 30 * 1000;
+const DISMISS_KEY = "watchman.shareBanner.dismissed";
+
+// Dismiss only hides the reminder on this device. It does not mark the patrol
+// shared, so the control room still shows "Not shared".
+const reminderKey = (row) => `${row.source}:${row.share_ref}`;
+function readDismissed() {
+  try {
+    const list = JSON.parse(localStorage.getItem(DISMISS_KEY) || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Persistent "not shared yet" reminder. Reads list_my_pending_patrol_shares
@@ -15,6 +28,7 @@ const RECHECK_MS = 30 * 1000;
 export default function PatrolShareBanner({ refreshKey, onOpen }) {
   const [rows, setRows] = useState([]);
   const [now, setNow] = useState(() => Date.now());
+  const [dismissed, setDismissed] = useState(readDismissed);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +44,18 @@ export default function PatrolShareBanner({ refreshKey, onOpen }) {
     };
   }, [refreshKey]);
 
-  const fresh = filterFreshPendingShares(rows, now);
+  const fresh = filterFreshPendingShares(rows, now).filter((r) => !dismissed.includes(reminderKey(r)));
+
+  const dismiss = (row) => {
+    // Keep only the latest 50 keys; old ones have expired anyway.
+    const next = [...dismissed, reminderKey(row)].slice(-50);
+    setDismissed(next);
+    try {
+      localStorage.setItem(DISMISS_KEY, JSON.stringify(next));
+    } catch {
+      /* storage unavailable: hidden for this session only */
+    }
+  };
 
   // Re-check every 30 s while something is showing, so it disappears on its own.
   useEffect(() => {
@@ -54,6 +79,13 @@ export default function PatrolShareBanner({ refreshKey, onOpen }) {
           {fresh.length > 1 ? ` · +${fresh.length - 1} more` : ""}
         </p>
       </div>
+      <button
+        type="button"
+        onClick={() => dismiss(row)}
+        className="shrink-0 px-2.5 py-1.5 rounded-xl text-sm font-medium text-emerald-800 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+      >
+        Dismiss
+      </button>
       <button
         type="button"
         onClick={() => onOpen?.({ kind, patrol: row })}
