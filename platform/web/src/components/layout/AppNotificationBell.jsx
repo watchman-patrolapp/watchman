@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { FaBell } from "react-icons/fa";
 import { useAuth } from "../../auth/useAuth";
@@ -19,11 +20,30 @@ export default function AppNotificationBell({ variant = "toolbar" }) {
   const { rows, unreadCount, markRead } = useAppNotifications(user?.id);
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
+  const panelRef = useRef(null);
+  const [pos, setPos] = useState(null);
+
+  // Panel is portalled to <body> with fixed positioning so parent cards using
+  // overflow-hidden (e.g. the resident hero) cannot clip it.
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const place = () => {
+      const r = rootRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
     const onDoc = (event) => {
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
+      if (!rootRef.current?.contains(event.target) && !panelRef.current?.contains(event.target)) setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -46,8 +66,8 @@ export default function AppNotificationBell({ variant = "toolbar" }) {
           </span>
         ) : null}
       </button>
-      {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
+      {open && pos ? createPortal(
+        <div ref={panelRef} style={{ position: "fixed", top: pos.top, right: pos.right }} className="z-[1000] w-[min(22rem,calc(100vw-1rem))] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
           <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2 dark:border-gray-800">
             <p className="text-sm font-semibold text-gray-900 dark:text-white">Notifications</p>
             {unreadCount > 0 ? (
@@ -60,7 +80,7 @@ export default function AppNotificationBell({ variant = "toolbar" }) {
               </button>
             ) : null}
           </div>
-          <ul className="max-h-80 overflow-y-auto">
+          <ul className="max-h-[min(20rem,calc(100vh-8rem))] overflow-y-auto">
             {rows.length === 0 ? (
               <li className="px-3 py-6 text-sm text-gray-500">No notifications yet.</li>
             ) : (
@@ -85,7 +105,8 @@ export default function AppNotificationBell({ variant = "toolbar" }) {
               ))
             )}
           </ul>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );

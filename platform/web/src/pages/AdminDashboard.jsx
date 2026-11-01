@@ -10,7 +10,7 @@ import { supabase } from "../supabase/client";
 import { useSupabaseQuery } from "../hooks/useSupabaseQuery";
 import ExcelJS from 'exceljs';
 import toast from 'react-hot-toast';
-import { FaCar, FaTrash, FaArrowLeft, FaFileExcel, FaPrint, FaFilePdf, FaUsers, FaClock, FaShieldAlt, FaTrophy, FaWalking, FaBicycle, FaMapMarkerAlt, FaPhone, FaStopwatch } from "react-icons/fa";
+import { FaCar, FaTrash, FaArrowLeft, FaFileExcel, FaPrint, FaFilePdf, FaUsers, FaClock, FaShieldAlt, FaTrophy, FaWalking, FaBicycle, FaMapMarkerAlt, FaPhone, FaStopwatch, FaToolbox } from "react-icons/fa";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid, Legend
@@ -37,6 +37,7 @@ import { fetchAllQueryPages } from '../utils/fetchPagedRows';
 import AreaContextBar from '../components/layout/AreaContextBar';
 import AdminToolsMenu from '../components/admin/AdminToolsMenu';
 import { canManageWishlist } from '../utils/equipmentWishlist';
+import { canManageEquipment as canManageEquipmentRole } from '../utils/equipment';
 import { useNewWishlistOffersCount } from '../hooks/useNewWishlistOffersCount';
 import { countPendingPatrollerRequests } from '../utils/residentVerification';
 
@@ -166,6 +167,7 @@ export default function AdminDashboard() {
   const canEditEmergencyContacts = canManageEmergencyDirectory(user?.role, user?.platformRole);
   const canSendAreaNotice = canPostAreaBroadcast(user?.role, user?.platformRole);
   const canManageNeeds = canManageWishlist(user?.role, user?.platformRole);
+  const canManageEquipment = canManageEquipmentRole(user?.role, user?.platformRole);
   const { count: newOffersCount } = useNewWishlistOffersCount(canManageNeeds, user?.id, activeOrganizationId);
   const canOpenAuditLog = isGlobalAppUser || normalizeAppRole(user?.role) === "nw_admin";
 
@@ -616,6 +618,16 @@ export default function AdminDashboard() {
               Dashboard
             </button>
             <h1 className="text-[1.35rem] sm:text-3xl font-bold text-gray-900 dark:text-white leading-tight">Admin Dashboard</h1>
+            {canManageEquipment ? (
+              <button
+                type="button"
+                onClick={() => navigate("/equipment/admin/items")}
+                className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-2.5 py-2 text-xs font-medium text-white shadow-sm transition hover:from-teal-700 hover:to-emerald-700 sm:px-3 sm:text-sm"
+              >
+                <FaToolbox className="h-4 w-4" aria-hidden="true" />
+                Equipment
+              </button>
+            ) : null}
           </div>
           {activeOrganization ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">{displayWatchAreaName(activeOrganization.name)}</p>
@@ -668,6 +680,7 @@ export default function AdminDashboard() {
           canEditEmergencyContacts={canEditEmergencyContacts}
           canSendAreaNotice={canSendAreaNotice}
           canManageNeeds={canManageNeeds}
+          canManageEquipment={canManageEquipment}
           newOffersCount={newOffersCount}
           canOpenAuditLog={canOpenAuditLog}
           onNavigate={(to) => navigate(to)}

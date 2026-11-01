@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FaCheckCircle, FaEllipsisH, FaExclamationCircle, FaInbox, FaSpinner } from "react-icons/fa";
+import { FaCheckCircle, FaEllipsisH, FaExclamationCircle, FaInbox, FaSpinner, FaToolbox } from "react-icons/fa";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useActiveOrganization } from "../../auth/useActiveOrganization";
@@ -26,6 +26,7 @@ import {
   wishlistPhotoUrl,
   wishlistStillNeededCents,
 } from "../../utils/equipmentWishlist";
+import { canManageEquipment, createEquipmentFromWishlist, equipmentErrorMessage, listEquipmentWishlistLinks } from "../../utils/equipment";
 
 const INPUT =
   "mt-1 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm font-normal text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/30 dark:border-gray-500 dark:bg-gray-900 dark:text-white";
@@ -119,6 +120,37 @@ export default function NeedsAdmin() {
   const [ledgerView, setLedgerView] = useState(null);
   const [ledgerKey, setLedgerKey] = useState(0);
   const { user } = useAuth();
+  const isEquipmentManager = canManageEquipment(user?.role, user?.platformRole);
+  const [inventoryLinks, setInventoryLinks] = useState(() => new Map());
+
+  useEffect(() => {
+    if (!isEquipmentManager) return undefined;
+    let alive = true;
+    listEquipmentWishlistLinks().then(({ data }) => {
+      if (alive) setInventoryLinks(data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isEquipmentManager, activeOrganizationId]);
+
+  const addToInventory = async (item) => {
+    const existing = inventoryLinks.get(item.id);
+    if (existing) {
+      navigate(`/equipment/admin/items?edit=${existing}`);
+      return;
+    }
+    setBusyId(item.id);
+    const { data, error } = await createEquipmentFromWishlist(item.id);
+    setBusyId(null);
+    if (error || !data) {
+      toast.error(equipmentErrorMessage(error, "Could not add it to the inventory."));
+      return;
+    }
+    setInventoryLinks((m) => new Map(m).set(item.id, data));
+    toast.success("Added to the equipment catalogue. Add its units next.");
+    navigate(`/equipment/admin/items?edit=${data}`);
+  };
 
   const loadItems = useCallback(async () => {
     const { data, error } = await listWishlistItems();
@@ -358,6 +390,17 @@ export default function NeedsAdmin() {
                     {item.status !== "cancelled" ? (
                       <button type="button" className={BTN} onClick={() => setLedgerFor({ item, mode: "contribution" })}>
                         Record contribution
+                      </button>
+                    ) : null}
+                    {isEquipmentManager && (item.status === "acquired" || item.quantity_acquired > 0) ? (
+                      <button
+                        type="button"
+                        className={`${BTN} inline-flex items-center gap-1`}
+                        disabled={busyId === item.id}
+                        title={inventoryLinks.has(item.id) ? "Open it in the equipment catalogue" : "Create an equipment catalogue item from this need"}
+                        onClick={() => addToInventory(item)}
+                      >
+                        <FaToolbox className="h-3.5 w-3.5" aria-hidden /> {inventoryLinks.has(item.id) ? "In inventory" : "Add to inventory"}
                       </button>
                     ) : null}
                     {item.open_offer_count ? (

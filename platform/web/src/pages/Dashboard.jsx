@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
-import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRoute, FaRoad, FaCalendarAlt, FaClipboardList, FaCar, FaBook, FaInfoCircle, FaShieldAlt, FaPhone, FaClock, FaStopwatch, FaFire, FaHome } from "react-icons/fa";
+import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRoute, FaRoad, FaCalendarAlt, FaClipboardList, FaCar, FaToolbox, FaBook, FaInfoCircle, FaShieldAlt, FaPhone, FaClock, FaStopwatch, FaFire, FaHome } from "react-icons/fa";
 import ActiveThreatsBanner from "../components/patrol/ActiveThreatsBanner";
 import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
 import toast from 'react-hot-toast';
@@ -1297,6 +1297,10 @@ export default function Dashboard() {
           <button type="button" onClick={() => navigate('/vehicles')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
             <FaCar className="text-slate-600 dark:text-slate-300 shrink-0" aria-hidden />
             <span>Vehicles</span>
+          </button>
+          <button type="button" onClick={() => navigate('/equipment')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
+            <FaToolbox className="text-teal-600 dark:text-teal-400 shrink-0" aria-hidden />
+            <span>Equipment</span>
           </button>
           <button type="button" onClick={() => navigate('/guide')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
             <FaBook className="text-violet-600 dark:text-violet-400 shrink-0" aria-hidden />

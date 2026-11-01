@@ -1253,10 +1253,217 @@ SELECT pg_temp.assert('WS', 'still exactly one log for the ref after the second 
      AND organization_id = pg_temp.id('org_a')),
   'checked as postgres');
 
+-- -----------------------------------------------------------------------------
+-- P3a - equipment catalogue (blueprint rows 16-23, part 1). Needs migration
+-- 20261101020000_equipment_catalogue.sql applied first.
+-- State here: a_admin = Org A nw_admin, a_comm = Org A committee (patrol member),
+-- a_unv = Org A resident (not a patrol member), b_admin = Org B nw_admin.
+-- -----------------------------------------------------------------------------
+SELECT pg_temp.check('P3', 'control: A nw_admin seeds default categories',
+  pg_temp.id('a_admin'), 'ok', 'SELECT public.ensure_equipment_defaults()');
+SELECT pg_temp.check('P3', 'control: A nw_admin creates an item',
+  pg_temp.id('a_admin'), 'ok', 'SELECT public.upsert_equipment_item(NULL, ''G7 radio kit'')');
+SELECT pg_temp.check('P3', 'control: A nw_admin adds unit G7-R1 with price and invoice',
+  pg_temp.id('a_admin'), 'ok',
+  format('SELECT public.add_equipment_unit(%L, %L, %L, NULL, %L, 150000, NULL, %L, %L, %L)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'G7-R1', 'good', 'SN-1', 'Shop',
+    pg_temp.id('org_a') || '/equipment/inv1.pdf', 'donation'));
+SELECT pg_temp.expect_error('P3', 'A committee creates an item -> forbidden (custodian cap unused)',
+  pg_temp.id('a_comm'), 'SELECT public.upsert_equipment_item(NULL, ''G7 x'')', 'forbidden');
+SELECT pg_temp.expect_error('P3', 'A committee adds a unit -> not found',
+  pg_temp.id('a_comm'), format('SELECT public.add_equipment_unit(%L, %L)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'G7-X1'), 'not found');
+SELECT pg_temp.expect_error('P3', 'A nw_admin invoice path in Org B folder -> invalid invoice path',
+  pg_temp.id('a_admin'), format('SELECT public.add_equipment_unit(%L, %L, NULL, NULL, NULL, NULL, NULL, NULL, %L)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'G7-R9', pg_temp.id('org_b') || '/equipment/x.pdf'),
+  'invalid invoice path');
+SELECT pg_temp.expect_error('P3', 'bad asset tag -> check constraint',
+  pg_temp.id('a_admin'), format('SELECT public.add_equipment_unit(%L, %L)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'bad tag!'), 'check constraint');
+SELECT pg_temp.expect_rows('16', 'A committee lists the A catalogue',
+  pg_temp.id('a_comm'), 'SELECT * FROM public.list_equipment_catalogue() WHERE name = ''G7 radio kit''', 1);
+SELECT pg_temp.expect_rows('16', 'A resident (not patrol) lists 0 catalogue items',
+  pg_temp.id('a_unv'), 'SELECT * FROM public.list_equipment_catalogue()', 0);
+SELECT pg_temp.expect_rows('16', 'A resident reads 0 equipment_items rows (table)',
+  pg_temp.id('a_unv'), format('SELECT 1 FROM public.equipment_items WHERE organization_id = %L', pg_temp.id('org_a')), 0);
+SELECT pg_temp.expect_rows('17', 'B nw_admin lists 0 Org A catalogue items',
+  pg_temp.id('b_admin'), 'SELECT * FROM public.list_equipment_catalogue() WHERE name LIKE ''G7 %''', 0);
+SELECT pg_temp.expect_rows('17', 'B nw_admin reads 0 Org A units (table)',
+  pg_temp.id('b_admin'), format('SELECT id FROM public.equipment_units WHERE organization_id = %L', pg_temp.id('org_a')), 0);
+SELECT pg_temp.expect_error('17', 'B nw_admin get_equipment_item(A) -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.get_equipment_item(%L)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit')), 'not found');
+SELECT pg_temp.expect_error('17', 'B nw_admin get_equipment_unit(A) -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.get_equipment_unit(%L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 'not found');
+SELECT pg_temp.expect_error('17', 'B nw_admin get_equipment_unit_admin(A) -> not found',
+  pg_temp.id('b_admin'), format('SELECT * FROM public.get_equipment_unit_admin(%L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 'not found');
+SELECT pg_temp.expect_error('17', 'B nw_admin edits A item -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.upsert_equipment_item(%L, %L)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'hijack'), 'not found');
+SELECT pg_temp.expect_error('17', 'B nw_admin rotates A QR -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.rotate_equipment_qr(%L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 'not found');
+SELECT pg_temp.expect_error('18', 'B nw_admin resolves A QR token -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.resolve_equipment_qr(%L)',
+    (SELECT qr_token FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 'not found');
+SELECT pg_temp.check('18', 'A committee resolves A QR token to the unit',
+  pg_temp.id('a_comm'), 'true', format('SELECT public.resolve_equipment_qr(%L) = %L::uuid',
+    (SELECT qr_token FROM public.equipment_units WHERE asset_tag = 'G7-R1'),
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')));
+SELECT pg_temp.expect_error('18', 'A resident resolves A QR token -> not found',
+  pg_temp.id('a_unv'), format('SELECT public.resolve_equipment_qr(%L)',
+    (SELECT qr_token FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 'not found');
+SELECT pg_temp.expect_error('19', 'A committee selects purchase price directly -> denied',
+  pg_temp.id('a_comm'), 'SELECT purchase_price_cents FROM public.equipment_units', 'permission denied');
+SELECT pg_temp.expect_error('19', 'A committee selects qr_token directly -> denied',
+  pg_temp.id('a_comm'), 'SELECT qr_token FROM public.equipment_units', 'permission denied');
+SELECT pg_temp.expect_error('19', 'A committee selects serial/supplier/invoice/funding -> denied',
+  pg_temp.id('a_comm'), 'SELECT serial_number, supplier, invoice_path, funding_source FROM public.equipment_units', 'permission denied');
+SELECT pg_temp.check('19', 'A committee member unit view has no price or token keys',
+  pg_temp.id('a_comm'), 'true', format(
+    'SELECT NOT (public.get_equipment_unit(%L) ?| ARRAY[''purchase_price_cents'',''qr_token'',''serial_number'',''invoice_path'',''supplier'',''funding_source''])',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')));
+SELECT pg_temp.expect_error('19', 'A committee get_equipment_unit_admin -> not found',
+  pg_temp.id('a_comm'), format('SELECT * FROM public.get_equipment_unit_admin(%L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 'not found');
+SELECT pg_temp.expect_rows('19', 'A nw_admin sees price via get_equipment_unit_admin',
+  pg_temp.id('a_admin'), format('SELECT 1 FROM public.get_equipment_unit_admin(%L) WHERE purchase_price_cents = 150000',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 1);
+SELECT pg_temp.expect_error('20', 'A nw_admin direct INSERT unit -> denied',
+  pg_temp.id('a_admin'), format('INSERT INTO public.equipment_units (organization_id, item_id, asset_tag) VALUES (%L, %L, %L)',
+    pg_temp.id('org_a'), (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'G7-F1'),
+  'permission denied|row-level security');
+SELECT pg_temp.check('20', 'A nw_admin direct UPDATE unit status -> blocked',
+  pg_temp.id('a_admin'), 'blocked', 'UPDATE public.equipment_units SET status = ''lost'' WHERE asset_tag = ''G7-R1''',
+  'permission denied|row-level security');
+SELECT pg_temp.expect_error('20', 'A nw_admin calls equipment_set_unit_status -> denied',
+  pg_temp.id('a_admin'), format('SELECT public.equipment_set_unit_status(%L, %L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1'), 'lost'), 'permission denied');
+SELECT pg_temp.check('20', 'service_role raw status UPDATE -> refused by guard',
+  pg_temp.id('a_admin'), 'error', 'UPDATE public.equipment_units SET status = ''lost'' WHERE asset_tag = ''G7-R1''',
+  'equipment_set_unit_status', 'service_role');
+SELECT pg_temp.check('20', 'service_role invalid transition available -> overdue -> refused',
+  pg_temp.id('a_admin'), 'error', format('SELECT public.equipment_set_unit_status(%L, %L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1'), 'overdue'),
+  'invalid status change', 'service_role');
+SELECT pg_temp.expect_error('21', 'A committee reads ledger table -> denied',
+  pg_temp.id('a_comm'), 'SELECT * FROM public.equipment_ledger', 'permission denied');
+SELECT pg_temp.expect_rows('21', 'A committee sees the unit timeline (unit_added)',
+  pg_temp.id('a_comm'), format('SELECT * FROM public.list_equipment_unit_ledger(%L) WHERE event = ''unit_added''',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 1);
+SELECT pg_temp.expect_error('21', 'B nw_admin reads A unit timeline -> not found',
+  pg_temp.id('b_admin'), format('SELECT * FROM public.list_equipment_unit_ledger(%L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1')), 'not found');
+SELECT pg_temp.check('22', 'service_role UPDATE ledger -> append-only',
+  pg_temp.id('a_admin'), 'error', 'UPDATE public.equipment_ledger SET payload = ''{}''::jsonb', 'append-only', 'service_role');
+SELECT pg_temp.check('22', 'service_role DELETE ledger -> append-only',
+  pg_temp.id('a_admin'), 'error', 'DELETE FROM public.equipment_ledger', 'append-only', 'service_role');
+SELECT pg_temp.check('22', 'service_role TRUNCATE ledger -> append-only',
+  pg_temp.id('a_admin'), 'error', 'TRUNCATE public.equipment_ledger', 'append-only', 'service_role');
+SELECT pg_temp.check('22', 'A nw_admin verifies the Org A hash chain (intact)',
+  pg_temp.id('a_admin'), 'true', format('SELECT public.verify_equipment_ledger(%L) IS NULL', pg_temp.id('org_a')));
+SELECT pg_temp.expect_error('22', 'B nw_admin verifies Org A chain -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.verify_equipment_ledger(%L)', pg_temp.id('org_a')), 'not found');
+SELECT pg_temp.assert('22', 'ledger rows are chained (prev_hash = previous hash)',
+  NOT EXISTS (
+    SELECT 1 FROM (
+      SELECT prev_hash, lag(hash) OVER (ORDER BY id) AS lag_hash, row_number() OVER (ORDER BY id) AS rn
+      FROM public.equipment_ledger WHERE organization_id = pg_temp.id('org_a')) q
+    WHERE q.rn > 1 AND q.prev_hash IS DISTINCT FROM q.lag_hash),
+  'checked as postgres');
+INSERT INTO storage.objects (bucket_id, name)
+VALUES ('community-private', pg_temp.id('org_a') || '/equipment/g7-invoice.pdf');
+SELECT pg_temp.expect_rows('23', 'A nw_admin reads the Org A equipment invoice object',
+  pg_temp.id('a_admin'), format('SELECT 1 FROM storage.objects WHERE bucket_id = ''community-private'' AND name = %L',
+    pg_temp.id('org_a') || '/equipment/g7-invoice.pdf'), 1);
+SELECT pg_temp.expect_rows('23', 'A committee reads 0 equipment invoice objects',
+  pg_temp.id('a_comm'), format('SELECT 1 FROM storage.objects WHERE bucket_id = ''community-private'' AND name = %L',
+    pg_temp.id('org_a') || '/equipment/g7-invoice.pdf'), 0);
+SELECT pg_temp.expect_rows('23', 'B nw_admin sees 0 Org A storage objects in community-private/equipment',
+  pg_temp.id('b_admin'), format('SELECT 1 FROM storage.objects WHERE bucket_id = ''community-private'' AND name LIKE %L',
+    pg_temp.id('org_a') || '/equipment/%'), 0);
+SELECT pg_temp.expect_rows('23', 'A certifications: committee reads 0 (none granted, nothing gated)',
+  pg_temp.id('a_comm'), 'SELECT 1 FROM public.equipment_certifications', 0);
+-- P3a admin (20261101021000): gallery, details, notes, admin unit list, tag suggestion.
+SELECT pg_temp.check('24', 'A nw_admin sets item details (kit, 12h loan)',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.set_equipment_item_details(%L, %L, 12)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'Radio, charger, earpiece'));
+SELECT pg_temp.expect_error('24', 'A nw_admin max loan 0 hours -> refused',
+  pg_temp.id('a_admin'), format('SELECT public.set_equipment_item_details(%L, NULL, 0)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit')), '1 to 720');
+SELECT pg_temp.expect_error('24', 'A committee sets item details -> not found',
+  pg_temp.id('a_comm'), format('SELECT public.set_equipment_item_details(%L, %L, 4)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'x'), 'not found');
+SELECT pg_temp.expect_error('24', 'B nw_admin sets A item details -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.set_equipment_item_details(%L, %L, 4)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), 'x'), 'not found');
+SELECT pg_temp.check('24', 'A nw_admin sets 2 gallery photos (cover = first)',
+  pg_temp.id('a_admin'), 'true', format('SELECT cardinality(public.set_equipment_item_photos(%L, ARRAY[%L, %L])) = 2',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'),
+    pg_temp.id('org_a') || '/equipment/' || (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit') || '/a.webp',
+    pg_temp.id('org_a') || '/equipment/' || (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit') || '/b.webp'));
+SELECT pg_temp.assert('24', 'photo_path mirrors photo_paths[1]',
+  (SELECT photo_path = photo_paths[1] AND max_loan_hours = 12 FROM public.equipment_items WHERE name = 'G7 radio kit'),
+  'checked as postgres');
+SELECT pg_temp.expect_error('24', 'A nw_admin photo path in Org B -> invalid',
+  pg_temp.id('a_admin'), format('SELECT public.set_equipment_item_photos(%L, ARRAY[%L])',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'),
+    pg_temp.id('org_b') || '/equipment/x/a.webp'), 'invalid photo path');
+SELECT pg_temp.expect_error('24', 'A nw_admin 6 photos -> refused',
+  pg_temp.id('a_admin'), format('SELECT public.set_equipment_item_photos(%L, ARRAY[''1'',''2'',''3'',''4'',''5'',''6''])',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit')), 'up to 5');
+SELECT pg_temp.expect_error('24', 'B nw_admin sets A gallery -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.set_equipment_item_photos(%L, ARRAY[]::text[])',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit')), 'not found');
+SELECT pg_temp.check('24', 'A committee sees kit + gallery in get_equipment_item',
+  pg_temp.id('a_comm'), 'true', format('SELECT (public.get_equipment_item(%L)->>''kit_contents'') IS NOT NULL AND jsonb_array_length(public.get_equipment_item(%L)->''photo_paths'') = 2',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit'), (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit')));
+SELECT pg_temp.check('24', 'A nw_admin sets unit notes',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.set_equipment_unit_notes(%L, %L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1'), 'Antenna replaced'));
+SELECT pg_temp.expect_error('24', 'B nw_admin sets A unit notes -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.set_equipment_unit_notes(%L, %L)',
+    (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1'), 'x'), 'not found');
+SELECT pg_temp.expect_error('24', 'A committee reads unit notes column -> denied',
+  pg_temp.id('a_comm'), 'SELECT notes FROM public.equipment_units', 'permission denied');
+SELECT pg_temp.expect_rows('24', 'A nw_admin admin unit list has QR token + notes',
+  pg_temp.id('a_admin'), 'SELECT 1 FROM public.list_equipment_units_admin(NULL) WHERE qr_token IS NOT NULL AND notes = ''Antenna replaced''', 1);
+SELECT pg_temp.expect_error('24', 'A committee admin unit list -> forbidden',
+  pg_temp.id('a_comm'), 'SELECT * FROM public.list_equipment_units_admin(NULL)', 'forbidden');
+SELECT pg_temp.expect_error('24', 'B nw_admin admin unit list for A item -> not found',
+  pg_temp.id('b_admin'), format('SELECT * FROM public.list_equipment_units_admin(%L)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit')), 'not found');
+SELECT pg_temp.expect_rows('24', 'B nw_admin own admin unit list has no A units',
+  pg_temp.id('b_admin'), 'SELECT 1 FROM public.list_equipment_units_admin(NULL) WHERE asset_tag LIKE ''G7-%''', 0);
+SELECT pg_temp.check('24', 'A nw_admin next tag after G7-R1 is G7-R02-style free tag',
+  pg_temp.id('a_admin'), 'true', format('SELECT public.suggest_equipment_asset_tag(%L) ~ ''^G7-R[0-9]{2,}$''',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit')));
+SELECT pg_temp.expect_error('24', 'B nw_admin suggest tag for A item -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.suggest_equipment_asset_tag(%L)',
+    (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit')), 'not found');
+INSERT INTO public.equipment_wishlist_items (organization_id, title, reason, photo_paths, photo_path, status)
+VALUES (pg_temp.id('org_a'), 'Spotlight', 'Night patrol light',
+  ARRAY[pg_temp.id('org_a') || '/needs/w1/a.webp'], pg_temp.id('org_a') || '/needs/w1/a.webp', 'acquired');
+SELECT pg_temp.check('24', 'A nw_admin adds acquired need to inventory',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.create_equipment_from_wishlist(%L)',
+    (SELECT id FROM public.equipment_wishlist_items WHERE title = 'Spotlight')));
+SELECT pg_temp.assert('24', 'inventory item copied the need photo + reason',
+  (SELECT cardinality(photo_paths) = 1 AND description = 'Night patrol light' FROM public.equipment_items WHERE name = 'Spotlight'),
+  'checked as postgres');
+SELECT pg_temp.expect_rows('24', 'A nw_admin sees the need link',
+  pg_temp.id('a_admin'), 'SELECT 1 FROM public.list_equipment_wishlist_links()', 1);
+SELECT pg_temp.expect_rows('24', 'B nw_admin sees 0 A need links',
+  pg_temp.id('b_admin'), 'SELECT 1 FROM public.list_equipment_wishlist_links()', 0);
+SELECT pg_temp.expect_error('24', 'B nw_admin adds A need to inventory -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.create_equipment_from_wishlist(%L)',
+    (SELECT id FROM public.equipment_wishlist_items WHERE title = 'Spotlight')), 'not found');
+
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2
---   P3 equipment: rows 16-23
+--   P3b equipment check-out/return/transfer (P3a part 1 rows 16-23 above)
 --   P4 local services + community-media storage: rows 6, 7, 8, 9
 --   Row 12 (City Hub/Hotspots stay city-wide): add when P0 touches them
 -- -----------------------------------------------------------------------------
