@@ -13,6 +13,7 @@ import {
   paginateLabels,
 } from "../../../utils/equipment";
 import EquipmentShell, { EquipmentNotice } from "../EquipmentShell";
+import EquipmentAdminNav from "../../../components/equipment/EquipmentAdminNav";
 
 const PRINT_CSS = `
 @page { size: A4 portrait; margin: 10mm; }
@@ -104,6 +105,7 @@ export default function EquipmentAdminLabels() {
       }
     >
       <style>{PRINT_CSS}</style>
+      <EquipmentAdminNav />
       {hint ? <EquipmentNotice>{hint}</EquipmentNotice> : null}
       {loading && !hint ? <p className="text-sm text-gray-500 dark:text-gray-400">Making QR codes...</p> : null}
       {!loading && !units.length && !hint ? <EquipmentNotice>No units to label yet. Add units first.</EquipmentNotice> : null}

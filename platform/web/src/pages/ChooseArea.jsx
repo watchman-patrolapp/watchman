@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import PageHeader from "../components/layout/PageHeader";
 import { fetchParentCity } from "../utils/cityScope";
@@ -7,6 +7,8 @@ import { DEFAULT_CITY_FULL_NAME } from "../config/neighborhoodRegions";
 
 export default function ChooseArea() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = typeof location.state?.from === "string" && location.state.from.startsWith("/") && !location.state.from.startsWith("//") ? location.state.from : "/dashboard";
   const {
     organizations,
     activeOrganizationId,
@@ -31,7 +33,7 @@ export default function ChooseArea() {
     setChoosingId(organizationId);
     try {
       await setActiveOrganizationId(organizationId);
-      navigate("/dashboard", { replace: true });
+      navigate(from, { replace: true });
     } finally {
       setChoosingId(null);
     }

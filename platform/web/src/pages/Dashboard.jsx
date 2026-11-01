@@ -49,6 +49,8 @@ import { hasHydratedAppRole } from '../auth/appRole';
 import { useActiveOrganization } from '../auth/useActiveOrganization';
 import { useScopedOrganization, belongsToActiveOrganization } from '../utils/organizationScope';
 import { useUnreadCityHubCount } from '../hooks/useUnreadCityHubCount';
+import { useEquipmentPendingCounts } from '../hooks/useEquipmentPendingCounts';
+import { equipmentAdminBadgeCount, equipmentMyBadgeCount } from '../utils/equipment';
 import { parsePatrolTime, formatWatchDate } from '../utils/watchTime';
 import { chatNotificationTag } from '../utils/chatNotificationGuard';
 import PatrolShareSheet from '../components/patrol/share/PatrolShareSheet';
@@ -96,6 +98,9 @@ export default function Dashboard() {
   const { user, signOut } = useAuth();
   const { activeOrganization, isGlobalOperator } = useActiveOrganization();
   const { scope, activeOrganizationId, includeUnscoped } = useScopedOrganization();
+  const equipmentCounts = useEquipmentPendingCounts(Boolean(user?.id), activeOrganizationId);
+  const equipmentMine = equipmentMyBadgeCount(equipmentCounts);
+  const equipmentBadge = equipmentMine + equipmentAdminBadgeCount(equipmentCounts);
 
   useEffect(() => {
     if (!hasHydratedAppRole(user?.role)) return;
@@ -1298,9 +1303,14 @@ export default function Dashboard() {
             <FaCar className="text-slate-600 dark:text-slate-300 shrink-0" aria-hidden />
             <span>Vehicles</span>
           </button>
-          <button type="button" onClick={() => navigate('/equipment')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
+          <button type="button" onClick={() => navigate(equipmentMine ? '/equipment/mine' : '/equipment')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
             <FaToolbox className="text-teal-600 dark:text-teal-400 shrink-0" aria-hidden />
             <span>Equipment</span>
+            {equipmentBadge ? (
+              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white" aria-label={`${equipmentBadge} waiting`}>
+                {equipmentBadge > 99 ? '99+' : equipmentBadge}
+              </span>
+            ) : null}
           </button>
           <button type="button" onClick={() => navigate('/guide')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
             <FaBook className="text-violet-600 dark:text-violet-400 shrink-0" aria-hidden />

@@ -98,7 +98,21 @@ export function wishlistItemPhotoPaths(item) {
   return item?.photo_path ? [item.photo_path] : [];
 }
 
-/** Pure: acquired progress, shared by the progress bar and the card strip. */
+/** Pure: est. value already in hand vs the full est. value, over priced "needed" items. */
+export function wishlistNeededProgressCents(items) {
+  let inHand = 0;
+  let target = 0;
+  for (const item of items || []) {
+    if (item?.status !== "needed") continue;
+    const t = wishlistItemTotals(item);
+    if (!t) continue;
+    target += t.fullCents;
+    inHand += t.fullCents - t.remainingCents;
+  }
+  return { inHandCents: inHand, targetCents: target, pct: target ? Math.round((inHand / target) * 100) : 0 };
+}
+
+/** Pure: acquired progress for the "X of Y acquired" bar. */
 export function wishlistAcquiredPct(acquired, needed) {
   const n = Math.max(Math.trunc(Number(needed)) || 0, 1);
   const a = Math.min(Math.max(Math.trunc(Number(acquired)) || 0, 0), n);

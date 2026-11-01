@@ -28,6 +28,7 @@ export const NOTIFICATION_KINDS = [
   { kind: "vouch", label: "Neighbour vouches", description: "When a neighbour vouches for you." },
   { kind: "membership", label: "Security membership", description: "Verified, rejected or transferred client claims." },
   { kind: "wishlist", label: "Neighbourhood Watch Needs", description: "Offers to help and updates on Neighbourhood Watch Needs." },
+  { kind: "equipment", label: "Equipment loans", description: "Borrow requests, approvals, transfers and returns." },
   { kind: "moderation", label: "Moderation", description: "When something you posted is hidden or restored." },
   { kind: "info", label: "Other updates", description: "General app notices." },
 ];

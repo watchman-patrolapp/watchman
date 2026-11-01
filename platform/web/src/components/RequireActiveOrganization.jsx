@@ -1,9 +1,10 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import PageSkeleton from "./layout/PageSkeleton";
 
 export default function RequireActiveOrganization({ children }) {
+  const location = useLocation();
   const { sessionReady, loading: authLoading } = useAuth();
   const { isGlobalOperator, needsAreaSelection, loading } = useActiveOrganization();
 
@@ -12,7 +13,8 @@ export default function RequireActiveOrganization({ children }) {
   }
 
   if (isGlobalOperator && needsAreaSelection) {
-    return <Navigate to="/choose-area" replace />;
+    const from = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to="/choose-area" replace state={{ from }} />;
   }
 
   return children;

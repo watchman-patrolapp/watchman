@@ -75,6 +75,7 @@ function buildPhase1Profile(data, authUser) {
     emergencyContact2Relationship: data.emergency_contact_2_relationship ?? null,
     vehicles: [],
     requiredSopVersion: null,
+    profileLoaded: true,
   }
 }
 
@@ -276,7 +277,8 @@ export const AuthProvider = ({ children }) => {
               sessionUserForAppState(authUser, {
                 sopVersionAccepted: null,
                 requiredSopVersion: null,
-              }) ?? { uid: authUser.id }
+                profileLoaded: true,
+              }) ?? { uid: authUser.id, profileLoaded: true }
             )
           })
         }

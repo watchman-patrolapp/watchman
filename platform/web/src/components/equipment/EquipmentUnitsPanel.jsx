@@ -8,6 +8,8 @@ import {
   EQUIPMENT_CONDITION_LABELS,
   EQUIPMENT_FUNDING_LABELS,
   addEquipmentUnit,
+  adminStatusEndsLoan,
+  adminUnitStatusTargets,
   centsToRandsInput,
   equipmentErrorMessage,
   equipmentStatusMeta,
@@ -15,10 +17,21 @@ import {
   listEquipmentUnitsAdmin,
   rotateEquipmentQr,
   setEquipmentUnitNotes,
+  setEquipmentUnitStatusAdmin,
   suggestEquipmentAssetTag,
   updateEquipmentUnitDetails,
 } from "../../utils/equipment";
 import { BTN, BTN_PRIMARY, HELP, INPUT, LABEL } from "./EquipmentItemEditor";
+import { DANGER_BTN, EquipmentSheet, FIELD, LABEL as SHEET_LABEL, PRIMARY_BTN, SECONDARY_BTN } from "./EquipmentLoanDialogs";
+
+const STATUS_HINTS = Object.freeze({
+  available: "Back in service. Patrollers can borrow it again.",
+  under_repair: "Out of use while it is being fixed.",
+  damaged: "Broken; decide later whether to repair or retire it.",
+  lost: "Can't be found. Set it back to Available if it turns up.",
+  stolen: "Reported stolen. Set it back to Available if it is recovered.",
+  retired: "Permanently out of the catalogue. This can't be undone.",
+});
 
 const EMPTY_UNIT = {
   id: null,
@@ -227,13 +240,118 @@ function UnitForm({ itemId, orgId, initial, onCancel, onSaved }) {
   );
 }
 
-/** Units of one item, for managers: add/edit, invoice, rotate QR, print labels. */
-export default function EquipmentUnitsPanel({ itemId, orgId }) {
+/** Change a unit's status outside the loan flow (repair, write-off, back in service). */
+function StatusSheet({ unit, onClose, onDone }) {
+  const targets = adminUnitStatusTargets(unit.status);
+  const [to, setTo] = useState(targets[0] || "");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const endsLoan = adminStatusEndsLoan(unit.status);
+  const needsNote = endsLoan && note.trim().length < 3;
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!to || needsNote) return;
+    setBusy(true);
+    const { error: err } = await setEquipmentUnitStatusAdmin(unit.id, to, note.trim());
+    setBusy(false);
+    if (err) return setError(equipmentErrorMessage(err));
+    onDone(`${unit.asset_tag} is now ${equipmentStatusMeta(to).label.toLowerCase()}.`);
+  };
+  return (
+    <EquipmentSheet
+      title={`Change status of ${unit.asset_tag}`}
+      subtitle={endsLoan ? `On loan to ${unit.holder_name || "a patroller"}. This closes their loan and tells them.` : `Now ${equipmentStatusMeta(unit.status).label.toLowerCase()}.`}
+      onClose={onClose}
+    >
+      {targets.length ? (
+        <form onSubmit={submit} className="space-y-3">
+          <fieldset>
+            <legend className={SHEET_LABEL}>New status</legend>
+            <div className="space-y-2">
+              {targets.map((s) => (
+                <label
+                  key={s}
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${
+                    to === s ? "border-teal-600 bg-teal-50 dark:border-teal-500 dark:bg-teal-900/30" : "border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/40"
+                  }`}
+                >
+                  <input type="radio" name="eq-status" value={s} checked={to === s} onChange={() => setTo(s)} className="mt-1 accent-teal-600" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-white">{equipmentStatusMeta(s).label}</span>
+                    <span className="block text-xs text-gray-600 dark:text-gray-300">{STATUS_HINTS[s]}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div>
+            <label htmlFor="eq-snote" className={SHEET_LABEL}>
+              {endsLoan ? "What happened" : "Note (optional)"}
+            </label>
+            <textarea id="eq-snote" rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} className={FIELD} />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Saved on the unit's timeline.</p>
+          </div>
+          {error ? <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-900/30 dark:text-rose-200">{error}</p> : null}
+          <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} className={SECONDARY_BTN}>
+              Cancel
+            </button>
+            <button type="submit" disabled={busy || needsNote} className={to === "available" || to === "under_repair" ? PRIMARY_BTN : DANGER_BTN}>
+              {busy ? "Saving..." : `Mark ${equipmentStatusMeta(to).label.toLowerCase()}`}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className="text-sm text-gray-700 dark:text-gray-200">
+            {unit.status === "retired"
+              ? "Retired units stay retired."
+              : "This unit is part of an open loan or transfer. Use the Loan desk to approve, hand over or take it back."}
+          </p>
+          <div className="flex justify-end">
+            <button type="button" onClick={onClose} className={SECONDARY_BTN}>
+              Close
+            </button>
+          </div>
+        </>
+      )}
+    </EquipmentSheet>
+  );
+}
+
+function RotateQrSheet({ unit, onClose, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const rotate = async () => {
+    setBusy(true);
+    const { error: err } = await rotateEquipmentQr(unit.id);
+    setBusy(false);
+    if (err) return setError(equipmentErrorMessage(err, "Could not replace the QR code."));
+    onDone("New QR code made. Print a new label.");
+  };
+  return (
+    <EquipmentSheet title={`Replace the QR label for ${unit.asset_tag}?`} subtitle="The old label stops working straight away. Print and stick on the new one." onClose={onClose}>
+      {error ? <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-900/30 dark:text-rose-200">{error}</p> : null}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onClose} className={SECONDARY_BTN}>
+          Keep current label
+        </button>
+        <button type="button" disabled={busy} onClick={rotate} className={DANGER_BTN}>
+          {busy ? "Replacing..." : "Replace QR"}
+        </button>
+      </div>
+    </EquipmentSheet>
+  );
+}
+
+/** Units of one item, for managers: add/edit, status, invoice, rotate QR, print labels. */
+export default function EquipmentUnitsPanel({ itemId, orgId, onChanged }) {
   const navigate = useNavigate();
   const [units, setUnits] = useState([]);
   const [editing, setEditing] = useState(null);
   const [hint, setHint] = useState("");
-  const [busyId, setBusyId] = useState(null);
+  const [sheet, setSheet] = useState(null); // { type: "status" | "qr", unit }
 
   const load = useCallback(async () => {
     const { data, error } = await listEquipmentUnitsAdmin(itemId);
@@ -245,16 +363,11 @@ export default function EquipmentUnitsPanel({ itemId, orgId }) {
     void load();
   }, [load]);
 
-  const rotate = async (u) => {
-    if (!window.confirm(`Replace the QR label for ${u.asset_tag}? The old label stops working.`)) return;
-    setBusyId(u.id);
-    const { error } = await rotateEquipmentQr(u.id);
-    setBusyId(null);
-    if (error) toast.error(equipmentErrorMessage(error, "Could not replace the QR code."));
-    else {
-      toast.success("New QR code made. Print a new label.");
-      void load();
-    }
+  const sheetDone = (message) => {
+    setSheet(null);
+    toast.success(message);
+    void load();
+    onChanged?.();
   };
 
   return (
@@ -283,6 +396,7 @@ export default function EquipmentUnitsPanel({ itemId, orgId }) {
           onSaved={() => {
             setEditing(null);
             void load();
+            onChanged?.();
           }}
         />
       ) : null}
@@ -314,10 +428,13 @@ export default function EquipmentUnitsPanel({ itemId, orgId }) {
                 <button type="button" className={BTN} onClick={() => setEditing(unitForm(u))}>
                   Edit
                 </button>
+                <button type="button" className={BTN} onClick={() => setSheet({ type: "status", unit: u })}>
+                  Status
+                </button>
                 <button type="button" className={BTN} onClick={() => navigate(`/equipment/units/${u.id}`)}>
                   Timeline
                 </button>
-                <button type="button" className={`${BTN} inline-flex items-center gap-1`} disabled={busyId === u.id} onClick={() => rotate(u)}>
+                <button type="button" className={`${BTN} inline-flex items-center gap-1`} onClick={() => setSheet({ type: "qr", unit: u })}>
                   <FaQrcode aria-hidden /> Rotate QR
                 </button>
                 {u.invoice_path ? (
@@ -330,6 +447,8 @@ export default function EquipmentUnitsPanel({ itemId, orgId }) {
           );
         })}
       </ul>
+      {sheet?.type === "status" ? <StatusSheet unit={sheet.unit} onClose={() => setSheet(null)} onDone={sheetDone} /> : null}
+      {sheet?.type === "qr" ? <RotateQrSheet unit={sheet.unit} onClose={() => setSheet(null)} onDone={sheetDone} /> : null}
     </section>
   );
 }

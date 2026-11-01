@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { FaPlus, FaPrint } from "react-icons/fa";
+import { FaPlus, FaTimes } from "react-icons/fa";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import { useScopedOrganization } from "../../../utils/organizationScope";
 import { NeedsEmpty } from "../../../components/needs/NeedCard";
 import EquipmentCard from "../../../components/equipment/EquipmentCard";
+import EquipmentAdminNav from "../../../components/equipment/EquipmentAdminNav";
 import EquipmentItemEditor, { BTN, BTN_PRIMARY, EMPTY_ITEM, itemFormFromDetail } from "../../../components/equipment/EquipmentItemEditor";
 import EquipmentUnitsPanel from "../../../components/equipment/EquipmentUnitsPanel";
 import {
@@ -101,40 +102,36 @@ export default function EquipmentAdminItems() {
       backTo="/admin"
       backLabel="Back to Admin Dashboard"
     >
+      <EquipmentAdminNav />
       <EquipmentBanner title="Equipment catalogue" subtitle={`${items.length} item${items.length === 1 ? "" : "s"} · ${unitTotal} unit${unitTotal === 1 ? "" : "s"}`}>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => navigate("/equipment/admin/labels")} className="inline-flex items-center gap-1 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/30 hover:bg-white/25">
-            <FaPrint aria-hidden /> Print labels
-          </button>
-          {!editing ? (
-            <button type="button" onClick={() => setEditing({ ...EMPTY_ITEM })} className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-teal-800 shadow hover:bg-teal-50">
-              <FaPlus aria-hidden /> Add item
-            </button>
-          ) : null}
-        </div>
+        <button type="button" onClick={() => setEditing({ ...EMPTY_ITEM })} className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-teal-800 shadow hover:bg-teal-50">
+          <FaPlus aria-hidden /> Add item
+        </button>
       </EquipmentBanner>
       {hint ? <EquipmentNotice>{hint}</EquipmentNotice> : null}
 
       {editing ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <EquipmentItemEditor
-            key={editing.id || "new"}
-            initial={editing}
-            orgId={activeOrganizationId}
-            categories={categories}
-            onCancel={closeEditor}
-            onSaved={async (id) => {
-              const { data } = await getEquipmentItem(id);
-              if (data) setEditing(itemFormFromDetail(data));
-              void load();
-            }}
-          />
-          {editing.id ? (
-            <EquipmentUnitsPanel itemId={editing.id} orgId={activeOrganizationId} />
-          ) : (
-            <p className="rounded-2xl border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">Save the item first, then add its units.</p>
-          )}
-        </div>
+        <EditorDrawer title={editing.id ? `Edit ${editing.name || "item"}` : "Add item"} onClose={closeEditor}>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <EquipmentItemEditor
+              key={editing.id || "new"}
+              initial={editing}
+              orgId={activeOrganizationId}
+              categories={categories}
+              onCancel={closeEditor}
+              onSaved={async (id) => {
+                const { data } = await getEquipmentItem(id);
+                if (data) setEditing(itemFormFromDetail(data));
+                void load();
+              }}
+            />
+            {editing.id ? (
+              <EquipmentUnitsPanel itemId={editing.id} orgId={activeOrganizationId} onChanged={load} />
+            ) : (
+              <p className="rounded-2xl border border-dashed border-gray-300 p-4 text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">Save the item first, then add its units.</p>
+            )}
+          </div>
+        </EditorDrawer>
       ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -163,7 +160,6 @@ export default function EquipmentAdminItems() {
                     return;
                   }
                   setEditing(itemFormFromDetail(data));
-                  window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
               >
                 Edit & units
@@ -181,5 +177,35 @@ export default function EquipmentAdminItems() {
         ))}
       </div>
     </EquipmentShell>
+  );
+}
+
+/** Right-hand drawer for the item editor + units. Backdrop clicks don't close it (unsaved edits). */
+function EditorDrawer({ title, onClose, children }) {
+  useEffect(() => {
+    const onKey = (e) => {
+      // A unit sheet opened inside the drawer handles its own Escape.
+      if (e.key === "Escape" && document.querySelectorAll('[role="dialog"][aria-modal="true"]').length === 1) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-40 !mt-0 flex justify-end bg-black/40" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="flex h-full w-full max-w-5xl flex-col bg-gray-100 shadow-2xl dark:bg-gray-900">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
+          <h2 className="truncate text-base font-bold text-gray-900 dark:text-white">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
+            <FaTimes aria-hidden />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+      </div>
+    </div>
   );
 }

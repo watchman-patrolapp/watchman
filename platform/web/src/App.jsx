@@ -107,6 +107,9 @@ const EquipmentUnitPage = lazy(() => import("./pages/equipment/EquipmentUnitPage
 const EquipmentQrResolve = lazy(() => import("./pages/equipment/EquipmentQrResolve"));
 const EquipmentAdminItems = lazy(() => import("./pages/equipment/admin/EquipmentAdminItems"));
 const EquipmentAdminLabels = lazy(() => import("./pages/equipment/admin/EquipmentAdminLabels"));
+const EquipmentMine = lazy(() => import("./pages/equipment/EquipmentMine"));
+const EquipmentAdminRequests = lazy(() => import("./pages/equipment/admin/EquipmentAdminRequests"));
+const EquipmentAdminCertifications = lazy(() => import("./pages/equipment/admin/EquipmentAdminCertifications"));
 const NeedsAdmin = lazy(() => import("./pages/admin/NeedsAdmin"));
 const CityAdminDashboard = lazy(() => import("./pages/CityAdminDashboard"));
 const SosEscalationBoard = lazy(() => import("./pages/SosEscalationBoard"));
@@ -340,6 +343,16 @@ function AppRoutes() {
           }
         />
         <Route
+          path="/equipment/mine"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES} allowPlatformConsole>
+                <EquipmentMine />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
           path="/equipment/items/:id"
           element={
             <NeighborhoodRoute>
@@ -388,6 +401,30 @@ function AppRoutes() {
               <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
                 <RequireActiveOrganization>
                   <EquipmentAdminLabels />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/equipment/admin/requests"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <EquipmentAdminRequests />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/equipment/admin/certifications"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <EquipmentAdminCertifications />
                 </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>

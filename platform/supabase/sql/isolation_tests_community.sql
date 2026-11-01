@@ -1460,10 +1460,257 @@ SELECT pg_temp.expect_error('24', 'B nw_admin adds A need to inventory -> not fo
   pg_temp.id('b_admin'), format('SELECT public.create_equipment_from_wishlist(%L)',
     (SELECT id FROM public.equipment_wishlist_items WHERE title = 'Spotlight')), 'not found');
 
+-- -----------------------------------------------------------------------------
+-- P3b - equipment borrowing (20261101030000_equipment_borrowing.sql): requests,
+-- approval, collection, return, holder-approved transfers, issue reports,
+-- training sign-offs, sweep. Fresh Org A patrollers eq_p1 / eq_p2 and an Org B
+-- patroller eq_bp. Uses 'G7 radio kit' / G7-R1 from P3a above (12 h max loan).
+-- -----------------------------------------------------------------------------
+DO $eq_fx$
+DECLARE
+  sfx text := left(replace(gen_random_uuid()::text, '-', ''), 10);
+  r record;
+BEGIN
+  INSERT INTO g7_ids VALUES ('eq_p1', gen_random_uuid()), ('eq_p2', gen_random_uuid()), ('eq_bp', gen_random_uuid());
+  FOR r IN SELECT * FROM (VALUES ('eq_p1', 'patroller', 'org_a'), ('eq_p2', 'patroller', 'org_a'),
+                                 ('eq_bp', 'patroller', 'org_b')) t(k, role, org)
+  LOOP
+    INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
+    VALUES (pg_temp.id(r.k), '00000000-0000-0000-0000-000000000000', 'authenticated',
+            'authenticated', 'g7-' || r.k || '-' || sfx || '@example.invalid', now(), now());
+    EXECUTE format(
+      'INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
+       VALUES (%L, %L, %L, %L, %L, true, %L)
+       ON CONFLICT (id) DO UPDATE
+         SET role = EXCLUDED.role, organization_id = EXCLUDED.organization_id,
+             full_name = EXCLUDED.full_name, verified = true, status = EXCLUDED.status',
+      pg_temp.id(r.k), 'g7-' || r.k || '-' || sfx || '@example.invalid',
+      'G7 ' || r.k, r.role, pg_temp.id(r.org), 'active');
+    INSERT INTO public.organization_members (organization_id, user_id, member_role, status)
+    VALUES (pg_temp.id(r.org), pg_temp.id(r.k), r.role, 'active')
+    ON CONFLICT (organization_id, user_id) DO NOTHING;
+  END LOOP;
+END
+$eq_fx$;
+CREATE TEMP TABLE g7_eq (k text PRIMARY KEY, v uuid) ON COMMIT DROP;
+INSERT INTO g7_eq VALUES
+  ('radio', (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit' AND organization_id = pg_temp.id('org_a'))),
+  ('r1', (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1' AND organization_id = pg_temp.id('org_a')));
+CREATE OR REPLACE FUNCTION pg_temp.eq(p_k text) RETURNS uuid
+LANGUAGE sql STABLE AS $$ SELECT v FROM g7_eq WHERE k = p_k $$;
+
+SELECT pg_temp.check('P3b', 'control: A nw_admin creates cert-gated item G7 drone',
+  pg_temp.id('a_admin'), 'ok', 'SELECT public.upsert_equipment_item(NULL, ''G7 drone'', NULL, NULL, NULL, true)');
+INSERT INTO g7_eq VALUES ('drone', (SELECT id FROM public.equipment_items WHERE name = 'G7 drone' AND organization_id = pg_temp.id('org_a')));
+SELECT pg_temp.check('P3b', 'control: A nw_admin adds drone unit G7-D1',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.add_equipment_unit(%L, %L)', pg_temp.eq('drone'), 'G7-D1'));
+INSERT INTO g7_eq VALUES ('d1', (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-D1' AND organization_id = pg_temp.id('org_a')));
+
+-- Requests: role, org and cert gating
+SELECT pg_temp.expect_error('P3b', 'A resident (not patrol) requests -> not found',
+  pg_temp.id('a_unv'), format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('radio')), 'not found');
+SELECT pg_temp.expect_error('P3b', 'B patroller requests an Org A item -> not found',
+  pg_temp.id('eq_bp'), format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('radio')), 'not found');
+SELECT pg_temp.expect_error('P3b', 'A patroller requests cert-gated drone without sign-off -> refused',
+  pg_temp.id('eq_p1'), format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('drone')), 'sign-off required');
+SELECT pg_temp.expect_error('P3b', 'return time beyond max loan -> refused',
+  pg_temp.id('eq_p1'), format('SELECT public.request_equipment_loan(%L, NULL, now() + interval ''60 days'')', pg_temp.eq('radio')), 'maximum loan');
+SELECT pg_temp.check('P3b', 'control: A patroller p1 requests the radio kit',
+  pg_temp.id('eq_p1'), 'ok', format('SELECT public.request_equipment_loan(%L, %L, now() + interval ''6 hours'')', pg_temp.eq('radio'), 'Night shift'));
+INSERT INTO g7_eq VALUES ('loan1', (SELECT id FROM public.equipment_loans WHERE requester_id = pg_temp.id('eq_p1') AND item_id = pg_temp.eq('radio')));
+SELECT pg_temp.expect_error('P3b', 'p1 double request for the same item -> refused',
+  pg_temp.id('eq_p1'), format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('radio')), 'already have an open request');
+SELECT pg_temp.assert('P3b', 'A nw_admin got an in-app equipment notification for the request',
+  EXISTS (SELECT 1 FROM public.app_notifications WHERE user_id = pg_temp.id('a_admin') AND kind = 'equipment'
+            AND title LIKE 'Borrow request:%'),
+  'checked as postgres');
+SELECT pg_temp.assert('P3b', 'B nw_admin got no notification for the Org A request',
+  NOT EXISTS (SELECT 1 FROM public.app_notifications WHERE user_id = pg_temp.id('b_admin') AND kind = 'equipment'),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P3b', 'p1 reads equipment_loans table directly -> denied',
+  pg_temp.id('eq_p1'), 'SELECT 1 FROM public.equipment_loans', 'permission denied');
+SELECT pg_temp.expect_rows('P3b', 'p1 lists own loans (1 requested)',
+  pg_temp.id('eq_p1'), 'SELECT 1 FROM public.list_my_equipment_loans() WHERE status = ''requested''', 1);
+SELECT pg_temp.expect_rows('P3b', 'p2 sees none of p1 loans',
+  pg_temp.id('eq_p2'), 'SELECT 1 FROM public.list_my_equipment_loans()', 0);
+
+-- Approval: roles and isolation
+SELECT pg_temp.expect_error('P3b', 'A committee lists the admin queue -> forbidden',
+  pg_temp.id('a_comm'), 'SELECT * FROM public.list_equipment_requests_admin()', 'forbidden');
+SELECT pg_temp.expect_rows('P3b', 'A nw_admin queue shows the request',
+  pg_temp.id('a_admin'), format('SELECT 1 FROM public.list_equipment_requests_admin() WHERE id = %L AND status = ''requested''', pg_temp.eq('loan1')), 1);
+SELECT pg_temp.expect_rows('P3b', 'B nw_admin queue has no Org A requests',
+  pg_temp.id('b_admin'), 'SELECT 1 FROM public.list_equipment_requests_admin() WHERE item_name LIKE ''G7 %''', 0);
+SELECT pg_temp.expect_error('P3b', 'p2 (patroller) approves -> not found',
+  pg_temp.id('eq_p2'), format('SELECT public.approve_equipment_loan(%L)', pg_temp.eq('loan1')), 'not found');
+SELECT pg_temp.expect_error('P3b', 'B nw_admin approves Org A request -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.approve_equipment_loan(%L)', pg_temp.eq('loan1')), 'not found');
+SELECT pg_temp.expect_error('P3b', 'p1 cannot call the internal status writer',
+  pg_temp.id('eq_p1'), format('SELECT public.equipment_set_unit_status_ex(%L, %L, NULL, NULL, NULL)', pg_temp.eq('r1'), 'reserved'), 'permission denied');
+SELECT pg_temp.check('P3b', 'control: A nw_admin approves (assigns G7-R1)',
+  pg_temp.id('a_admin'), 'true', format('SELECT public.approve_equipment_loan(%L, %L) = %L', pg_temp.eq('loan1'), pg_temp.eq('r1'), pg_temp.eq('r1')));
+SELECT pg_temp.expect_error('P3b', 'second approve of the same request -> no longer open',
+  pg_temp.id('a_admin'), format('SELECT public.approve_equipment_loan(%L)', pg_temp.eq('loan1')), 'no longer open');
+SELECT pg_temp.assert('P3b', 'G7-R1 reserved for p1, loan approved',
+  (SELECT u.status = 'reserved' AND u.current_holder_id = pg_temp.id('eq_p1') AND l.status = 'approved'
+   FROM public.equipment_units u, public.equipment_loans l WHERE u.id = pg_temp.eq('r1') AND l.id = pg_temp.eq('loan1')),
+  'checked as postgres');
+SELECT pg_temp.assert('P3b', 'p1 told about the approval',
+  EXISTS (SELECT 1 FROM public.app_notifications WHERE user_id = pg_temp.id('eq_p1') AND title LIKE 'Approved:%'),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P3b', 'p2 requests radio while no unit is available -> refused',
+  pg_temp.id('eq_p2'), format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('radio')), 'no unit is available');
+
+-- Collection
+SELECT pg_temp.expect_error('P3b', 'p1 confirms own collection -> not found',
+  pg_temp.id('eq_p1'), format('SELECT public.confirm_equipment_collection(%L)', pg_temp.eq('loan1')), 'not found');
+SELECT pg_temp.check('P3b', 'control: A nw_admin confirms collection (due capped at 12 h)',
+  pg_temp.id('a_admin'), 'true', format('SELECT public.confirm_equipment_collection(%L, now() + interval ''3 days'') <= now() + interval ''12 hours''', pg_temp.eq('loan1')));
+SELECT pg_temp.expect_error('P3b', 'double collect -> not waiting for collection',
+  pg_temp.id('a_admin'), format('SELECT public.confirm_equipment_collection(%L)', pg_temp.eq('loan1')), 'not waiting for collection');
+SELECT pg_temp.check('P3b', 'A committee sees holder "G7 E." on the unit',
+  pg_temp.id('a_comm'), 'true', format('SELECT public.get_equipment_unit(%L)->>''holder_name'' = ''G7 E.'' AND public.get_equipment_unit(%L)->>''status'' = ''checked_out''', pg_temp.eq('r1'), pg_temp.eq('r1')));
+
+-- Transfers (holder approves)
+SELECT pg_temp.expect_error('P3b', 'p1 requests transfer of own unit -> refused',
+  pg_temp.id('eq_p1'), format('SELECT public.request_equipment_transfer(%L)', pg_temp.eq('r1')), 'already hold');
+SELECT pg_temp.expect_error('P3b', 'B patroller requests transfer of Org A unit -> not found',
+  pg_temp.id('eq_bp'), format('SELECT public.request_equipment_transfer(%L)', pg_temp.eq('r1')), 'not found');
+SELECT pg_temp.check('P3b', 'control: p2 requests transfer of G7-R1',
+  pg_temp.id('eq_p2'), 'ok', format('SELECT public.request_equipment_transfer(%L, %L)', pg_temp.eq('r1'), 'Swap at gate'));
+INSERT INTO g7_eq VALUES ('tr1', (SELECT id FROM public.equipment_transfers WHERE to_user_id = pg_temp.id('eq_p2') AND status = 'requested'));
+SELECT pg_temp.expect_error('P3b', 'p2 duplicate transfer request -> refused',
+  pg_temp.id('eq_p2'), format('SELECT public.request_equipment_transfer(%L)', pg_temp.eq('r1')), 'already asked');
+SELECT pg_temp.assert('P3b', 'holder p1 notified of the transfer request',
+  EXISTS (SELECT 1 FROM public.app_notifications WHERE user_id = pg_temp.id('eq_p1') AND title LIKE 'Transfer request:%'),
+  'checked as postgres');
+SELECT pg_temp.expect_rows('P3b', 'p1 sees 1 incoming transfer',
+  pg_temp.id('eq_p1'), 'SELECT 1 FROM public.list_my_equipment_transfers() WHERE direction = ''incoming'' AND status = ''requested''', 1);
+SELECT pg_temp.expect_error('P3b', 'requester p2 approves own transfer -> not found',
+  pg_temp.id('eq_p2'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'not found');
+SELECT pg_temp.expect_error('P3b', 'A nw_admin (not holder) approves transfer -> not found',
+  pg_temp.id('a_admin'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'not found');
+SELECT pg_temp.expect_error('P3b', 'B patroller approves transfer -> not found',
+  pg_temp.id('eq_bp'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'not found');
+SELECT pg_temp.check('P3b', 'control: holder p1 accepts the transfer',
+  pg_temp.id('eq_p1'), 'true', format('SELECT public.respond_equipment_transfer(%L, true) IS NOT NULL', pg_temp.eq('tr1')));
+SELECT pg_temp.expect_error('P3b', 'second accept -> no longer open',
+  pg_temp.id('eq_p1'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'no longer open');
+SELECT pg_temp.assert('P3b', 'G7-R1 now held by p2; p1 loan transferred, p2 loan active with same due time',
+  (SELECT u.current_holder_id = pg_temp.id('eq_p2') AND u.status = 'checked_out'
+     AND (SELECT status FROM public.equipment_loans WHERE id = pg_temp.eq('loan1')) = 'transferred'
+     AND (SELECT due_at FROM public.equipment_loans WHERE unit_id = u.id AND status = 'active')
+         = (SELECT due_at FROM public.equipment_loans WHERE id = pg_temp.eq('loan1'))
+   FROM public.equipment_units u WHERE u.id = pg_temp.eq('r1')),
+  'checked as postgres');
+SELECT pg_temp.expect_rows('P3b', 'custody history shows 2 holders (A committee view)',
+  pg_temp.id('a_comm'), format('SELECT 1 FROM public.list_equipment_unit_custody(%L)', pg_temp.eq('r1')), 2);
+SELECT pg_temp.expect_error('P3b', 'B nw_admin reads Org A custody -> not found',
+  pg_temp.id('b_admin'), format('SELECT * FROM public.list_equipment_unit_custody(%L)', pg_temp.eq('r1')), 'not found');
+
+-- Issues: only the latest holder
+SELECT pg_temp.expect_error('P3b', 'previous holder p1 reports issue -> only latest holder',
+  pg_temp.id('eq_p1'), format('SELECT public.report_equipment_issue(%L, %L, %L)', pg_temp.eq('r1'), 'damage', 'Cracked screen'), 'latest holder');
+SELECT pg_temp.expect_error('P3b', 'B patroller reports issue on Org A unit -> not found',
+  pg_temp.id('eq_bp'), format('SELECT public.report_equipment_issue(%L, %L, %L)', pg_temp.eq('r1'), 'theft', 'Gone'), 'not found');
+SELECT pg_temp.expect_error('P3b', 'unknown issue type -> refused',
+  pg_temp.id('eq_p2'), format('SELECT public.report_equipment_issue(%L, %L, %L)', pg_temp.eq('r1'), 'lost', 'Gone'), 'unknown issue type');
+SELECT pg_temp.check('P3b', 'control: latest holder p2 reports a malfunction',
+  pg_temp.id('eq_p2'), 'ok', format('SELECT public.report_equipment_issue(%L, %L, %L)', pg_temp.eq('r1'), 'malfunction', 'Will not power on'));
+SELECT pg_temp.check('P3b', 'unit greyed: damaged, issue + latest holder visible to members',
+  pg_temp.id('a_comm'), 'true', format('SELECT u->>''status'' = ''damaged'' AND u->''issue''->>''kind'' = ''malfunction'' AND u->''issue''->>''holder_name'' = ''G7 E.'' FROM (SELECT public.get_equipment_unit(%L) AS u) q', pg_temp.eq('r1')));
+SELECT pg_temp.expect_error('P3b', 'second open issue on the unit -> refused',
+  pg_temp.id('eq_p2'), format('SELECT public.report_equipment_issue(%L, %L, %L)', pg_temp.eq('r1'), 'damage', 'Also cracked'), 'cannot be reported|already open');
+SELECT pg_temp.expect_error('P3b', 'A committee clears the issue -> not found',
+  pg_temp.id('a_comm'), format('SELECT public.clear_equipment_issue(%L)',
+    (SELECT id FROM public.equipment_issue_reports WHERE unit_id = pg_temp.eq('r1') AND cleared_at IS NULL)), 'not found');
+SELECT pg_temp.expect_rows('P3b', 'B nw_admin issue list has no Org A issues',
+  pg_temp.id('b_admin'), 'SELECT 1 FROM public.list_equipment_issues_admin() WHERE asset_tag LIKE ''G7-%''', 0);
+SELECT pg_temp.check('P3b', 'control: A nw_admin clears the issue (back to available)',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.clear_equipment_issue(%L, %L, %L)',
+    (SELECT id FROM public.equipment_issue_reports WHERE unit_id = pg_temp.eq('r1') AND cleared_at IS NULL), 'available', 'Battery swapped'));
+SELECT pg_temp.assert('P3b', 'G7-R1 available with no holder and no open loan',
+  (SELECT u.status = 'available' AND u.current_holder_id IS NULL
+     AND NOT EXISTS (SELECT 1 FROM public.equipment_loans l WHERE l.unit_id = u.id AND l.status IN ('approved', 'active'))
+   FROM public.equipment_units u WHERE u.id = pg_temp.eq('r1')),
+  'checked as postgres');
+
+-- Return + overdue sweep
+SELECT pg_temp.check('P3b', 'control: p1 requests again, admin approves + collects',
+  pg_temp.id('eq_p1'), 'ok', format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('radio')));
+INSERT INTO g7_eq VALUES ('loan2', (SELECT id FROM public.equipment_loans WHERE requester_id = pg_temp.id('eq_p1') AND item_id = pg_temp.eq('radio') AND status = 'requested'));
+SELECT pg_temp.check('P3b', 'control: approve + collect loan 2',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.approve_equipment_loan(%L), public.confirm_equipment_collection(%L)', pg_temp.eq('loan2'), pg_temp.eq('loan2')));
+UPDATE public.equipment_loans SET due_at = now() - interval '1 hour' WHERE id = pg_temp.eq('loan2');
+SELECT pg_temp.check('P3b', 'sweep flags the past-due loan overdue (1)',
+  pg_temp.id('eq_p2'), 'true', 'SELECT (public.equipment_sweep()->>''overdue'')::int = 1');
+SELECT pg_temp.check('P3b', 'sweep again is idempotent (0 newly overdue)',
+  pg_temp.id('a_admin'), 'true', 'SELECT (public.equipment_sweep()->>''overdue'')::int = 0');
+SELECT pg_temp.assert('P3b', 'unit overdue, borrower notified once',
+  (SELECT status = 'overdue' FROM public.equipment_units WHERE id = pg_temp.eq('r1'))
+  AND (SELECT count(*) = 1 FROM public.app_notifications WHERE user_id = pg_temp.id('eq_p1') AND title LIKE 'Overdue:%'),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P3b', 'transfer of an overdue unit -> refused',
+  pg_temp.id('eq_p2'), format('SELECT public.request_equipment_transfer(%L)', pg_temp.eq('r1')), 'overdue');
+SELECT pg_temp.check('P3b', 'A nw_admin counts 1 overdue',
+  pg_temp.id('a_admin'), 'true', 'SELECT (public.equipment_pending_counts()->>''overdue'')::int = 1');
+SELECT pg_temp.expect_error('P3b', 'B nw_admin confirms Org A return -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.confirm_equipment_return(%L)', pg_temp.eq('loan2')), 'not found');
+SELECT pg_temp.check('P3b', 'control: A nw_admin confirms return (fair)',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.confirm_equipment_return(%L, %L, %L)', pg_temp.eq('loan2'), 'fair', 'Scuffed'));
+SELECT pg_temp.assert('P3b', 'unit available + condition fair; loan returned',
+  (SELECT u.status = 'available' AND u.condition = 'fair' AND l.status = 'returned'
+   FROM public.equipment_units u, public.equipment_loans l WHERE u.id = pg_temp.eq('r1') AND l.id = pg_temp.eq('loan2')),
+  'checked as postgres');
+
+-- Cancel + 7-day expiry
+SELECT pg_temp.check('P3b', 'control: p2 requests then cancels',
+  pg_temp.id('eq_p2'), 'ok', format('SELECT public.cancel_equipment_loan_request(public.request_equipment_loan(%L))', pg_temp.eq('radio')));
+SELECT pg_temp.check('P3b', 'control: p2 requests again (for expiry)',
+  pg_temp.id('eq_p2'), 'ok', format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('radio')));
+SELECT pg_temp.expect_error('P3b', 'p1 cancels p2 request -> not found',
+  pg_temp.id('eq_p1'), format('SELECT public.cancel_equipment_loan_request(%L)',
+    (SELECT id FROM public.equipment_loans WHERE requester_id = pg_temp.id('eq_p2') AND status = 'requested')), 'not found');
+UPDATE public.equipment_loans SET created_at = now() - interval '8 days'
+ WHERE requester_id = pg_temp.id('eq_p2') AND status = 'requested';
+SELECT pg_temp.check('P3b', 'sweep expires the 8-day-old request',
+  pg_temp.id('eq_p2'), 'true', 'SELECT (public.equipment_sweep()->>''expired_requests'')::int = 1');
+
+-- Training sign-offs
+SELECT pg_temp.expect_error('P3b', 'A committee grants a sign-off -> not found',
+  pg_temp.id('a_comm'), format('SELECT public.grant_equipment_certification(%L, %L)', pg_temp.id('eq_p1'), pg_temp.eq('drone')), 'not found');
+SELECT pg_temp.expect_error('P3b', 'B nw_admin grants sign-off on Org A item -> not found',
+  pg_temp.id('b_admin'), format('SELECT public.grant_equipment_certification(%L, %L)', pg_temp.id('eq_p1'), pg_temp.eq('drone')), 'not found');
+SELECT pg_temp.expect_error('P3b', 'A nw_admin grants Org A item to Org B patroller -> not found',
+  pg_temp.id('a_admin'), format('SELECT public.grant_equipment_certification(%L, %L)', pg_temp.id('eq_bp'), pg_temp.eq('drone')), 'not found');
+SELECT pg_temp.check('P3b', 'control: A nw_admin signs off p1 on the drone',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.grant_equipment_certification(%L, %L)', pg_temp.id('eq_p1'), pg_temp.eq('drone')));
+SELECT pg_temp.check('P3b', 'p1 with sign-off requests the drone',
+  pg_temp.id('eq_p1'), 'ok', format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('drone')));
+SELECT pg_temp.expect_rows('P3b', 'p1 reads own sign-off row',
+  pg_temp.id('eq_p1'), 'SELECT 1 FROM public.equipment_certifications WHERE revoked_at IS NULL', 1);
+SELECT pg_temp.expect_rows('P3b', 'A nw_admin lists 1 active sign-off',
+  pg_temp.id('a_admin'), 'SELECT 1 FROM public.list_equipment_certifications_admin() WHERE is_active', 1);
+SELECT pg_temp.check('P3b', 'control: A nw_admin revokes the sign-off',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.revoke_equipment_certification(%L, %L)', pg_temp.id('eq_p1'), pg_temp.eq('drone')));
+SELECT pg_temp.expect_error('P3b', 'approve after sign-off revoked -> refused',
+  pg_temp.id('a_admin'), format('SELECT public.approve_equipment_loan(%L)',
+    (SELECT id FROM public.equipment_loans WHERE item_id = pg_temp.eq('drone') AND status = 'requested')), 'no training sign-off');
+SELECT pg_temp.expect_error('P3b', 'p2 without sign-off asks for drone transfer -> refused',
+  pg_temp.id('eq_p2'), format('SELECT public.request_equipment_transfer(%L)', pg_temp.eq('d1')), 'sign-off required');
+
+-- Ledger
+SELECT pg_temp.assert('P3b', 'G7-R1 status changes are all in the ledger (>= 10 rows)',
+  (SELECT count(*) >= 10 FROM public.equipment_ledger WHERE unit_id = pg_temp.eq('r1') AND event = 'status_changed'),
+  'checked as postgres');
+SELECT pg_temp.check('P3b', 'A nw_admin: Org A hash chain still verifies after P3b',
+  pg_temp.id('a_admin'), 'true', format('SELECT public.verify_equipment_ledger(%L) IS NULL', pg_temp.id('org_a')));
+SELECT pg_temp.check('P3b', 'client UPDATE of unit status still blocked by guard',
+  pg_temp.id('a_admin'), 'error', format('UPDATE public.equipment_units SET status = ''lost'' WHERE id = %L', pg_temp.eq('r1')), 'permission denied|equipment_set_unit_status');
+
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2
---   P3b equipment check-out/return/transfer (P3a part 1 rows 16-23 above)
 --   P4 local services + community-media storage: rows 6, 7, 8, 9
 --   Row 12 (City Hub/Hotspots stay city-wide): add when P0 touches them
 -- -----------------------------------------------------------------------------

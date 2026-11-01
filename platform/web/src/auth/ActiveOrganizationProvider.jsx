@@ -14,14 +14,20 @@ export function ActiveOrganizationProvider({ children }) {
   const [organizations, setOrganizations] = useState([]);
   const [activeOrganizationId, setActiveOrganizationIdState] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadedKey, setLoadedKey] = useState(null);
 
   const isGlobalOperator = isGlobalOperatorUser(user);
+  const profileLoaded = Boolean(user?.profileLoaded);
+  const requestKey = user?.id
+    ? `${user.id}|${isGlobalOperator}|${user.organizationId || ""}|${user.activeOrganizationId || ""}`
+    : "";
 
   const refreshOrganizations = useCallback(async ({ silent = false } = {}) => {
     if (!user?.id) {
       setOrganizations([]);
       setActiveOrganizationIdState("");
       setLoading(false);
+      setLoadedKey("");
       return;
     }
 
@@ -59,13 +65,19 @@ export function ActiveOrganizationProvider({ children }) {
       }
     } finally {
       setLoading(false);
+      setLoadedKey(requestKey);
     }
-  }, [user?.id, user?.organizationId, user?.activeOrganizationId, isGlobalOperator]);
+  }, [user?.id, user?.organizationId, user?.activeOrganizationId, isGlobalOperator, requestKey]);
 
   useEffect(() => {
     if (!sessionReady) return undefined;
+    if (user?.id && !profileLoaded) return undefined;
     void refreshOrganizations();
-  }, [sessionReady, refreshOrganizations]);
+  }, [sessionReady, profileLoaded, user?.id, refreshOrganizations]);
+
+  // Stay "loading" until the orgs were resolved for the current profile, so guards never
+  // see a stale empty area for one render (that sent deep links to /choose-area).
+  const settling = Boolean(user?.id) && (!profileLoaded || loadedKey !== requestKey);
 
   const setActiveOrganizationId = useCallback(
     async (organizationId) => {
@@ -102,7 +114,7 @@ export function ActiveOrganizationProvider({ children }) {
       refreshOrganizations,
       isGlobalOperator,
       needsAreaSelection: Boolean(isGlobalOperator && !activeOrganizationId),
-      loading,
+      loading: loading || settling,
     }),
     [
       organizations,
@@ -112,6 +124,7 @@ export function ActiveOrganizationProvider({ children }) {
       refreshOrganizations,
       isGlobalOperator,
       loading,
+      settling,
     ]
   );
 
