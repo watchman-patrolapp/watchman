@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaHome, FaListUl, FaPlusCircle, FaComment, FaClipboardCheck, FaShieldAlt, FaCalendarAlt, FaBell, FaPhone, FaUserFriends } from 'react-icons/fa';
+import { FaHome, FaListUl, FaPlusCircle, FaComment, FaClipboardCheck, FaShieldAlt, FaCalendarAlt, FaBell, FaPhone, FaUserFriends, FaToolbox } from 'react-icons/fa';
 import { useAuth } from '../../auth/useAuth';
 import { canAccessAdminPanel } from '../../auth/staffRoles';
 import { canAccessPatrolSchedule, homePathForRole, isHouseholdModeRole, isResidentAppRole } from '../../auth/roleMatrix';
@@ -93,7 +93,8 @@ export default function DashboardMobileDock({
       { path: homePath, label: 'Home', icon: FaHome, onClick: () => navigate(homePath), active: pathname === homePath },
       ...(householdMode ? [householdDockItem] : []),
       ...(canUsePatrolSchedule
-        ? [{ path: '/schedule', label: 'Schedule', icon: FaCalendarAlt, onClick: () => navigate('/schedule'), active: pathname === '/schedule' }]
+        ? [{ path: '/schedule', label: 'Schedule', icon: FaCalendarAlt, onClick: () => navigate('/schedule'), active: pathname === '/schedule' },
+           { path: '/equipment', label: 'Gear', icon: FaToolbox, onClick: () => navigate('/equipment'), active: pathname.startsWith('/equipment') }]
         : []),
       chatItem,
       { path: '/incident/new', label: 'Report', icon: FaPlusCircle, onClick: () => navigate('/incident/new'), active: pathname === '/incident/new' },

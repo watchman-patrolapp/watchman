@@ -6,6 +6,7 @@ import RequireRole from "./components/RequireRole";
 import RequirePlatformRole from "./components/RequirePlatformRole";
 import RequireCapability from "./components/RequireCapability";
 import { WISHLIST_MANAGER_ROLES } from "./utils/equipmentWishlist";
+import { EQUIPMENT_MANAGER_ROLES } from "./utils/equipment";
 import RequireActiveOrganization from "./components/RequireActiveOrganization";
 import { ADMIN_PANEL_ROLES } from "./auth/staffRoles";
 import {
@@ -100,6 +101,12 @@ const AreaBroadcast = lazy(() => import("./pages/AreaBroadcast"));
 const ResidentModeration = lazy(() => import("./pages/ResidentModeration"));
 const NeedsBoard = lazy(() => import("./pages/NeedsBoard"));
 const NeedsItemPage = lazy(() => import("./pages/NeedsItemPage"));
+const EquipmentCatalogue = lazy(() => import("./pages/equipment/EquipmentCatalogue"));
+const EquipmentItemPage = lazy(() => import("./pages/equipment/EquipmentItemPage"));
+const EquipmentUnitPage = lazy(() => import("./pages/equipment/EquipmentUnitPage"));
+const EquipmentQrResolve = lazy(() => import("./pages/equipment/EquipmentQrResolve"));
+const EquipmentAdminItems = lazy(() => import("./pages/equipment/admin/EquipmentAdminItems"));
+const EquipmentAdminLabels = lazy(() => import("./pages/equipment/admin/EquipmentAdminLabels"));
 const NeedsAdmin = lazy(() => import("./pages/admin/NeedsAdmin"));
 const CityAdminDashboard = lazy(() => import("./pages/CityAdminDashboard"));
 const SosEscalationBoard = lazy(() => import("./pages/SosEscalationBoard"));
@@ -320,6 +327,70 @@ function AppRoutes() {
                 <NeedsItemPage />
               </RequireRole>
             </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/equipment"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES} allowPlatformConsole>
+                <EquipmentCatalogue />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/equipment/items/:id"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES} allowPlatformConsole>
+                <EquipmentItemPage />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/equipment/units/:id"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES} allowPlatformConsole>
+                <EquipmentUnitPage />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/equipment/u/:qrToken"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES} allowPlatformConsole>
+                <EquipmentQrResolve />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/equipment/admin/items"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <EquipmentAdminItems />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/equipment/admin/labels"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <EquipmentAdminLabels />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
           }
         />
 

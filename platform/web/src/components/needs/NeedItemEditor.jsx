@@ -34,7 +34,7 @@ function photosFromPaths(paths) {
   return (paths || []).map((p) => ({ key: p, path: p, state: "saved", pct: 100 }));
 }
 
-function PhotoTile({ photo, index, count, disabled, onMove, onRemove, onDragStart, onDrop }) {
+export function PhotoTile({ photo, index, count, disabled, onMove, onRemove, onDragStart, onDrop }) {
   const src = photo.preview || wishlistPhotoUrl(photo.path);
   return (
     <li
