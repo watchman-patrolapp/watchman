@@ -5,8 +5,10 @@ import { normalizeAppRole } from "../auth/staffRoles";
 import { canAccessPlatformConsole } from "../auth/platformRoles";
 import { PATROL_MEMBER_ROLES } from "../auth/roleMatrix";
 import { equipmentErrorMessage as baseErrorMessage } from "./equipmentMeta";
+import { equipmentLoanErrorText } from "./equipmentLoanMeta";
 
 export * from "./equipmentMeta";
+export * from "./equipmentLoanMeta";
 
 /**
  * P3a equipment catalogue RPC wrappers. Each returns { data, error }.
@@ -34,6 +36,10 @@ export function equipmentPhotoUrl(path) {
 }
 
 export function equipmentErrorMessage(error, fallback) {
+  if (!isRpcNotFoundError(error)) {
+    const loanText = equipmentLoanErrorText(error);
+    if (loanText) return loanText;
+  }
   return baseErrorMessage(error, isRpcNotFoundError(error), fallback);
 }
 
@@ -171,4 +177,61 @@ export async function listEquipmentWishlistLinks() {
   const { data, error } = await supabase.rpc("list_equipment_wishlist_links");
   if (error) return { data: new Map(), error: isRpcNotFoundError(error) ? null : error };
   return { data: new Map((data || []).map((r) => [r.wishlist_item_id, r.item_id])), error: null };
+}
+
+// ---------------------------------------------------------------------------
+// P3b borrowing. All writes go through SECURITY DEFINER RPCs; the server re-checks
+// role, neighbourhood, training sign-off and unit status on every call.
+// ---------------------------------------------------------------------------
+
+async function rpc(name, args, empty = null) {
+  const { data, error } = await supabase.rpc(name, args);
+  return { data: error ? empty : data ?? empty, error };
+}
+
+const isoOrNull = (v) => (v ? new Date(v).toISOString() : null);
+
+export const requestEquipmentLoan = (itemId, { note = "", desiredDueAt = null } = {}) =>
+  rpc("request_equipment_loan", { p_item_id: itemId, p_note: note || null, p_desired_due_at: isoOrNull(desiredDueAt) });
+export const cancelEquipmentLoanRequest = (loanId) => rpc("cancel_equipment_loan_request", { p_loan_id: loanId });
+export const approveEquipmentLoan = (loanId, { unitId = null, note = "" } = {}) =>
+  rpc("approve_equipment_loan", { p_loan_id: loanId, p_unit_id: unitId || null, p_note: note || null });
+export const rejectEquipmentLoan = (loanId, note = "") => rpc("reject_equipment_loan", { p_loan_id: loanId, p_note: note || null });
+export const confirmEquipmentCollection = (loanId, dueAt = null) =>
+  rpc("confirm_equipment_collection", { p_loan_id: loanId, p_due_at: isoOrNull(dueAt) });
+export const confirmEquipmentReturn = (loanId, { condition = null, note = "" } = {}) =>
+  rpc("confirm_equipment_return", { p_loan_id: loanId, p_condition: condition || null, p_note: note || null });
+export const extendEquipmentLoan = (loanId, dueAt) => rpc("extend_equipment_loan", { p_loan_id: loanId, p_due_at: isoOrNull(dueAt) });
+export const setEquipmentUnitStatusAdmin = (unitId, status, note = "") =>
+  rpc("set_equipment_unit_status_admin", { p_unit_id: unitId, p_status: status, p_note: note || null });
+
+export const requestEquipmentTransfer = (unitId, note = "") => rpc("request_equipment_transfer", { p_unit_id: unitId, p_note: note || null });
+export const respondEquipmentTransfer = (transferId, accept, note = "") =>
+  rpc("respond_equipment_transfer", { p_transfer_id: transferId, p_accept: Boolean(accept), p_note: note || null });
+export const cancelEquipmentTransfer = (transferId) => rpc("cancel_equipment_transfer", { p_transfer_id: transferId });
+
+export const reportEquipmentIssue = (unitId, kind, note) => rpc("report_equipment_issue", { p_unit_id: unitId, p_kind: kind, p_note: note });
+export const clearEquipmentIssue = (issueId, outcome = "available", note = "") =>
+  rpc("clear_equipment_issue", { p_issue_id: issueId, p_outcome: outcome, p_note: note || null });
+
+export const grantEquipmentCertification = (userId, itemId, { expiresAt = null, note = "" } = {}) =>
+  rpc("grant_equipment_certification", { p_user_id: userId, p_item_id: itemId, p_expires_at: isoOrNull(expiresAt), p_note: note || null });
+export const revokeEquipmentCertification = (userId, itemId, note = "") =>
+  rpc("revoke_equipment_certification", { p_user_id: userId, p_item_id: itemId, p_note: note || null });
+export const listEquipmentCertificationsAdmin = () => rpc("list_equipment_certifications_admin", {}, []);
+export const listEquipmentPatrollers = () => rpc("list_equipment_patrollers", {}, []);
+
+/** Expire stale requests/transfers and flag overdue loans for the active neighbourhood. Safe to call on page load. */
+export const runEquipmentSweep = () => rpc("equipment_sweep", {});
+export const listMyEquipmentLoans = () => rpc("list_my_equipment_loans", {}, []);
+export const listMyEquipmentTransfers = () => rpc("list_my_equipment_transfers", {}, []);
+export const listEquipmentRequestsAdmin = () => rpc("list_equipment_requests_admin", {}, []);
+export const listEquipmentIssuesAdmin = () => rpc("list_equipment_issues_admin", {}, []);
+export const listEquipmentUnitCustody = (unitId) => rpc("list_equipment_unit_custody", { p_unit_id: unitId }, []);
+
+/** Badge counts; null data (no error) on databases without P3b, so badges just stay hidden. */
+export async function getEquipmentPendingCounts() {
+  const { data, error } = await supabase.rpc("equipment_pending_counts");
+  if (error) return { data: null, error: isRpcNotFoundError(error) ? null : error };
+  return { data: data || null, error: null };
 }

@@ -5,12 +5,12 @@ import { supabase } from "../supabase/client";
  * Keeps a page in sync without a refresh (web + Capacitor):
  * - light poll every intervalMs while the tab/app is visible (paused when hidden),
  * - immediate refetch on tab visible, window focus, back online and Capacitor app resume,
- * - fast path: a new 'wishlist' in-app notification for this user (app_notifications is in
- *   the supabase_realtime publication; the Needs tables are not, and offers RLS would hide
- *   other residents' rows anyway).
+ * - fast path: a new in-app notification of `kind` for this user (app_notifications is in
+ *   the supabase_realtime publication; the Needs and equipment tables are not, and their
+ *   RLS would hide other people's rows anyway).
  * All triggers are debounced into one call. Everything is torn down on unmount.
  */
-export function useLiveRefresh(refresh, { enabled = true, intervalMs = 12000, userId = null, debounceMs = 600 } = {}) {
+export function useLiveRefresh(refresh, { enabled = true, intervalMs = 12000, userId = null, debounceMs = 600, kind = "wishlist" } = {}) {
   const fnRef = useRef(refresh);
   const channelKey = useId();
 
@@ -55,12 +55,12 @@ export function useLiveRefresh(refresh, { enabled = true, intervalMs = 12000, us
 
     if (userId) {
       channel = supabase
-        .channel(`needs-live-${userId}-${channelKey}`)
+        .channel(`${kind}-live-${userId}-${channelKey}`)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "app_notifications", filter: `user_id=eq.${userId}` },
           (payload) => {
-            if (payload?.new?.kind === "wishlist") trigger();
+            if (payload?.new?.kind === kind) trigger();
           }
         )
         .subscribe();
@@ -91,5 +91,5 @@ export function useLiveRefresh(refresh, { enabled = true, intervalMs = 12000, us
       if (channel) supabase.removeChannel(channel);
       resumeHandle?.remove?.();
     };
-  }, [enabled, intervalMs, userId, debounceMs, channelKey]);
+  }, [enabled, intervalMs, userId, debounceMs, channelKey, kind]);
 }

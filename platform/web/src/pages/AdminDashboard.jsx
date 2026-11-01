@@ -37,7 +37,8 @@ import { fetchAllQueryPages } from '../utils/fetchPagedRows';
 import AreaContextBar from '../components/layout/AreaContextBar';
 import AdminToolsMenu from '../components/admin/AdminToolsMenu';
 import { canManageWishlist } from '../utils/equipmentWishlist';
-import { canManageEquipment as canManageEquipmentRole } from '../utils/equipment';
+import { canManageEquipment as canManageEquipmentRole, equipmentAdminBadgeCount } from '../utils/equipment';
+import { useEquipmentPendingCounts } from '../hooks/useEquipmentPendingCounts';
 import { useNewWishlistOffersCount } from '../hooks/useNewWishlistOffersCount';
 import { countPendingPatrollerRequests } from '../utils/residentVerification';
 
@@ -168,6 +169,7 @@ export default function AdminDashboard() {
   const canSendAreaNotice = canPostAreaBroadcast(user?.role, user?.platformRole);
   const canManageNeeds = canManageWishlist(user?.role, user?.platformRole);
   const canManageEquipment = canManageEquipmentRole(user?.role, user?.platformRole);
+  const equipmentPendingCount = equipmentAdminBadgeCount(useEquipmentPendingCounts(canManageEquipment, activeOrganizationId));
   const { count: newOffersCount } = useNewWishlistOffersCount(canManageNeeds, user?.id, activeOrganizationId);
   const canOpenAuditLog = isGlobalAppUser || normalizeAppRole(user?.role) === "nw_admin";
 
@@ -621,11 +623,16 @@ export default function AdminDashboard() {
             {canManageEquipment ? (
               <button
                 type="button"
-                onClick={() => navigate("/equipment/admin/items")}
+                onClick={() => navigate(equipmentPendingCount ? "/equipment/admin/requests" : "/equipment/admin/items")}
                 className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-2.5 py-2 text-xs font-medium text-white shadow-sm transition hover:from-teal-700 hover:to-emerald-700 sm:px-3 sm:text-sm"
               >
                 <FaToolbox className="h-4 w-4" aria-hidden="true" />
                 Equipment
+                {equipmentPendingCount ? (
+                  <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white" aria-label={`${equipmentPendingCount} waiting`}>
+                    {equipmentPendingCount > 99 ? "99+" : equipmentPendingCount}
+                  </span>
+                ) : null}
               </button>
             ) : null}
           </div>
@@ -681,6 +688,7 @@ export default function AdminDashboard() {
           canSendAreaNotice={canSendAreaNotice}
           canManageNeeds={canManageNeeds}
           canManageEquipment={canManageEquipment}
+          equipmentPendingCount={equipmentPendingCount}
           newOffersCount={newOffersCount}
           canOpenAuditLog={canOpenAuditLog}
           onNavigate={(to) => navigate(to)}

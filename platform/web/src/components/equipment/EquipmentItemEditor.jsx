@@ -229,7 +229,7 @@ export default function EquipmentItemEditor({ initial, orgId, categories, onCanc
       </label>
       <div className="flex flex-wrap gap-4">
         <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
-          <input type="checkbox" checked={form.requiresCertification} onChange={set("requiresCertification")} /> Training recommended
+          <input type="checkbox" checked={form.requiresCertification} onChange={set("requiresCertification")} /> Training sign-off required to borrow
         </label>
         <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
           <input type="checkbox" checked={form.isArchived} onChange={set("isArchived")} /> Archived (hidden from members)

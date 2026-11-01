@@ -90,6 +90,7 @@ export default function AdminToolsMenu({
   canSendAreaNotice = false,
   canManageNeeds = false,
   canManageEquipment = false,
+  equipmentPendingCount = 0,
   newOffersCount = 0,
   canOpenAuditLog = false,
   onNavigate,
@@ -127,10 +128,11 @@ export default function AdminToolsMenu({
       {
         id: "equipment",
         label: "Equipment",
-        to: "/equipment/admin/items",
+        to: equipmentPendingCount ? "/equipment/admin/requests" : "/equipment/admin/items",
         icon: FaToolbox,
         tone: "bg-teal-700",
         show: canManageEquipment,
+        badge: equipmentPendingCount,
       },
       {
         id: "contacts",
@@ -281,6 +283,7 @@ export default function AdminToolsMenu({
     canSendAreaNotice,
     canManageNeeds,
     canManageEquipment,
+    equipmentPendingCount,
     canOpenAuditLog,
     canEditEmergencyContacts,
     isFeedbackReviewer,

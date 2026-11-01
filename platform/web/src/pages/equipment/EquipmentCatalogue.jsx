@@ -3,10 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { homeBackNav } from "../../auth/roleMatrix";
 import { useScopedOrganization } from "../../utils/organizationScope";
+import { useEquipmentPendingCounts } from "../../hooks/useEquipmentPendingCounts";
 import { NeedsEmpty } from "../../components/needs/NeedCard";
 import EquipmentCard from "../../components/equipment/EquipmentCard";
 import {
   canManageEquipment,
+  equipmentAdminBadgeCount,
+  equipmentMyBadgeCount,
+  runEquipmentSweep,
   equipmentCategoryChips,
   equipmentErrorMessage,
   filterEquipmentCatalogue,
@@ -26,9 +30,13 @@ export default function EquipmentCatalogue() {
   const [hint, setHint] = useState("");
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
+  const counts = useEquipmentPendingCounts(Boolean(user?.id), activeOrganizationId);
+  const myBadge = equipmentMyBadgeCount(counts);
+  const adminBadge = equipmentAdminBadgeCount(counts);
 
   const load = useCallback(async () => {
     setLoading(true);
+    await runEquipmentSweep(); // flags overdue loans / expires stale requests; ignored on older DBs
     const { data, error } = await listEquipmentCatalogue();
     setLoading(false);
     if (error) {
@@ -75,11 +83,31 @@ export default function EquipmentCatalogue() {
           aria-label="Search gear"
           className={SEARCH_INPUT}
         />
-        {isManager ? (
-          <button type="button" onClick={() => navigate("/equipment/admin/items")} className="self-start text-xs font-medium text-teal-700 hover:underline dark:text-teal-400 sm:self-auto">
-            Manage equipment
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => navigate("/equipment/mine")}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-50 dark:border-teal-800 dark:bg-gray-800 dark:text-teal-200 dark:hover:bg-teal-900/30"
+          >
+            My gear
+            <CountDot value={myBadge} />
           </button>
-        ) : null}
+          {isManager ? (
+            <button
+              type="button"
+              onClick={() => navigate("/equipment/admin/requests")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              Loan desk
+              <CountDot value={adminBadge} />
+            </button>
+          ) : null}
+          {isManager ? (
+            <button type="button" onClick={() => navigate("/equipment/admin/items")} className="text-xs font-medium text-teal-700 hover:underline dark:text-teal-400">
+              Manage equipment
+            </button>
+          ) : null}
+        </div>
       </div>
       {chips.length > 1 ? (
         <FilterPills options={[{ id: "all", label: "All" }, ...chips.map((c) => ({ id: c.id, label: c.name }))]} value={category} onChange={setCategory} />
@@ -99,5 +127,14 @@ export default function EquipmentCatalogue() {
         ))}
       </div>
     </EquipmentShell>
+  );
+}
+
+function CountDot({ value }) {
+  if (!value) return null;
+  return (
+    <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white" aria-label={`${value} waiting`}>
+      {value > 99 ? "99+" : value}
+    </span>
   );
 }
