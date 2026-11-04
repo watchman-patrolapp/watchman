@@ -2,13 +2,13 @@ import { useEffect, useRef } from "react";
 import { Navigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../auth/useAuth";
-import { hasHydratedAppRole } from "../auth/appRole";
 import { normalizeAppRole } from "../auth/staffRoles";
 import { canAccessPlatformConsole } from "../auth/platformRoles";
 import { homePathForRole } from "../auth/roleMatrix";
 import { hasCapability } from "../auth/capabilities";
 import { useOrgCapabilities } from "../hooks/useOrgCapabilities";
 import PageSkeleton from "./layout/PageSkeleton";
+import ProfileHydrationGate from "./ProfileHydrationGate";
 
 function normalizeAllowedRoles(allowedRoles) {
   return allowedRoles.map((r) => String(r).trim().toLowerCase());
@@ -24,21 +24,25 @@ export default function RequireCapability({
   anyCapabilities = [],
   allowPlatformConsole = false,
 }) {
-  const { user, loading, sessionReady } = useAuth();
+  return (
+    <ProfileHydrationGate allowPlatformBypass={allowPlatformConsole} pendingMessage="Checking access.">
+      <CapabilityBody
+        allowedRoles={allowedRoles}
+        anyCapabilities={anyCapabilities}
+        allowPlatformConsole={allowPlatformConsole}
+      >
+        {children}
+      </CapabilityBody>
+    </ProfileHydrationGate>
+  );
+}
+
+function CapabilityBody({ children, allowedRoles, anyCapabilities, allowPlatformConsole }) {
+  const { user } = useAuth();
   const { capabilities, loading: capsLoading } = useOrgCapabilities();
   const toastFiredRef = useRef(false);
 
-  if (!sessionReady || loading) {
-    return <PageSkeleton message="Checking access." />;
-  }
-
-  if (!user) return <Navigate to="/login" replace />;
-
   const platformOk = allowPlatformConsole && canAccessPlatformConsole(user.platformRole);
-  if (!hasHydratedAppRole(user.role) && !platformOk) {
-    return <PageSkeleton message="Checking access." />;
-  }
-
   const userNorm = normalizeAppRole(user.role);
   const roleOk = Boolean(userNorm && normalizeAllowedRoles(allowedRoles).includes(userNorm));
   if (roleOk || platformOk) return <>{children}</>;

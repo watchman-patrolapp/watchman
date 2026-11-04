@@ -1,30 +1,28 @@
 import { useAuth } from "../auth/useAuth";
-import { hasHydratedAppRole } from "../auth/appRole";
 import { normalizeAppRole } from "../auth/staffRoles";
 import { canAccessPlatformConsole } from "../auth/platformRoles";
 import { Navigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useEffect, useRef } from "react";
-import PageSkeleton from "./layout/PageSkeleton";
+import ProfileHydrationGate from "./ProfileHydrationGate";
 
 function normalizeAllowedRoles(allowedRoles) {
   return allowedRoles.map((r) => String(r).trim().toLowerCase());
 }
 
 export default function RequireRole({ children, allowedRoles = [], allowPlatformConsole = false }) {
-  const { user, loading, sessionReady } = useAuth();
+  return (
+    <ProfileHydrationGate allowPlatformBypass={allowPlatformConsole} pendingMessage="Checking access…">
+      <RoleBody allowedRoles={allowedRoles} allowPlatformConsole={allowPlatformConsole}>
+        {children}
+      </RoleBody>
+    </ProfileHydrationGate>
+  );
+}
+
+function RoleBody({ children, allowedRoles, allowPlatformConsole }) {
+  const { user } = useAuth();
   const toastFiredRef = useRef(false);
-
-  if (!sessionReady || loading) {
-    return <PageSkeleton message="Checking access…" />;
-  }
-
-  if (!user) return <Navigate to="/login" replace />;
-
-  // Wait until public.users role is loaded — not Supabase JWT `role` ("authenticated").
-  if (user && !hasHydratedAppRole(user.role) && !(allowPlatformConsole && canAccessPlatformConsole(user.platformRole))) {
-    return <PageSkeleton message="Checking access…" />;
-  }
 
   const userNorm = normalizeAppRole(user.role);
   const allowedNorm = normalizeAllowedRoles(allowedRoles);
