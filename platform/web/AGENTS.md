@@ -69,7 +69,7 @@ Create a `.env.production` file in **`platform/web/`** with the following variab
 # Supabase Configuration
 VITE_SUPABASE_URL=https://pfjcxewlsqmfajrogvdo.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
-VITE_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+# never put service-role keys in VITE_* vars
 
 # Application Configuration
 VITE_APP_NAME=Neighbourhood Watch
