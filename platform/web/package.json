@@ -7,11 +7,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "predev": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs",
+    "predev": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs && node scripts/check-asset-budget.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs",
+    "prebuild": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs && node scripts/check-asset-budget.mjs",
     "build": "vite build",
-    "prebuild:mobile": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs",
+    "prebuild:mobile": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs && node scripts/check-asset-budget.mjs",
     "build:mobile": "vite build --mode capacitor",
     "android:clean-web-assets": "node -e \"const fs=require('fs');['dist','../android/app/src/main/assets/public'].forEach((d)=>{try{fs.rmSync(d,{recursive:true,force:true})}catch{}})\"",
     "android:icons": "node scripts/prepare-capacitor-assets.mjs && npx @capacitor/assets generate --android --iconBackgroundColor \"#0f766e\" --iconBackgroundColorDark \"#083344\" --splashBackgroundColor \"#0f766e\" --splashBackgroundColorDark \"#083344\"",

@@ -3,6 +3,34 @@ import { devLog, devWarn } from './devLog';
 
 let audioUnlocked = false;
 
+/**
+ * MP3 everywhere. Android WebView and iOS Safari both play it, so there is no WAV fallback.
+ * Clip choices match the previous WAV mapping; only the container changed.
+ */
+const SOUND_SRC = {
+  chat: '/sounds/notification.mp3',
+  messageSent: '/sounds/message-sent.mp3',
+  messageFailed: '/sounds/notification.mp3',
+  patrolStart: '/sounds/patrol-start.mp3',
+  patrolEnd: '/sounds/patrol-end.mp3',
+  patrolWarning: '/sounds/patrol-warning.mp3',
+  patrolAutoEnd: '/sounds/patrol-autoend.mp3',
+  incidentNew: '/sounds/incident-new.mp3',
+  patrolSigninNotification: '/sounds/patrolsigninNotification.mp3',
+  voiceNote: '/sounds/voice-note.mp3',
+};
+
+/**
+ * Startup preload is only the hot path plus the SOS clip.
+ * Chat notification and message-sent are played constantly.
+ * playPanicSiren() uses patrol-warning and must already be buffered: the call
+ * often runs after an awaited geolocation, so play() stays synchronous for the
+ * iOS Safari / Android WebView autoplay unlock. Its element is separate from
+ * the lazy patrol-warning cue so stop() does not cut that sound off.
+ * The long panic-siren / emergency-alarm files load on first play (see useSound).
+ */
+const PRELOAD_KEYS = ['chat', 'messageSent'];
+
 const sounds = {
   chat: null,
   messageSent: null,
@@ -16,30 +44,51 @@ const sounds = {
   voiceNote: null,
 };
 
+/** Dedicated, preloaded element for playPanicSiren() (same clip: patrol-warning). */
+let panicAudio = null;
+
+function createAudio(src, preload) {
+  const audio = new Audio(src);
+  audio.volume = 0.5;
+  audio.preload = preload ? 'auto' : 'none';
+  if (preload) audio.load();
+  return audio;
+}
+
+function safeRewind(audio) {
+  if (!audio || audio.readyState < 1) return;
+  try {
+    audio.currentTime = 0;
+  } catch {
+    // Not seekable until metadata arrives. play() still starts at the beginning.
+  }
+}
+
+/** Create on first play. play() is still called in the same turn (no canplay wait). */
+function getSound(key) {
+  if (!sounds[key]) {
+    sounds[key] = createAudio(SOUND_SRC[key], true);
+  }
+  return sounds[key];
+}
+
 function preloadSounds() {
-  sounds.chat = new Audio('/sounds/notification.wav');
-  sounds.messageSent = new Audio('/sounds/message-sent.wav');
-  sounds.messageFailed = new Audio('/sounds/notification.wav');
-  sounds.patrolStart = new Audio('/sounds/patrol-start.wav');
-  sounds.patrolEnd = new Audio('/sounds/patrol-end.wav');
-  sounds.patrolWarning = new Audio('/sounds/patrol-warning.wav');
-  sounds.patrolAutoEnd = new Audio('/sounds/patrol-autoend.wav');
-  sounds.incidentNew = new Audio('/sounds/incident-new.wav');
-  sounds.patrolSigninNotification = new Audio('/sounds/patrolsigninNotification.wav');
-  sounds.voiceNote = new Audio('/sounds/voice-note.wav');
-
-  Object.values(sounds).forEach((audio) => {
-    if (audio) {
-      audio.volume = 0.5;
-      audio.preload = 'auto'; // better than just load()
-      audio.load();
-    }
+  PRELOAD_KEYS.forEach((key) => {
+    sounds[key] = createAudio(SOUND_SRC[key], true);
   });
-
-  devLog('Sounds preloaded');
+  panicAudio = createAudio(SOUND_SRC.patrolWarning, true);
+  panicAudio.volume = 0.8;
+  devLog('Sounds preloaded:', [...PRELOAD_KEYS, 'panic'].join(', '));
 }
 
 preloadSounds();
+
+function markUnlocked() {
+  if (!audioUnlocked) {
+    audioUnlocked = true;
+    devLog('Audio context unlocked via user interaction');
+  }
+}
 
 function playSound(audio, name) {
   if (!audio) {
@@ -47,60 +96,66 @@ function playSound(audio, name) {
     return;
   }
 
-  // Reset to start in case it was partially played before
-  audio.currentTime = 0;
+  safeRewind(audio);
 
-  audio.play()
-    .then(() => {
-      if (!audioUnlocked) {
-        audioUnlocked = true;
-        devLog('Audio context unlocked via user interaction');
-      }
-    })
-    .catch((err) => {
-      devWarn(`${name} sound playback failed:`, err.message);
-    });
+  const pending = audio.play();
+  if (pending && typeof pending.then === 'function') {
+    pending
+      .then(() => {
+        markUnlocked();
+      })
+      .catch((err) => {
+        devWarn(`${name} sound playback failed:`, err.message);
+      });
+  }
+}
+
+function playKeyed(key, name) {
+  const audio = getSound(key);
+  audio.loop = false;
+  audio.volume = 0.5;
+  playSound(audio, name);
 }
 
 // ─── Normal sounds ──────────────────────────────────────────────
 export function playVoiceNote() {
-  playSound(sounds.voiceNote, 'Voice note');
+  playKeyed('voiceNote', 'Voice note');
 }
 
 export function playMessageFailed() {
-  playSound(sounds.messageFailed, 'Message failed');
+  playKeyed('messageFailed', 'Message failed');
 }
 
 export function playMessageSent() {
-  playSound(sounds.messageSent, 'Message sent');
+  playKeyed('messageSent', 'Message sent');
 }
 
 export function playChatNotification() {
-  playSound(sounds.chat, 'Chat notification');
+  playKeyed('chat', 'Chat notification');
 }
 
 export function playPatrolStart() {
-  playSound(sounds.patrolStart, 'Patrol start (self)');
+  playKeyed('patrolStart', 'Patrol start (self)');
 }
 
 export function playPatrolEnd() {
-  playSound(sounds.patrolEnd, 'Patrol end');
+  playKeyed('patrolEnd', 'Patrol end');
 }
 
 export function playPatrolWarning() {
-  playSound(sounds.patrolWarning, 'Patrol warning');
+  playKeyed('patrolWarning', 'Patrol warning');
 }
 
 export function playPatrolAutoEnd() {
-  playSound(sounds.patrolAutoEnd, 'Patrol auto-end');
+  playKeyed('patrolAutoEnd', 'Patrol auto-end');
 }
 
 export function playIncidentNew() {
-  playSound(sounds.incidentNew, 'Incident new');
+  playKeyed('incidentNew', 'Incident new');
 }
 
 export function playPatrolSigninNotification() {
-  playSound(sounds.patrolSigninNotification, 'Patrol sign-in notification (others)');
+  playKeyed('patrolSigninNotification', 'Patrol sign-in notification (others)');
 }
 
 // ─── Test / debug ───────────────────────────────────────────────
@@ -114,32 +169,51 @@ export function playTestSound() {
 
 // ─── Emergency sounds (non-looping or controllable) ─────────────
 export function playEmergencyAlarm() {
-  const audio = new Audio('/sounds/notification.wav');
+  // Separate element so looping does not take over the chat notification.
+  const audio = new Audio(SOUND_SRC.chat);
   audio.loop = true;
   audio.volume = 0.7;
-  audio.play().catch((err) => devWarn('Emergency alarm error:', err));
+  const pending = audio.play();
+  if (pending && typeof pending.catch === 'function') {
+    pending.catch((err) => devWarn('Emergency alarm error:', err));
+  }
   return {
     stop: () => {
       audio.pause();
-      audio.currentTime = 0;
+      safeRewind(audio);
     },
   };
 }
 
 export function playAlertChime() {
-  const audio = new Audio('/sounds/notification.wav');
+  const audio = new Audio(SOUND_SRC.chat);
   audio.volume = 0.6;
-  audio.play().catch((err) => devWarn('Alert chime error:', err));
+  const pending = audio.play();
+  if (pending && typeof pending.catch === 'function') {
+    pending.catch((err) => devWarn('Alert chime error:', err));
+  }
 }
 
 export function playPanicSiren() {
-  const audio = new Audio('/sounds/patrol-warning.wav');
+  // Preloaded patrol-warning element (same clip as before). play() is synchronous
+  // so a user gesture is not dropped while the file fetches.
+  const audio = panicAudio || createAudio(SOUND_SRC.patrolWarning, true);
+  if (!panicAudio) panicAudio = audio;
+  audio.loop = false;
   audio.volume = 0.8;
-  audio.play().catch((err) => devWarn('Panic siren error:', err));
+  safeRewind(audio);
+  const pending = audio.play();
+  if (pending && typeof pending.then === 'function') {
+    pending
+      .then(() => {
+        markUnlocked();
+      })
+      .catch((err) => devWarn('Panic siren error:', err));
+  }
   return {
     stop: () => {
       audio.pause();
-      audio.currentTime = 0;
+      safeRewind(audio);
     },
   };
 }
