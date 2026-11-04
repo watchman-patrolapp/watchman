@@ -1,9 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getServiceRoleKey, requireCronSecret } from '../_shared/auth.ts';
 
 interface CleanupResult {
   success: boolean;
@@ -14,48 +10,43 @@ interface CleanupResult {
 }
 
 Deno.serve(async (req): Promise<Response> => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
-  const cronSecret = Deno.env.get('CRON_SECRET');
-  if (cronSecret && cronSecret.length > 0) {
-    const h = req.headers.get('x-cron-secret');
-    if (h !== cronSecret) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-  }
+  const denied = requireCronSecret(req);
+  if (denied) return denied;
 
   const result: CleanupResult = {
     success: true,
     softDeleted: 0,
     archived: 0,
     hardDeleted: 0,
-    errors: []
+    errors: [],
   };
 
   try {
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseServiceKey = getServiceRoleKey();
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing required environment variables');
+      console.error('location-cleanup: missing SUPABASE_URL or service role key');
+      return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
+      auth: { autoRefreshToken: false, persistSession: false },
     });
 
     const now = new Date();
 
-    // ============================================================================
     // STEP 1: SOFT DELETE - Patrols ended > 7 days ago
-    // ============================================================================
     try {
       const sevenDaysAgo = new Date(now);
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -69,7 +60,7 @@ Deno.serve(async (req): Promise<Response> => {
       if (patrolError) throw patrolError;
 
       if (oldPatrols && oldPatrols.length > 0) {
-        const patrolIds = oldPatrols.map(p => p.id);
+        const patrolIds = oldPatrols.map((p) => p.id);
 
         const { error: softDeleteError } = await supabase
           .from('patrol_locations')
@@ -80,16 +71,15 @@ Deno.serve(async (req): Promise<Response> => {
         if (softDeleteError) throw softDeleteError;
 
         result.softDeleted = oldPatrols.length;
-        console.log(`✅ Soft deleted locations for ${oldPatrols.length} patrols`);
+        console.log(`Soft deleted locations for ${oldPatrols.length} patrols`);
       }
     } catch (err) {
-      result.errors.push(`Soft delete failed: ${err.message}`);
-      console.error('❌ Soft delete error:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      result.errors.push('Soft delete failed');
+      console.error('Soft delete error:', message);
     }
 
-    // ============================================================================
     // STEP 2: ARCHIVE - Locations > 90 days old
-    // ============================================================================
     try {
       const ninetyDaysAgo = new Date(now);
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -107,43 +97,44 @@ Deno.serve(async (req): Promise<Response> => {
       if (oldLocations && oldLocations.length > 0) {
         const { error: archiveInsertError } = await supabase
           .from('patrol_locations_archive')
-          .insert(oldLocations.map(loc => ({
-            ...loc,
-            original_id: loc.id,
-            archived_at: now.toISOString()
-          })));
+          .insert(
+            oldLocations.map((loc) => ({
+              ...loc,
+              original_id: loc.id,
+              archived_at: now.toISOString(),
+            })),
+          );
 
         if (archiveInsertError) {
-          if (archiveInsertError.message.includes('does not exist')) {
-            console.warn('⚠️ Archive table does not exist');
+          if (String(archiveInsertError.message || '').includes('does not exist')) {
+            console.warn('Archive table does not exist');
             result.errors.push('Archive table missing');
           } else {
             throw archiveInsertError;
           }
         } else {
-          const locationIds = oldLocations.map(l => l.id);
+          const locationIds = oldLocations.map((l) => l.id);
           const { error: archiveUpdateError } = await supabase
             .from('patrol_locations')
-            .update({ 
+            .update({
               is_archived: true,
-              archived_at: now.toISOString()
+              archived_at: now.toISOString(),
             })
             .in('id', locationIds);
 
           if (archiveUpdateError) throw archiveUpdateError;
 
           result.archived = oldLocations.length;
-          console.log(`✅ Archived ${oldLocations.length} locations`);
+          console.log(`Archived ${oldLocations.length} locations`);
         }
       }
     } catch (err) {
-      result.errors.push(`Archive failed: ${err.message}`);
-      console.error('❌ Archive error:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      result.errors.push('Archive failed');
+      console.error('Archive error:', message);
     }
 
-    // ============================================================================
     // STEP 3: ARCHIVE patrol_routes
-    // ============================================================================
     try {
       const ninetyDaysAgo = new Date(now);
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -152,22 +143,21 @@ Deno.serve(async (req): Promise<Response> => {
         .from('patrol_routes')
         .update({
           is_archived: true,
-          archived_at: now.toISOString()
+          archived_at: now.toISOString(),
         })
         .lt('created_at', ninetyDaysAgo.toISOString())
         .eq('is_archived', false);
 
       if (routesError) throw routesError;
-      
-      console.log('✅ Archived old patrol_routes');
+
+      console.log('Archived old patrol_routes');
     } catch (err) {
-      result.errors.push(`Routes archive failed: ${err.message}`);
-      console.error('❌ Routes archive error:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      result.errors.push('Routes archive failed');
+      console.error('Routes archive error:', message);
     }
 
-    // ============================================================================
     // STEP 4: HARD DELETE - Archived > 2 years (GDPR)
-    // ============================================================================
     try {
       const twoYearsAgo = new Date(now);
       twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
@@ -182,42 +172,26 @@ Deno.serve(async (req): Promise<Response> => {
 
       result.hardDeleted = deletedData?.length || 0;
       if (result.hardDeleted > 0) {
-        console.log(`✅ Hard deleted ${result.hardDeleted} old records`);
+        console.log(`Hard deleted ${result.hardDeleted} old records`);
       }
     } catch (err) {
-      result.errors.push(`Hard delete failed: ${err.message}`);
-      console.error('❌ Hard delete error:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      result.errors.push('Hard delete failed');
+      console.error('Hard delete error:', message);
     }
 
     if (result.errors.length > 0) {
       result.success = false;
     }
 
-    return new Response(
-      JSON.stringify(result),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
-    );
-
+    return new Response(JSON.stringify(result), {
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (error) {
-    console.error('💥 Fatal error:', error);
-    
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }),
-      { 
-        status: 500, 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
-    );
+    console.error('Fatal location-cleanup error:', error);
+    return new Response(JSON.stringify({ success: false, error: 'Internal error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 });

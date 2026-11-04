@@ -1,4 +1,4 @@
-﻿name: Daily Location Cleanup
+name: Daily Location Cleanup
 
 on:
   schedule:
@@ -18,27 +18,39 @@ jobs:
       - name: Trigger Location Cleanup Edge Function
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "SUPABASE_URL and CRON_SECRET secrets are required"
+            exit 1
+          fi
+
           echo "=== Triggering Edge Function ==="
           echo "URL: ${SUPABASE_URL}/functions/v1/location-cleanup"
-          
+
+          HEADERS=(-H "Content-Type: application/json" -H "x-cron-secret: ${CRON_SECRET}")
+          # Gateway often expects an apikey header; use the anon key only (never the service role).
+          if [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+            HEADERS+=(-H "apikey: ${SUPABASE_ANON_KEY}" -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          fi
+
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${SUPABASE_URL}/functions/v1/location-cleanup" \
-            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Content-Type: application/json" \
+            "${HEADERS[@]}" \
             -d '{"trigger": "scheduled-cleanup"}')
-          
+
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
-          
+
           echo "Response: $BODY"
           echo "HTTP Status: $HTTP_CODE"
-          
+
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            echo "✅ Cleanup triggered successfully"
+            echo "Cleanup triggered successfully"
             exit 0
           else
-            echo "❌ Failed with status $HTTP_CODE"
+            echo "Failed with status $HTTP_CODE"
             exit 1
           fi

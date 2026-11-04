@@ -1,11 +1,18 @@
-# Run from repo root: .\scripts\test-location-cleanup.ps1
-# Full test:  $env:CRON_SECRET = 'paste-from-Supabase-Secrets'; .\scripts\test-location-cleanup.ps1
+# Run from repo root: .\platform\scripts\test-location-cleanup.ps1
+# Requires CRON_SECRET (same value as Supabase Edge Function secret).
+# Example:
+#   $env:CRON_SECRET = 'paste-from-Supabase-Secrets'
+#   .\platform\scripts\test-location-cleanup.ps1
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $envFile = Join-Path $root "web\.env"
 if (-not (Test-Path $envFile)) {
-  Write-Error "web\.env not found. Set root or create web\.env with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY."
+  Write-Error "web\.env not found. Create platform\web\.env with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY."
+}
+
+if ([string]::IsNullOrWhiteSpace($env:CRON_SECRET)) {
+  Write-Error "CRON_SECRET env var is required. Set `$env:CRON_SECRET to the Supabase secret before calling this script."
 }
 
 $base = $null
@@ -18,13 +25,13 @@ if (-not $base -or -not $key) { Write-Error "Missing VITE_SUPABASE_URL or VITE_S
 
 $uri = "$base/functions/v1/location-cleanup"
 $headers = @{
-  Authorization  = "Bearer $key"
-  "Content-Type" = "application/json"
+  Authorization   = "Bearer $key"
+  apikey          = $key
+  "Content-Type"  = "application/json"
+  "x-cron-secret" = $env:CRON_SECRET
 }
-if ($env:CRON_SECRET) { $headers["x-cron-secret"] = $env:CRON_SECRET }
 
-Write-Host "POST $uri"
-if (-not $env:CRON_SECRET) { Write-Host "No CRON_SECRET env set; expect 401 if Supabase has CRON_SECRET.`n" }
+Write-Host "POST $uri (x-cron-secret header set; anon key used only as gateway apikey)"
 
 try {
   $r = Invoke-WebRequest -Uri $uri -Method POST -Headers $headers -UseBasicParsing -TimeoutSec 60

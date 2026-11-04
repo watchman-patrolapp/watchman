@@ -385,6 +385,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 [functions.auto-end-patrols]
 enabled = true
+# Cron/scheduler only. Auth is x-cron-secret (CRON_SECRET); gateway JWT verify stays off.
 verify_jwt = false
 import_map = "./functions/auto-end-patrols/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
@@ -396,6 +397,12 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/notify-chat-message/deno.json"
 entrypoint = "./functions/notify-chat-message/index.ts"
+
+[functions.notify-incident-status]
+enabled = true
+# Database webhook auth via x-incident-status-secret (INCIDENT_STATUS_WEBHOOK_SECRET).
+verify_jwt = false
+entrypoint = "./functions/notify-incident-status/index.ts"
 
 [functions.notify-resident-event]
 enabled = true
@@ -425,7 +432,7 @@ entrypoint = "./functions/delete-my-account/index.ts"
 
 [functions.location-cleanup]
 enabled = true
-# Call from Supabase scheduled invocations or cron; set CRON_SECRET and header x-cron-secret to lock down.
+# Cron/scheduler only. Auth is x-cron-secret (CRON_SECRET); fails closed if unset.
 verify_jwt = false
 import_map = "./functions/location-cleanup/deno.json"
 entrypoint = "./functions/location-cleanup/index.ts"

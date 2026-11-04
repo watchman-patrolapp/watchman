@@ -10,22 +10,12 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT, importPKCS8 } from "https://esm.sh/jose@5.2.3";
+import { getServiceRoleKey } from "../_shared/auth.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-function decodeJwtSub(token: string) {
-  try {
-    const payload = token.split(".")[1];
-    if (!payload) return "";
-    const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
-    return String(json.sub || "");
-  } catch {
-    return "";
-  }
-}
 
 async function fcmAccessToken(clientEmail: string, privateKeyRaw: string) {
   const pem = privateKeyRaw.replace(/\\n/g, "\n").trim();
@@ -100,8 +90,8 @@ async function sendPush(
 }
 
 // G6: drop recipients who muted this kind (or are in quiet hours). Mandatory
-// kinds always pass server-side. Fails open (sends to everyone) if the
-// notification_prefs SQL isn't applied yet or the rpc errors.
+// kinds always pass server-side. Fail closed (throw) if the RPC errors so
+// webhooks can retry instead of ignoring mute/quiet hours.
 // deno-lint-ignore no-explicit-any
 async function filterByNotifyPrefs(supabase: any, userIds: string[], kind: string): Promise<string[]> {
   if (!userIds.length) return userIds;
@@ -111,8 +101,8 @@ async function filterByNotifyPrefs(supabase: any, userIds: string[], kind: strin
     p_channel: "push",
   });
   if (error) {
-    console.warn("filter_notify_recipients unavailable - sending to all:", error.message);
-    return userIds;
+    console.error("filter_notify_recipients failed:", error.message);
+    throw new Error("filter_notify_recipients_failed");
   }
   const allowed = new Set(
     // deno-lint-ignore no-explicit-any
@@ -133,15 +123,8 @@ Deno.serve(async (req) => {
   }
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const callerId = decodeJwtSub(authHeader.replace(/^Bearer\s+/i, "").trim());
-  if (!callerId) {
+  const token = authHeader?.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -149,14 +132,27 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY");
+  const serviceRole = getServiceRoleKey();
   if (!serviceRole) {
+    console.error("notify-resident-event: missing service role key");
     return new Response(JSON.stringify({ error: "Server misconfigured" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
   const supabase = createClient(supabaseUrl, serviceRole);
+
+  const {
+    data: { user: jwtUser },
+    error: jwtError,
+  } = await supabase.auth.getUser(token);
+  if (jwtError || !jwtUser) {
+    return new Response(JSON.stringify({ error: "Invalid session" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const callerId = jwtUser.id;
 
   let body: Record<string, unknown>;
   try {
@@ -361,7 +357,19 @@ Deno.serve(async (req) => {
     });
   }
 
-  recipientIds = await filterByNotifyPrefs(supabase, recipientIds, type === "wishlist_offer" ? "wishlist" : type);
+  try {
+    recipientIds = await filterByNotifyPrefs(
+      supabase,
+      recipientIds,
+      type === "wishlist_offer" ? "wishlist" : type,
+    );
+  } catch (err) {
+    console.error("notify-resident-event prefs filter failed:", err);
+    return new Response(JSON.stringify({ error: "prefs_filter_failed" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
   if (!recipientIds.length) {
     return new Response(JSON.stringify({ ok: true, sent: 0, reason: "muted" }), {
       status: 200,
