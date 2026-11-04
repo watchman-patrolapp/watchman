@@ -28,8 +28,15 @@ import ShareToCityHubSheet from "../components/incident/ShareToCityHubSheet";
 // Constants
 // ---------------------------------------------------------------------------
 
-const POLLING_INTERVAL = 30000; // 30s fallback polling
+const POLL_BASE_MS = 30000;
+const POLL_MAX_MS = 120000;
 const CACHE_STALE_TIME = 1000; // 1s before refetch
+
+/** Fallback poll delay while realtime is not SUBSCRIBED: 30s, 60s, 120s, … */
+export function moderationPollDelayMs(attempt) {
+  const step = Math.max(0, Number(attempt) || 0);
+  return Math.min(POLL_MAX_MS, POLL_BASE_MS * 2 ** step);
+}
 
 async function createResidentStatusEvents({
   incidentId,
@@ -317,6 +324,31 @@ export default function IncidentModeration() {
   // ---------------------------------------------------------------------------
   
   useEffect(() => {
+    let cancelled = false;
+    let pollTimer = 0;
+    let attempt = 0;
+    let subscribed = false;
+
+    const clearPoll = () => {
+      if (pollTimer) {
+        window.clearTimeout(pollTimer);
+        pollTimer = 0;
+      }
+    };
+
+    const schedulePoll = () => {
+      clearPoll();
+      if (cancelled || subscribed) return;
+      const delay = moderationPollDelayMs(attempt);
+      pollTimer = window.setTimeout(() => {
+        pollTimer = 0;
+        if (cancelled || subscribed) return;
+        attempt += 1;
+        void fetchPendingIncidents({ silent: true, force: true });
+        schedulePoll();
+      }, delay);
+    };
+
     // Initial fetch
     fetchPendingIncidents();
     
@@ -378,21 +410,30 @@ export default function IncidentModeration() {
         }
       )
       .subscribe((status) => {
+        if (cancelled) return;
         console.log('Realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          subscribed = true;
+          attempt = 0;
+          clearPoll();
+          return;
+        }
+        subscribed = false;
+        if (!pollTimer) schedulePoll();
       });
 
-    // Fallback polling (every 30s) for when realtime fails
-    const pollInterval = setInterval(() => {
-      fetchPendingIncidents({ silent: true, force: true });
-    }, POLLING_INTERVAL);
+    // Arm the fallback immediately. The timer is cleared as soon as realtime is SUBSCRIBED.
+    schedulePoll();
 
     return () => {
+      cancelled = true;
+      clearPoll();
       if (realtimeChannel.current) {
         supabase.removeChannel(realtimeChannel.current);
+        realtimeChannel.current = null;
       }
-      clearInterval(pollInterval);
     };
-  }, [fetchPendingIncidents]);
+  }, [fetchPendingIncidents, activeOrganizationId, includeUnscoped]);
 
   // ---------------------------------------------------------------------------
   // Actions with optimistic UI + verification

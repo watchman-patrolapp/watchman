@@ -5,9 +5,11 @@ import { sanitizeInput } from '../utils/security';
 import {
   applyWorkingOrganizationScope,
   getWorkingOrganizationId,
+  getWorkingOrganizationIncludeUnscoped,
   messageBelongsToWorkingOrganization,
 } from '../../utils/organizationScope';
 import { messageMatchesChannel } from '../utils/chatChannels';
+import { subscribeChatMessages } from '../realtime/chatRealtimeClient';
 
 /** Duplicate read row (PK message_id, user_id) — not a failure. */
 function isChatReadDuplicateError(error) {
@@ -99,9 +101,7 @@ async function insertChatMessage(row) {
 
 class MessageService {
   constructor() {
-    this.channel = null;
     this.reactionChannel = null;
-    this.subscribers = new Map();
     this.reactionSubscribers = new Map();
   }
 
@@ -119,31 +119,19 @@ class MessageService {
   }
 
   subscribe(callback) {
-    const id = crypto.randomUUID();
-    this.subscribers.set(id, callback);
-
-    if (!this.channel) {
-      this.channel = supabase
-        .channel('emergency-chat')
-        .on('postgres_changes', 
-          { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-          (payload) => {
-            if (!messageBelongsToWorkingOrganization(payload.new)) return;
-            this.subscribers.forEach(cb => {
-              try { cb(payload.new); } catch (e) { console.error(e); }
-            });
-          }
-        )
-        .subscribe();
-    }
-
-    return () => {
-      this.subscribers.delete(id);
-      if (this.subscribers.size === 0) {
-        supabase.removeChannel(this.channel);
-        this.channel = null;
+    return subscribeChatMessages((message) => {
+      if (!messageBelongsToWorkingOrganization(message)) return;
+      try {
+        callback(message);
+      } catch (e) {
+        console.error(e);
       }
-    };
+    }, {
+      getScope: () => ({
+        organizationId: getWorkingOrganizationId(),
+        includeUnscoped: getWorkingOrganizationIncludeUnscoped(),
+      }),
+    });
   }
 
   subscribeReactions(callback) {

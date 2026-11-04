@@ -6,13 +6,15 @@ import { adaptivePollIntervalMs } from '../../utils/dataSaverProfile';
 import {
   applyWorkingOrganizationScope,
   getWorkingOrganizationId,
+  getWorkingOrganizationIncludeUnscoped,
   messageBelongsToWorkingOrganization,
 } from '../../utils/organizationScope';
 import { isFreshChatMessage } from '../../utils/chatNotificationGuard';
-
-const POLL_FIELDS = 'id, sender_id, sender_name, text, created_at, organization_id, visibility, is_critical';
+import { subscribeChatMessages } from '../realtime/chatRealtimeClient';
 import { useAuth } from '../../auth/useAuth';
 import { canAccessPatrolOpsChat, shouldAlertForChatMessage } from '../utils/chatChannels';
+
+const POLL_FIELDS = 'id, sender_id, sender_name, text, created_at, organization_id, visibility, is_critical';
 
 /**
  * Dashboard (and similar) listener for new chat_messages.
@@ -80,20 +82,17 @@ export const useChatNotifications = (userId, onNewMessage) => {
     };
     void seedBaseline();
 
-    const subscription = supabase
-      .channel('dashboard-chat-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-        },
-        (payload) => {
-          applyRemoteMessage(payload.new);
-        }
-      )
-      .subscribe();
+    const unsubscribe = subscribeChatMessages(
+      (message) => {
+        applyRemoteMessage(message);
+      },
+      {
+        getScope: () => ({
+          organizationId: getWorkingOrganizationId(),
+          includeUnscoped: getWorkingOrganizationIncludeUnscoped(),
+        }),
+      }
+    );
 
     const pollTick = async () => {
       if (!seeded) {
@@ -132,7 +131,7 @@ export const useChatNotifications = (userId, onNewMessage) => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onVisibility);
       if (pollInterval) clearInterval(pollInterval);
-      supabase.removeChannel(subscription);
+      unsubscribe();
     };
   }, [userId, onNewMessage, playThrottled, isOps]);
 };

@@ -1,5 +1,5 @@
 // src/chat/hooks/useSound.js
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 // Sound file paths - adjust to your actual files
 const SOUNDS = {
@@ -13,6 +13,12 @@ const SOUNDS = {
 
 export const useSound = () => {
   const audioRefs = useRef({});
+  const fadeTimersRef = useRef(new Set());
+
+  useEffect(() => () => {
+    for (const id of fadeTimersRef.current) window.clearInterval(id);
+    fadeTimersRef.current.clear();
+  }, []);
 
   const play = useCallback((soundName, options = {}) => {
     const { loop = false, volume = 1 } = options;
@@ -43,14 +49,16 @@ export const useSound = () => {
         },
         fadeOut: (duration = 1000) => {
           const step = audio.volume / (duration / 100);
-          const fade = setInterval(() => {
+          const fade = window.setInterval(() => {
             if (audio.volume > step) {
               audio.volume -= step;
             } else {
               audio.pause();
-              clearInterval(fade);
+              window.clearInterval(fade);
+              fadeTimersRef.current.delete(fade);
             }
           }, 100);
+          fadeTimersRef.current.add(fade);
         },
       };
     } catch (e) {
@@ -60,6 +68,8 @@ export const useSound = () => {
   }, []);
 
   const stopAll = useCallback(() => {
+    for (const id of fadeTimersRef.current) window.clearInterval(id);
+    fadeTimersRef.current.clear();
     Object.values(audioRefs.current).forEach(audio => {
       audio.pause();
       audio.currentTime = 0;
