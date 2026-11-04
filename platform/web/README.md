@@ -1,16 +1,27 @@
-# React + Vite
+# Neighbourhood Watch — Web app (`platform/web`)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Vite + React SPA deployed on **Vercel** with **Root Directory** = `platform/web`.
 
-Currently, two official plugins are available:
+## Node.js
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Local:** use Node **20 LTS** (`nvm use` reads `.nvmrc`, currently `20.18.3`).
+- **CI / Vercel:** `package.json` `engines.node` is `>=20` (matches Vercel’s Node 20 runtime).
 
-## React Compiler
+## Install and build
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm ci
+npm run build
+```
 
-## Expanding the ESLint configuration
+`npm run build` runs the `prebuild` hook (`check-sound-assets`, `generate-firebase-messaging-sw`) before `vite build`. Vercel uses the same path via `vercel.json` (`installCommand`: `npm ci`, `buildCommand`: `npm run build`).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+On Vercel, set all `VITE_FIREBASE_*` variables listed in `.env.example` so the build generates `dist/firebase-messaging-sw.js` for web push.
+
+**Production on Vercel** intentionally skips `vite-plugin-pwa` (no Workbox precache / generated manifest there). The app is **online-first**; FCM uses `/firebase-messaging-sw.js` only. Non-Vercel production builds (e.g. `npm run build && npm run preview`) still enable the PWA plugin locally.
+
+## Deploy
+
+Prefer git push + Vercel Git integration. Optional CLI helpers: `./deploy.sh` / `deploy.bat` (run from this directory after `vercel link`).
+
+See also `AGENTS.md` in this folder for deployment checklists and env var names.

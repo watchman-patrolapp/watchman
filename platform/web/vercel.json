@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm install && npx vite build",
-  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci",
   "framework": "vite",
   "outputDirectory": "dist",
   "headers": [
@@ -13,11 +13,14 @@
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     },
     {
-      "source": "/((?!assets/).*)",
+      "source": "/((?!assets/|sounds/|icons/|\\.well-known/|sw\\.js|firebase-messaging-sw\\.js|.*\\..*).*)",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     }
   ],
   "rewrites": [
-    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!assets/|sounds/|icons/|\\.well-known/|sw\\.js|firebase-messaging-sw\\.js|.*\\..*).*)",
+      "destination": "/index.html"
+    }
   ]
 }

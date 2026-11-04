@@ -24,7 +24,13 @@ function vitePwaRegisterScriptPresent() {
   return !!document.querySelector('[id="vite-plugin-pwa:register-sw"]');
 }
 
-/** Vercel builds omit vite-plugin-pwa; Workbox otherwise owns `/` and FCM must be merged via injectManifest. */
+function serviceWorkerScriptUrl(registration) {
+  if (!registration) return '';
+  const worker = registration.active || registration.waiting || registration.installing;
+  return worker?.scriptURL || '';
+}
+
+/** Vercel builds omit vite-plugin-pwa; register dedicated FCM worker after legacy /sw.js migration. */
 async function registerFcmServiceWorkerWhenNeeded() {
   if (import.meta.env.DEV) return;
   if (typeof navigator === 'undefined' || !navigator.serviceWorker) return;
@@ -32,13 +38,27 @@ async function registerFcmServiceWorkerWhenNeeded() {
   if (vitePwaRegisterScriptPresent()) return;
 
   try {
-    const existing = await navigator.serviceWorker.getRegistration('/');
-    const activeUrl = existing?.active?.scriptURL || '';
-    if (activeUrl.includes('sw.js') && !activeUrl.includes('firebase-messaging-sw')) return;
-    if (activeUrl.includes('firebase-messaging-sw')) return;
-    await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-  } catch (e) {
-    console.warn('[FCM SW] register failed', e);
+    let existing = await navigator.serviceWorker.getRegistration('/');
+    const scriptUrl = serviceWorkerScriptUrl(existing);
+    const isLegacyRootSw =
+      scriptUrl.endsWith('/sw.js') && !scriptUrl.includes('firebase-messaging-sw');
+
+    if (isLegacyRootSw) {
+      try {
+        await existing.unregister();
+      } catch {
+        return;
+      }
+      existing = undefined;
+    } else if (scriptUrl.includes('firebase-messaging-sw')) {
+      return;
+    }
+
+    if (!existing) {
+      await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    }
+  } catch {
+    /* FCM registration is best-effort; chat still works without push */
   }
 }
 

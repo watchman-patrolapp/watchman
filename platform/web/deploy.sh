@@ -64,7 +64,7 @@ check_prerequisites() {
 install_dependencies() {
     log "Installing dependencies..."
     cd "$PROJECT_DIR"
-    npm install
+    npm ci
     success "Dependencies installed"
 }
 
@@ -119,7 +119,7 @@ deploy_to_vercel() {
             vercel --dev
             ;;
         preview)
-            vercel --preivew
+            vercel --preview
             ;;
         prod)
             vercel --prod
