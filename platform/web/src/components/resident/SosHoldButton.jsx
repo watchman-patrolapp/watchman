@@ -9,12 +9,14 @@ export default function SosHoldButton({
   onTrigger,
   busy = false,
   disabled = false,
+  confirming = false,
 }) {
   const [holding, setHolding] = useState(false);
   const [progress, setProgress] = useState(0);
   const startRef = useRef(0);
   const frameRef = useRef(0);
   const firedRef = useRef(false);
+  const tickRef = useRef(() => {});
 
   const stopHold = useCallback((fired) => {
     cancelAnimationFrame(frameRef.current);
@@ -23,24 +25,34 @@ export default function SosHoldButton({
     startRef.current = 0;
   }, []);
 
-  const tick = useCallback(() => {
-    const elapsed = Date.now() - startRef.current;
-    const next = Math.min(100, (elapsed / HOLD_MS) * 100);
-    setProgress(next);
-    if (elapsed >= HOLD_MS) {
-      if (!firedRef.current) {
-        firedRef.current = true;
-        stopHold(true);
-        void onTrigger?.();
+  useEffect(() => {
+    tickRef.current = () => {
+      const elapsed = Date.now() - startRef.current;
+      const next = Math.min(100, (elapsed / HOLD_MS) * 100);
+      setProgress(next);
+      if (elapsed >= HOLD_MS) {
+        if (!firedRef.current) {
+          firedRef.current = true;
+          stopHold(true);
+          void onTrigger?.();
+        }
+        return;
       }
-      return;
-    }
-    frameRef.current = requestAnimationFrame(tick);
+      frameRef.current = requestAnimationFrame(() => {
+        tickRef.current();
+      });
+    };
   }, [onTrigger, stopHold]);
 
   const beginHold = useCallback(
     (event) => {
-      if (disabled || busy || firedRef.current) return;
+      if (disabled || busy) return;
+      if (confirming) {
+        event?.preventDefault?.();
+        void onTrigger?.();
+        return;
+      }
+      if (firedRef.current) return;
       if (event?.pointerType === "mouse" && event.button !== 0) return;
       event?.preventDefault?.();
       try {
@@ -52,9 +64,11 @@ export default function SosHoldButton({
       startRef.current = Date.now();
       setHolding(true);
       setProgress(0);
-      frameRef.current = requestAnimationFrame(tick);
+      frameRef.current = requestAnimationFrame(() => {
+        tickRef.current();
+      });
     },
-    [busy, disabled, tick]
+    [busy, confirming, disabled, onTrigger]
   );
 
   const cancelHold = useCallback(() => {
@@ -71,6 +85,15 @@ export default function SosHoldButton({
     }
   }, [busy]);
 
+  useEffect(() => {
+    if (!confirming) return undefined;
+    firedRef.current = false;
+    cancelAnimationFrame(frameRef.current);
+    setHolding(false);
+    setProgress(0);
+    return undefined;
+  }, [confirming]);
+
   const handleKeyDown = (event) => {
     if (event.repeat) return;
     if (event.key === " " || event.key === "Enter") {
@@ -86,12 +109,14 @@ export default function SosHoldButton({
     }
   };
 
-  const label = busy ? "SENDING" : holding ? "HOLD…" : "SOS";
+  const label = busy ? "SENDING" : confirming ? "SEND" : holding ? "HOLD…" : "SOS";
   const hint = busy
     ? "Sending your location to patrol…"
-    : holding
-      ? "Keep holding…"
-      : "Press and hold 2s to alert patrol";
+    : confirming
+      ? "Press again to send now"
+      : holding
+        ? "Keep holding…"
+        : "Press and hold 2 seconds to alert patrol";
 
   return (
     <div className="flex flex-col items-center">
@@ -109,9 +134,9 @@ export default function SosHoldButton({
           onContextMenu={(event) => event.preventDefault()}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
-          aria-label="Hold two seconds to send SOS"
+          aria-label={confirming ? "Send SOS now" : "Hold two seconds to send SOS"}
           aria-describedby="resident-sos-hint"
-          className="relative z-[2] flex h-[7.25rem] w-[7.25rem] select-none touch-none flex-col items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_0_0_6px_rgba(239,68,68,0.18),0_14px_34px_-10px_rgba(185,28,28,0.55)] transition-transform active:scale-95 disabled:opacity-60"
+          className="relative z-[2] flex h-[7.25rem] w-[7.25rem] select-none touch-none flex-col items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_0_0_6px_rgba(239,68,68,0.18),0_14px_34px_-10px_rgba(185,28,28,0.55)] motion-safe:transition-transform motion-safe:active:scale-95 disabled:opacity-60"
           style={{
             boxShadow: holding
               ? `0 0 0 6px rgba(239,68,68,0.22), 0 14px 34px -10px rgba(185,28,28,0.55), inset 0 0 0 3px rgba(255,255,255,${0.15 + progress / 400})`
@@ -137,6 +162,7 @@ export default function SosHoldButton({
       </div>
       <p
         id="resident-sos-hint"
+        aria-live="polite"
         className="mt-3 max-w-xs text-center text-xs text-gray-500 dark:text-gray-400"
       >
         {hint}

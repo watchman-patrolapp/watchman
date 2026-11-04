@@ -7,7 +7,16 @@ import {
 } from "./organizationScope";
 import { MessageType } from "../chat/utils/constants";
 import { sanitizeInput } from "../chat/utils/security";
+import { enqueueChatQueueItem } from "../chat/utils/chatQueueStorage";
 import { isRpcNotFoundError } from "./isRpcNotFound";
+import {
+  buildPendingSosQueueItem,
+  buildSosChatQueueItem,
+  buildSosChatText,
+  canUseOfflineSosQueue,
+  newSosLocalId,
+  shapeBroadcastResult,
+} from "./sosDelivery";
 import { fetchUserLabelMap } from "./profileUserLabels";
 import { parsePatrolTime } from "./watchTime";
 
@@ -73,12 +82,16 @@ export async function triggerResidentSos({
   organizationId,
   notes,
   triggerType = "hold",
+  coords: coordsOverride = null,
 } = {}) {
   if (!user?.id) {
     throw new Error("You must be signed in to send an SOS.");
   }
 
-  const coords = await readCurrentPosition();
+  const coords =
+    coordsOverride && Number.isFinite(coordsOverride.latitude) && Number.isFinite(coordsOverride.longitude)
+      ? coordsOverride
+      : await readCurrentPosition();
   const card = await loadHouseholdCard(user);
   const homeAddress = householdAddressFrom(user, { home_address: card.homeAddress });
   const description = String(notes || "").trim() || "Resident triggered SOS.";
@@ -130,7 +143,7 @@ export async function triggerResidentSos({
     throw sosErr;
   }
 
-  await broadcastSosToPatrolChat({
+  const chat = await deliverSosChat({
     user,
     coords,
     description,
@@ -139,7 +152,43 @@ export async function triggerResidentSos({
     card,
   });
 
-  return { incidentId: incident.id, coords, card };
+  return { incidentId: incident.id, coords, card, chat, homeAddress, description, orgId };
+}
+
+/**
+ * Offline: the chat queue can hold a full SOS and replay it on reconnect.
+ * Returns { ok: false } when storage cannot take the item — caller shows the phone fallback.
+ */
+export async function queueResidentSosForLater({
+  user,
+  organizationId,
+  notes,
+  triggerType = "hold",
+} = {}) {
+  if (!canUseOfflineSosQueue()) {
+    return { ok: false, error: "This device cannot queue an SOS." };
+  }
+  if (!user?.id) {
+    return { ok: false, error: "You must be signed in to send an SOS." };
+  }
+  if (!organizationId) {
+    return { ok: false, error: "Select or join a neighbourhood before sending an SOS." };
+  }
+  const coords = await readCurrentPosition();
+  const localId = newSosLocalId();
+  const item = buildPendingSosQueueItem({
+    localId,
+    user,
+    organizationId,
+    notes,
+    triggerType,
+    coords,
+  });
+  const queued = enqueueChatQueueItem(item);
+  if (!queued.ok) {
+    return { ok: false, localId, error: queued.error || "Could not queue the SOS." };
+  }
+  return { ok: true, localId };
 }
 
 export async function listSecurityPartnerSosAlerts() {
@@ -355,29 +404,43 @@ export async function deleteSosBoardAlert(alertId) {
   if (error) throw error;
 }
 
-async function broadcastSosToPatrolChat({ user, coords, description, orgId, homeAddress, card }) {
-  const senderName = sanitizeInput(card?.fullName || user.fullName || user.email || "Resident");
-  const addressLine = homeAddress ? `Home: ${homeAddress}.` : "";
-  const phoneLine = card?.phone ? `Phone: ${card.phone}.` : "";
-  const text = sanitizeInput(
-    `SOS — ${senderName} needs help now. ${addressLine} ${phoneLine} ${description}`.replace(/\s+/g, " ").trim()
-  );
+function isMissingClientMessageId(error) {
+  const blob = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
+  return blob.includes("client_message_id");
+}
+
+async function broadcastSosToPatrolChat({ user, coords, description, orgId, homeAddress, card, localId }) {
+  const senderName = card?.fullName || user.fullName || user.email || "Resident";
+  const text = buildSosChatText({
+    senderName,
+    homeAddress,
+    phone: card?.phone,
+    description,
+  });
+  const safeName = sanitizeInput(senderName);
+  const safeText = sanitizeInput(text);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const base = {
     sender_id: user.id,
-    sender_name: senderName,
+    sender_name: safeName,
     sender_avatar: card?.avatarUrl || user.avatarUrl || null,
-    text,
+    text: safeText,
     is_critical: true,
     visibility: "patrol",
     expires_at: expiresAt,
     organization_id: orgId,
+    ...(localId ? { client_message_id: String(localId) } : {}),
   };
 
   const insertSosChat = async (row) => {
-    let { error } = await supabase.from("chat_messages").insert(row);
+    let attempt = { ...row };
+    let { error } = await supabase.from("chat_messages").insert(attempt);
+    if (error && attempt.client_message_id && isMissingClientMessageId(error)) {
+      delete attempt.client_message_id;
+      ({ error } = await supabase.from("chat_messages").insert(attempt));
+    }
     if (error && /visibility|schema cache|42703/i.test(`${error.code || ""} ${error.message || ""}`)) {
-      const fallback = { ...row };
+      const fallback = { ...attempt };
       delete fallback.visibility;
       ({ error } = await supabase.from("chat_messages").insert(fallback));
     }
@@ -393,16 +456,41 @@ async function broadcastSosToPatrolChat({ user, coords, description, orgId, home
         location_lng: coords.longitude,
         location_address: homeAddress || "Current GPS location",
       });
-      if (!error) return;
+      if (!error) return { ...shapeBroadcastResult(null), localId, text };
     }
     const textErr = await insertSosChat({
       ...base,
       type: MessageType.TEXT,
     });
-    if (textErr) {
-      console.warn("SOS chat broadcast failed:", textErr.message);
+    const result = { ...shapeBroadcastResult(textErr), localId, text };
+    if (!result.ok) {
+      console.warn("SOS chat broadcast failed:", result.error);
     }
+    return result;
   } catch (err) {
-    console.warn("SOS chat broadcast failed:", err);
+    const result = { ...shapeBroadcastResult(err), localId, text };
+    console.warn("SOS chat broadcast failed:", result.error);
+    return result;
   }
+}
+
+async function deliverSosChat(args) {
+  const localId = args.localId || newSosLocalId();
+  const chat = await broadcastSosToPatrolChat({ ...args, localId });
+  if (chat.ok) return chat;
+  const item = buildSosChatQueueItem({
+    localId,
+    user: args.user,
+    card: args.card,
+    text: chat.text,
+    coords: args.coords,
+    homeAddress: args.homeAddress,
+  });
+  const queued = enqueueChatQueueItem(item);
+  return { ...chat, queued: queued.ok === true, localId };
+}
+
+/** Retry only the patrol chat row. Does not create another SOS alert. */
+export async function retrySosChatNow(args) {
+  return deliverSosChat(args);
 }

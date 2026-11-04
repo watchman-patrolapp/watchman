@@ -1,34 +1,35 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { APP_CONFIG } from '../utils/constants';
-import { flushChatQueueItem } from '../services/chatQueueFlush';
+import { useState, useEffect, useCallback } from 'react';
 import { queueMediaPut, queueMediaDelete } from '../utils/queueMediaDB';
-
-const STORAGE_KEY = 'chat_message_queue';
+import { installChatQueueRunner, setChatQueueOnline } from '../utils/chatQueueRunner';
+import {
+  CHAT_QUEUE_CHANGED_EVENT,
+  enqueueChatQueueItem,
+  readChatQueue,
+  removeChatQueueItem,
+  writeChatQueue,
+} from '../utils/chatQueueStorage';
 
 function stripForStorage(msg) {
-  const { file, blob, ...rest } = msg;
+  const rest = { ...msg };
+  delete rest.file;
+  delete rest.blob;
   return rest;
 }
 
 export const useMessageQueue = (isOnline) => {
-  const [queue, setQueue] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const flushInProgressRef = useRef(false);
+  const [queue, setQueue] = useState(() => readChatQueue());
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
-    } catch (e) {
-      console.warn('[chat] queue persist failed', e);
-    }
-  }, [queue]);
+    installChatQueueRunner();
+    setChatQueueOnline(isOnline);
+    return () => setChatQueueOnline(null);
+  }, [isOnline]);
+
+  useEffect(() => {
+    const sync = () => setQueue(readChatQueue());
+    window.addEventListener(CHAT_QUEUE_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(CHAT_QUEUE_CHANGED_EVENT, sync);
+  }, []);
 
   const addToQueue = useCallback((message) => {
     void (async () => {
@@ -50,10 +51,8 @@ export const useMessageQueue = (isOnline) => {
           const ab = await message.blob.arrayBuffer();
           await queueMediaPut(message.localId, ab);
         }
-        setQueue((prev) => {
-          if (prev.some((m) => m.localId === serial.localId)) return prev;
-          return [...prev, { ...serial, queuedAt: Date.now() }];
-        });
+        enqueueChatQueueItem(serial);
+        setQueue(readChatQueue());
       } catch (e) {
         console.error('[chat] addToQueue failed', e);
       }
@@ -61,57 +60,18 @@ export const useMessageQueue = (isOnline) => {
   }, []);
 
   const removeFromQueue = useCallback((localId) => {
-    setQueue((prev) => prev.filter((m) => m.localId !== localId));
+    removeChatQueueItem(localId);
+    setQueue(readChatQueue());
     void queueMediaDelete(localId);
   }, []);
 
   const clearQueue = useCallback(() => {
-    setQueue((prev) => {
-      prev.forEach((m) => {
-        if (m._mediaKey) void queueMediaDelete(m._mediaKey);
-      });
-      return [];
+    readChatQueue().forEach((row) => {
+      if (row._mediaKey) void queueMediaDelete(row._mediaKey);
     });
+    writeChatQueue([]);
+    setQueue([]);
   }, []);
-
-  useEffect(() => {
-    if (!isOnline || queue.length === 0) return undefined;
-
-    let cancelled = false;
-    const inFlightLocalIds = new Set();
-
-    const tick = async () => {
-      if (cancelled || flushInProgressRef.current || queue.length === 0) return;
-      flushInProgressRef.current = true;
-      const sorted = [...queue].sort((a, b) => {
-        if (a.is_emergency && !b.is_emergency) return -1;
-        if (!a.is_emergency && b.is_emergency) return 1;
-        return (a.queuedAt || 0) - (b.queuedAt || 0);
-      });
-      const item = sorted.find((m) => m.localId && !inFlightLocalIds.has(m.localId)) || sorted[0];
-      if (!item?.localId) {
-        flushInProgressRef.current = false;
-        return;
-      }
-      inFlightLocalIds.add(item.localId);
-      try {
-        const { ok } = await flushChatQueueItem(item);
-        if (ok && !cancelled) {
-          removeFromQueue(item.localId);
-        }
-      } finally {
-        inFlightLocalIds.delete(item.localId);
-        flushInProgressRef.current = false;
-      }
-    };
-
-    void tick();
-    const id = setInterval(tick, APP_CONFIG.OFFLINE_RETRY_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [isOnline, queue, removeFromQueue]);
 
   return { queue, addToQueue, removeFromQueue, clearQueue, queueLength: queue.length };
 };
