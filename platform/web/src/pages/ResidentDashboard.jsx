@@ -18,7 +18,7 @@ import {
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
 import { canPreviewResidentHome, canUseHouseholdMode, isHouseholdModeRole } from "../auth/roleMatrix";
-import SosHoldButton from "../components/resident/SosHoldButton";
+import ResidentSosControl from "../components/resident/ResidentSosControl";
 import ReportContentButton from "../components/community/ReportContentButton";
 import { useOrgCapabilities } from "../hooks/useOrgCapabilities";
 import { listWishlistItems } from "../utils/equipmentWishlist";
@@ -26,7 +26,6 @@ import ResidentHomeHero from "../components/resident/ResidentHomeHero";
 import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
 import { useScopedOrganization } from "../utils/organizationScope";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
-import { triggerResidentSos } from "../utils/residentSos";
 import { formatRelativeTime } from "../utils/formatRelativeTime";
 import {
   filterDashboardNeighbourhoodActivity,
@@ -162,7 +161,6 @@ export default function ResidentDashboard() {
   }, [user?.id, activeOrganizationId]);
   const [pendingCount, setPendingCount] = useState(0);
   const [homeAddress, setHomeAddress] = useState("");
-  const [sosBusy, setSosBusy] = useState(false);
   const [broadcasts, setBroadcasts] = useState([]);
   const broadcastGen = useRef(0);
   const [civic, setCivic] = useState(null);
@@ -263,30 +261,6 @@ export default function ResidentDashboard() {
   const dismissHouseholdIntro = () => {
     if (user?.id) markHouseholdIntroSeen(user.id);
     setShowHouseholdIntro(false);
-  };
-
-  const handleSos = async () => {
-    if (!user?.id || sosBusy) return;
-    const organizationId = activeOrganizationId || user.organizationId;
-    if (!organizationId) {
-      toast.error("Select or join a neighbourhood before sending an SOS.");
-      return;
-    }
-    setSosBusy(true);
-    try {
-      await triggerResidentSos({
-        user,
-        organizationId,
-        triggerType: "hold",
-      });
-      toast.success("SOS sent. Patrol has been notified with your location.");
-      navigate("/chat");
-    } catch (err) {
-      console.error(err);
-      toast.error(err.message || "Could not trigger SOS.");
-    } finally {
-      setSosBusy(false);
-    }
   };
 
   const pinnedBroadcasts = broadcasts.filter((row) => isPinnedAreaBroadcast(row));
@@ -486,9 +460,13 @@ export default function ResidentDashboard() {
         ) : null}
 
         <section className="rounded-2xl border border-gray-200 bg-white px-4 py-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:px-6">
-          <SosHoldButton onTrigger={handleSos} busy={sosBusy} />
+          <ResidentSosControl
+            user={user}
+            organizationId={activeOrganizationId || user?.organizationId || null}
+          />
           <p className="mt-2 text-center text-[11px] text-gray-400 dark:text-gray-500">
-            Immediate danger only. For anything else, report activity below.
+            Immediate danger only. Hold for two seconds, then cancel within five seconds or press
+            SOS again to send now. For anything else, report activity below.
           </p>
         </section>
 

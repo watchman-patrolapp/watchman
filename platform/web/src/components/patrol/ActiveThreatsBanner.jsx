@@ -7,6 +7,7 @@ import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { scopeToOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
 import { parsePatrolTime } from '../../utils/watchTime';
 import CriminalPhotoImg from '../intelligence/CriminalPhotoImg';
+import { threatPhotoAlt } from '../../utils/sosDelivery';
 
 /** Haversine distance in km */
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -187,10 +188,10 @@ export default function ActiveThreatsBanner({
   const criticalCount = nearbyProfiles.filter(p => p.risk_level === 'critical').length;
 
   return (
-    <div className={`rounded-xl shadow-lg p-4 mb-6 ${criticalCount > 0 ? 'bg-red-600 text-white animate-pulse' : 'bg-orange-500 text-white'}`}>
-      <div className="flex items-center justify-between">
+    <div className={`rounded-xl shadow-lg p-4 mb-6 ${criticalCount > 0 ? 'bg-red-600 text-white motion-safe:animate-pulse' : 'bg-orange-500 text-white'}`}>
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <FaExclamationTriangle className="text-2xl flex-shrink-0" />
+          <FaExclamationTriangle className="text-2xl flex-shrink-0" aria-hidden="true" />
           <div>
             <h3 className="font-bold text-lg">
               {criticalCount > 0 ? `${criticalCount} Critical Threat(s) Nearby` : `${nearbyProfiles.length} High-Risk Profile(s) Nearby`}
@@ -201,18 +202,20 @@ export default function ActiveThreatsBanner({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button 
+          <button
+            type="button"
             onClick={() => navigate('/intelligence')}
-            className="px-4 py-2 bg-white text-red-600 rounded-lg font-bold text-sm hover:bg-gray-100 transition"
+            className="min-h-[44px] px-4 py-2 bg-white text-red-600 rounded-lg font-bold text-sm hover:bg-gray-100 transition"
           >
             View All
           </button>
-          <button 
+          <button
+            type="button"
             onClick={() => setDismissed(true)}
-            className="p-2 hover:bg-white/20 rounded-lg transition"
-            title="Dismiss"
+            className="inline-flex h-11 w-11 items-center justify-center hover:bg-white/20 rounded-lg transition"
+            aria-label="Dismiss threat alert"
           >
-            <FaTimes />
+            <FaTimes aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -226,10 +229,10 @@ export default function ActiveThreatsBanner({
               className="bg-white/20 backdrop-blur-sm rounded-lg p-3 flex items-center gap-3 cursor-pointer hover:bg-white/30 transition"
             >
               {profile.photo_urls?.[0] ? (
-                <CriminalPhotoImg src={profile.photo_urls[0]} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                <CriminalPhotoImg src={profile.photo_urls[0]} alt={threatPhotoAlt(profile)} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
               ) : (
                 <div className="w-12 h-12 rounded-lg bg-gray-300 flex items-center justify-center flex-shrink-0">
-                  <FaMapMarkerAlt className="text-gray-500" />
+                  <FaMapMarkerAlt className="text-gray-500" aria-hidden="true" />
                 </div>
               )}
               <div className="flex-1 min-w-0">

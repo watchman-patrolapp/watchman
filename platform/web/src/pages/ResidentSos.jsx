@@ -1,44 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
 import { useAuth } from "../auth/useAuth";
 import PageHeader from "../components/layout/PageHeader";
-import SosHoldButton from "../components/resident/SosHoldButton";
+import ResidentSosControl from "../components/resident/ResidentSosControl";
 import { useScopedOrganization } from "../utils/organizationScope";
-import { triggerResidentSos } from "../utils/residentSos";
 
 export default function ResidentSos() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { activeOrganizationId } = useScopedOrganization();
-  const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState("");
-
-  const triggerSos = async () => {
-    if (!user?.id) return;
-    if (loading) return;
-    const organizationId = activeOrganizationId || user.organizationId;
-    if (!organizationId) {
-      toast.error("Select or join a neighbourhood before sending an SOS.");
-      return;
-    }
-    setLoading(true);
-    try {
-      await triggerResidentSos({
-        user,
-        organizationId,
-        notes,
-        triggerType: "hold",
-      });
-      toast.success("SOS sent. Patrollers and admins have been notified.");
-      navigate("/chat");
-    } catch (err) {
-      console.error(err);
-      toast.error(err.message || "Could not trigger SOS.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const organizationId = activeOrganizationId || user?.organizationId || null;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-6">
@@ -51,7 +21,7 @@ export default function ResidentSos() {
           className="p-0 shadow-none bg-transparent dark:bg-transparent"
         />
 
-        <SosHoldButton onTrigger={triggerSos} busy={loading} />
+        <ResidentSosControl user={user} organizationId={organizationId} notes={notes} />
 
         <textarea
           value={notes}
@@ -61,7 +31,8 @@ export default function ResidentSos() {
           placeholder="Optional details (example: intruder at gate, medical emergency, fire)"
         />
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Hold the SOS button for two seconds. Optional notes above are sent with the alert.
+          Hold the SOS button for two seconds. You then have five seconds to cancel, or press SOS
+          again to send now. Optional notes above are sent with the alert.
         </p>
       </div>
     </div>
