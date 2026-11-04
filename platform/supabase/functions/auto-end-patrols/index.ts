@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getServiceRoleKey, requireCronSecret } from '../_shared/auth.ts'
 
 async function resolveOrganizationId(supabase, patrol) {
   if (patrol?.organization_id) return patrol.organization_id
@@ -53,10 +54,20 @@ serve(async (req) => {
     return new Response('Method not allowed', { status: 405 })
   }
 
+  const denied = requireCronSecret(req)
+  if (denied) return denied
+
   try {
-    const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY')
+    const serviceRoleKey = getServiceRoleKey()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabase = createClient(supabaseUrl!, serviceRoleKey!)
+    if (!serviceRoleKey || !supabaseUrl) {
+      console.error('auto-end-patrols: missing SUPABASE_URL or service role key')
+      return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey)
 
     const cutoffTime = new Date(Date.now() - PATROL_MAX_MS).toISOString()
 
@@ -112,10 +123,10 @@ serve(async (req) => {
 
     return new Response(`Auto-ended ${ended} patrols`, { status: 200 })
   } catch (err) {
-    console.error(err)
-    return new Response(JSON.stringify({ error: err.message, details: err }), {
+    console.error('auto-end-patrols failed:', err)
+    return new Response(JSON.stringify({ error: 'Internal error' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     })
   }
 })

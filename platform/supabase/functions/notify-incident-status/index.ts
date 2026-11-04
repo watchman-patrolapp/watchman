@@ -18,6 +18,7 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT, importPKCS8 } from "https://esm.sh/jose@5.2.3";
+import { getServiceRoleKey, requireWebhookSecret } from "../_shared/auth.ts";
 
 function toLabel(status: string) {
   const s = String(status || "").toLowerCase();
@@ -28,8 +29,8 @@ function toLabel(status: string) {
 }
 
 // G6: drop recipients who muted this kind (or are in quiet hours). Mandatory
-// kinds always pass server-side. Fails open (sends to everyone) if the
-// notification_prefs SQL isn't applied yet or the rpc errors.
+// kinds always pass server-side. Fail closed (throw) if the RPC errors so
+// webhooks can retry instead of ignoring mute/quiet hours.
 // deno-lint-ignore no-explicit-any
 async function filterByNotifyPrefs(supabase: any, userIds: string[], kind: string): Promise<string[]> {
   if (!userIds.length) return userIds;
@@ -39,8 +40,8 @@ async function filterByNotifyPrefs(supabase: any, userIds: string[], kind: strin
     p_channel: "push",
   });
   if (error) {
-    console.warn("filter_notify_recipients unavailable - sending to all:", error.message);
-    return userIds;
+    console.error("filter_notify_recipients failed:", error.message);
+    throw new Error("filter_notify_recipients_failed");
   }
   const allowed = new Set(
     // deno-lint-ignore no-explicit-any
@@ -54,18 +55,17 @@ async function filterByNotifyPrefs(supabase: any, userIds: string[], kind: strin
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  const secret = Deno.env.get("INCIDENT_STATUS_WEBHOOK_SECRET");
-  const provided = req.headers.get("x-incident-status-secret")?.trim();
-  if (!secret || provided !== secret) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+  const denied = requireWebhookSecret(
+    req,
+    "INCIDENT_STATUS_WEBHOOK_SECRET",
+    "x-incident-status-secret",
+  );
+  if (denied) return denied;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY");
+  const serviceRole = getServiceRoleKey();
   if (!serviceRole) {
+    console.error("notify-incident-status: missing service role key");
     return new Response(JSON.stringify({ error: "Server misconfigured" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
@@ -111,7 +111,16 @@ Deno.serve(async (req) => {
     actor_user_id: record.approved_by ?? record.rejected_by ?? null,
   });
 
-  const prefRecipients = await filterByNotifyPrefs(supabase, [reporterId], "incident_status");
+  let prefRecipients: string[];
+  try {
+    prefRecipients = await filterByNotifyPrefs(supabase, [reporterId], "incident_status");
+  } catch (err) {
+    console.error("notify-incident-status prefs filter failed:", err);
+    return new Response(JSON.stringify({ ok: false, error: "prefs_filter_failed" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   if (!prefRecipients.length) {
     return new Response(JSON.stringify({ ok: true, sent: 0, reason: "muted" }), {
       status: 200,
