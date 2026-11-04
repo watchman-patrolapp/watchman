@@ -9,7 +9,7 @@
   "scripts": {
     "predev": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs && node scripts/check-asset-budget.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs && node scripts/check-asset-budget.mjs",
+    "prebuild": "node scripts/check-no-secrets-in-env.mjs && node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs && node scripts/check-asset-budget.mjs",
     "build": "vite build",
     "prebuild:mobile": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs && node scripts/check-asset-budget.mjs",
     "build:mobile": "vite build --mode capacitor",
