@@ -607,7 +607,13 @@ function AppRoutes() {
           }
         />
         
-        {/* ✅ CHAT ROUTE - Wrapped with ChatErrorBoundary */}
+        {/*
+          /chat is shared on purpose. Residents open Neighbours
+          (defaultChatChannel); canAccessPatrolOpsChat is false for them, so
+          ChatContainer never selects the patrol room. Patrol rows are denied
+          by RLS (chat_messages_select_channel: visibility = 'resident' OR
+          is_chat_ops_member()), not by a route role guard.
+        */}
         <Route
           path="/chat"
           element={
@@ -910,6 +916,11 @@ function AppRoutes() {
           }
         />
 
+        {/*
+          Static role matrix, no neighborhood queries. Global admins can open
+          it before an area is selected, so this route does not use
+          RequireActiveOrganization.
+        */}
         <Route
           path="/admin/roles"
           element={

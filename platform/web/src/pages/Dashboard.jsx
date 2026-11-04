@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
 import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRoute, FaRoad, FaCalendarAlt, FaClipboardList, FaCar, FaToolbox, FaBook, FaInfoCircle, FaShieldAlt, FaPhone, FaClock, FaStopwatch, FaFire, FaHome } from "react-icons/fa";
@@ -42,10 +42,13 @@ import { adaptivePollIntervalMs, subscribeDataBudgetHints } from '../utils/dataS
 import startPatrolIcon from '../assets/start-patrol-icon.png';
 import appMark from '../assets/app-mark.png';
 import BrandedLoader from '../components/layout/BrandedLoader';
+import PageSkeleton from '../components/layout/PageSkeleton';
 import AreaWeatherChip from '../components/layout/AreaWeatherChip';
 import { canAccessAdminPanel, canReviewFeedback, isStaffForModerationAlerts } from '../auth/staffRoles';
 import { canAccessPatrolSchedule, canAccessSosBoard, canStartOrEndPatrol, canStaffVerifyResident, canUseHouseholdMode, canViewCityHub, canViewIntelligence, homePathForRole, isHouseholdModeRole } from '../auth/roleMatrix';
 import { hasHydratedAppRole } from '../auth/appRole';
+import { useProfileAccessGate } from '../auth/useProfileAccessGate';
+import ProfileLoadRecovery from '../components/ProfileLoadRecovery';
 import { useActiveOrganization } from '../auth/useActiveOrganization';
 import { useScopedOrganization, belongsToActiveOrganization } from '../utils/organizationScope';
 import { useUnreadCityHubCount } from '../hooks/useUnreadCityHubCount';
@@ -96,17 +99,12 @@ function unlockAudio() {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { view: profileView, retryProfile, signOut: gateSignOut } = useProfileAccessGate();
   const { activeOrganization, isGlobalOperator } = useActiveOrganization();
   const { scope, activeOrganizationId, includeUnscoped } = useScopedOrganization();
   const equipmentCounts = useEquipmentPendingCounts(Boolean(user?.id), activeOrganizationId);
   const equipmentMine = equipmentMyBadgeCount(equipmentCounts);
   const equipmentBadge = equipmentMine + equipmentAdminBadgeCount(equipmentCounts);
-
-  useEffect(() => {
-    if (!hasHydratedAppRole(user?.role)) return;
-    const home = homePathForRole(user.role, user.platformRole);
-    if (home !== "/dashboard") navigate(home, { replace: true });
-  }, [user?.role, user?.platformRole, navigate]);
 
   // --- Patrol state ---
   const [activePatrol, setActivePatrol] = useState(null);
@@ -778,6 +776,29 @@ export default function Dashboard() {
     document.addEventListener('click', clickHandler, { once: true });
     return () => document.removeEventListener('click', clickHandler);
   }, []);
+
+  // Unknown role must not paint the patrol dashboard. Residents (and other
+  // role homes) redirect here, before that markup, including after a profile error.
+  if (profileView === "session" || profileView === "pending" || !hasHydratedAppRole(user?.role)) {
+    if (profileView === "offline" || profileView === "error") {
+      return (
+        <ProfileLoadRecovery
+          variant={profileView}
+          onRetry={() => {
+            void retryProfile?.();
+          }}
+          onSignOut={() => {
+            void (gateSignOut || signOut)?.();
+          }}
+        />
+      );
+    }
+    return <PageSkeleton message="Checking access…" />;
+  }
+  const home = homePathForRole(user.role, user.platformRole);
+  if (home !== "/dashboard") {
+    return <Navigate to={home} replace />;
+  }
 
   if (fetchError && !activePatrol && loadingPatrol === false) {
     return (
