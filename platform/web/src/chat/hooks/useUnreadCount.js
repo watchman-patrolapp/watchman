@@ -6,9 +6,11 @@ import { isRpcNotFoundError } from '../../utils/isRpcNotFound';
 import {
   applyWorkingOrganizationScope,
   getWorkingOrganizationId,
+  getWorkingOrganizationIncludeUnscoped,
   messageBelongsToWorkingOrganization,
 } from '../../utils/organizationScope';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
+import { subscribeChatMessages } from '../realtime/chatRealtimeClient';
 
 function messageVisibility(message) {
   return message?.visibility || 'patrol';
@@ -90,22 +92,24 @@ export const useUnreadCount = (userId, visibility = null, options = {}) => {
 
     void fetchCount();
 
-    const subscription = supabase
-      .channel(`unread-count-${visibility || 'default'}-${activeOrganizationId || 'none'}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-        (payload) => {
-          if (!messageBelongsToWorkingOrganization(payload.new)) return;
-          if (payload.new.sender_id === userId) return;
-          const vis = messageVisibility(payload.new);
-          if (visibility && vis !== visibility) return;
-          if (pauseIncrements) return;
-          if (!visibility && isActiveChatPath()) return;
-          setCount((prev) => prev + 1);
-        }
-      )
-      .subscribe();
+    const unsubscribe = subscribeChatMessages(
+      (message) => {
+        if (!messageBelongsToWorkingOrganization(message)) return;
+        if (message.sender_id === userId) return;
+        const vis = messageVisibility(message);
+        if (visibility && vis !== visibility) return;
+        if (pauseIncrements) return;
+        if (!visibility && isActiveChatPath()) return;
+        setCount((prev) => prev + 1);
+      },
+      {
+        rooms: visibility ? [visibility] : null,
+        getScope: () => ({
+          organizationId: getWorkingOrganizationId(),
+          includeUnscoped: getWorkingOrganizationIncludeUnscoped(),
+        }),
+      }
+    );
 
     const handleVisibility = () => {
       if (!document.hidden) fetchCount();
@@ -116,7 +120,7 @@ export const useUnreadCount = (userId, visibility = null, options = {}) => {
     window.addEventListener(CHAT_READ_CURSOR_EVENT, onReadCursor);
 
     return () => {
-      supabase.removeChannel(subscription);
+      unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener(CHAT_READ_CURSOR_EVENT, onReadCursor);
     };

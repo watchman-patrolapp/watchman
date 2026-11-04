@@ -1,10 +1,11 @@
 // src/hooks/useGPSTracking.js - FIXED VERSION
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../supabase/client';
 import { devLog, devWarn } from '../utils/devLog';
 import { distanceMeters, getGpsUploadThrottle } from '../utils/dataSaverProfile';
 import { getWorkingOrganizationId } from '../utils/organizationScope';
+import { sharedGeolocation } from '../geo/sharedGeolocationClient';
 
 async function ensureNativeLocationPermission() {
   if (!Capacitor.isNativePlatform()) return true;
@@ -42,6 +43,9 @@ const globalGPS = {
   /** Last options used for watch — needed when resuming after tab visibility / pauseWatch */
   lastWatchOptions: null,
   _autoStopClear: null,
+  _releaseShared: null,
+  _session: 0,
+  _starting: false,
 
   subscribe(listener) {
     this.listeners.add(listener);
@@ -160,7 +164,7 @@ const globalGPS = {
 
     devLog('GPS starting', { patrolId: this.currentPatrolId, userId: this.userId });
 
-    if (this.watchId !== null) {
+    if (this._releaseShared || this._starting) {
       devLog('GPS already active', this.watchId);
       this.notify({ isActive: true, isLoading: false });
       return;
@@ -175,18 +179,17 @@ const globalGPS = {
       return;
     }
 
-    void this._beginWatch({
-      enableHighAccuracy,
-      timeout,
-      maximumAge,
-      historyLimit
-    });
+    const session = ++this._session;
+    this._starting = true;
+    void this._beginWatch(session, { historyLimit });
   },
 
-  async _beginWatch({ enableHighAccuracy, timeout, maximumAge, historyLimit }) {
+  async _beginWatch(session, { historyLimit }) {
+    try {
     this.notify({ isLoading: true });
 
     const allowed = await ensureNativeLocationPermission();
+    if (session !== this._session) return;
     if (!allowed) {
       this.hasPermission = false;
       this.notify({
@@ -260,28 +263,40 @@ const globalGPS = {
       this.notify({ error: errorMessage, isActive: false, isLoading: false });
     };
 
-    const throttle = getGpsUploadThrottle();
-    const watchHigh = enableHighAccuracy && throttle.enableHighAccuracy;
-    const watchMaxAge = Math.max(maximumAge ?? 0, throttle.maximumAge);
-    navigator.geolocation.getCurrentPosition(handleSuccess, handleError, {
-      enableHighAccuracy: watchHigh,
-      timeout,
-      maximumAge: watchMaxAge,
+    if (session !== this._session) return;
+    this._releaseShared = sharedGeolocation.acquire({
+      purpose: 'patrol',
+      onPosition: (position) => {
+        void handleSuccess(position);
+      },
+      onError: handleError,
     });
-    this.watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
-      enableHighAccuracy: watchHigh,
-      maximumAge: watchMaxAge,
-      timeout,
-    });
+    this.watchId = 1;
     this.isActive = true;
-    devLog('GPS started', this.watchId);
+    devLog('GPS started via shared geolocation');
+    } catch (err) {
+      if (session !== this._session) return;
+      console.error('GPS start failed', err);
+      this.notify({
+        error: 'Could not start location tracking',
+        isActive: false,
+        isLoading: false,
+      });
+    } finally {
+      if (session === this._session) this._starting = false;
+    }
   },
 
   /** Stop watch only — keeps patrol/user ids for resume (e.g. web tab refresh path). */
   pauseWatch() {
-    if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
-      devLog('GPS watch cleared', this.watchId);
+    this._session += 1;
+    this._starting = false;
+    if (this._releaseShared) {
+      this._releaseShared();
+      this._releaseShared = null;
+    }
+    if (this.watchId !== null || this.isActive) {
+      devLog('GPS watch cleared');
       this.watchId = null;
       this.isActive = false;
       this.notify({ isActive: false });
@@ -352,7 +367,9 @@ export function useGPSTracking(options = {}) {
   });
 
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+  useLayoutEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const totalDistance = useMemo(() => {
     const pts = state.history || [];

@@ -137,11 +137,12 @@ const useNetworkStatus = () => {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    
+
     checkConnectionSpeed();
-    setInterval(checkConnectionSpeed, 30000); // Check every 30 seconds
+    const speedTimer = window.setInterval(checkConnectionSpeed, 30000);
 
     return () => {
+      window.clearInterval(speedTimer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -171,7 +172,6 @@ export const LocationMessage = React.memo(function LocationMessage({
   isEmergency = false
 }) {
   const [mapError, setMapError] = useState(false);
-  const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapVisible, setIsMapVisible] = useState(false);
   const mapRef = useRef(null);
   const mapAreaRef = useRef(null);
@@ -236,7 +236,6 @@ export const LocationMessage = React.memo(function LocationMessage({
 
   // Handle map load success
   const handleMapLoad = useCallback(() => {
-    setIsMapLoaded(true);
     endLoad();
     
     // Add haptic feedback on mobile

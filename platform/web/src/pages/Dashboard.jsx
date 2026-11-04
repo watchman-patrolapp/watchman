@@ -30,6 +30,7 @@ import {
 import { OpsChatUnreadSplit } from '../chat/components/OpsChatUnreadSplit';
 import { Avatar } from '../chat/components/common/Avatar';
 import { useGPSTracking } from '../hooks/useGPSTracking';
+import { useSharedGeolocation } from '../hooks/useSharedGeolocation';
 import { enrichPatrolRowsWithAvatars } from '../utils/enrichPatrolAvatars';
 import { resolvePatrolAvatarUrl } from '../utils/patrolAvatarUrl';
 import { syncActivePatrolVehicleFromVehicleList } from '../utils/syncActivePatrolVehicle';
@@ -124,8 +125,8 @@ export default function Dashboard() {
   const [vehiclesList, setVehiclesList] = useState([]);
   const [patrolPhotoPreview, setPatrolPhotoPreview] = useState(null);
 
-  // --- Criminal Intelligence Integration ---
-  const [userLocation, setUserLocation] = useState(null);
+  // Threat banner reads the shared watch (low accuracy until a patrol upgrades it).
+  const userLocation = useSharedGeolocation('banner');
 
   const warningTriggeredRef = useRef(false);
   const isEndingRef = useRef(false);
@@ -135,22 +136,6 @@ export default function Dashboard() {
   const prevPatrolsRef = useRef(null);
   const patrolAvatarUrlByUserIdRef = useRef({});
   const [upcomingScheduleRefresh, setUpcomingScheduleRefresh] = useState(0);
-
-  // Handle location updates for threat detection (clear watch on leave — avoids geolocation + Google 403 noise on other routes e.g. admin)
-  useEffect(() => {
-    if (!navigator.geolocation) return undefined;
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-      },
-      () => { /* expected in dev / blocked network location */ },
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
 
   // --- Unread: ops keep Patrol ops vs Neighbours split (never merged) ---
   const isOpsChat = canAccessPatrolOpsChat(user?.role);
