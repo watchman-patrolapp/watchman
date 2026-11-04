@@ -55,7 +55,7 @@ echo.
 REM Install dependencies
 echo [INFO] Installing dependencies...
 cd /d "%PROJECT_DIR%"
-call npm install
+call npm ci
 if %errorlevel% neq 0 (
     echo [ERROR] Failed to install dependencies
     pause

@@ -7,6 +7,8 @@ Living status for scaling from **one live neighborhood (Theescombe)** to a multi
 Canonical app: `platform/web`  
 Canonical backend: `platform/supabase`
 
+**Vercel production (web):** deploys are **online-first** — `vite-plugin-pwa` / Workbox is disabled when `VERCEL=1`, so there is no precache shell or generated `manifest.webmanifest` on that host. Web push uses a build-time generated `/firebase-messaging-sw.js` (Firebase env vars required on Vercel). Offline/PWA testing uses a local `npm run build && npm run preview` build where Workbox is enabled.
+
 ---
 
 ## Where we are

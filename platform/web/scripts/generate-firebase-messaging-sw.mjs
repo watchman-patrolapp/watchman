@@ -42,6 +42,15 @@ loadEnvFile(path.join(root, '.env.local'));
 loadEnvFile(path.join(root, '.env.production'));
 loadEnvFile(path.join(root, '.env.production.local'));
 
+const FIREBASE_ENV_KEYS = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+];
+
 const firebaseConfig = {
   apiKey: process.env.VITE_FIREBASE_API_KEY || '',
   authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || '',
@@ -50,6 +59,19 @@ const firebaseConfig = {
   messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
   appId: process.env.VITE_FIREBASE_APP_ID || '',
 };
+
+const isVercelBuild = process.env.VERCEL === '1';
+if (isVercelBuild) {
+  const missing = FIREBASE_ENV_KEYS.filter((key) => !process.env[key]?.trim());
+  if (missing.length > 0) {
+    console.error(
+      '[generate-firebase-messaging-sw] Vercel build requires Firebase env vars for web push.\n' +
+        `Missing: ${missing.join(', ')}\n` +
+        'Set them in Vercel → Project → Settings → Environment Variables (Production / Preview).'
+    );
+    process.exit(1);
+  }
+}
 
 const src = `/**
  * Firebase Cloud Messaging — background handler (Web / PWA).
