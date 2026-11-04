@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, useMap, useMapEvents, ZoomControl } from 'react-leaflet';
+import '../../utils/leaflet-icons';
 import toast from 'react-hot-toast';
 import { searchNominatim, reverseLabel, SEARCH_BIAS } from '../../utils/nominatimLookup';
 

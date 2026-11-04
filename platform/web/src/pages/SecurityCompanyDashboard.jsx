@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import "../utils/leaflet-icons";
 import toast from "react-hot-toast";
 import {
   FaChevronDown,

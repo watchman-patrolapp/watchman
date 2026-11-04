@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FaMapMarkerAlt, FaExternalLinkAlt, FaExclamationTriangle, FaMobileAlt, FaWifi, FaBatteryFull } from 'react-icons/fa';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import '../../../utils/leaflet-icons';
 
 // Coordinate validation
 const isValidCoordinate = (lat, lng) => {

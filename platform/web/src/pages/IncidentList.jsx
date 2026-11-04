@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../supabase/client";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useAuth } from "../auth/useAuth";
 import { deleteIncidentFully } from "../utils/deleteIncident";
 import ThemeToggle from "../components/ThemeToggle";
@@ -27,7 +28,7 @@ import { INCIDENT_SECTION_LABELS } from "../constants/incidentSectionUpdates";
 import { canStaffManageIncidents } from "../auth/staffRoles";
 import { useScopedOrganization } from "../utils/organizationScope";
 import { parsePatrolTime } from "../utils/watchTime";
-import { fetchAllQueryPages } from "../utils/fetchPagedRows";
+import { approvedIncidentsQueryKey, fetchApprovedIncidentPage } from "../utils/incidentListQuery";
 
 /** Newest / latest-first timestamps for date-style sorts */
 const SORT_OPTIONS = [
@@ -281,7 +282,9 @@ function IncidentCard({ incident, showAdminDelete, onAdminDelete, deleteBusyId, 
 
       <div className="mt-4">
         <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Evidence</p>
-        {(!incident.evidenceRows?.length && normalizeMediaUrls(incident.media_urls).length === 0) ? (
+        {incident.evidenceUnknown ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300">Evidence could not be loaded.</p>
+        ) : (!incident.evidenceRows?.length && normalizeMediaUrls(incident.media_urls).length === 0) ? (
           <p className="text-sm text-gray-500 dark:text-gray-400 italic">No evidence attached.</p>
         ) : (
           <StructuredEvidenceList
@@ -329,15 +332,33 @@ function IncidentCard({ incident, showAdminDelete, onAdminDelete, deleteBusyId, 
 export default function IncidentList() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { scope } = useScopedOrganization();
-  const [incidents, setIncidents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { scope, activeOrganizationId, includeUnscoped } = useScopedOrganization();
+  const queryClient = useQueryClient();
   const [deleteBusyId, setDeleteBusyId] = useState(null);
   const [sortBy, setSortBy] = useState("incident_date");
-  const loadGen = useRef(0);
+  const listRef = useRef(null);
+  const loadMoreRef = useRef(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
 
   const showAdminDelete = canStaffManageIncidents(user?.role);
+  const queryKey = approvedIncidentsQueryKey(activeOrganizationId, includeUnscoped);
+
+  const incidentsQuery = useInfiniteQuery({
+    queryKey,
+    initialPageParam: null,
+    staleTime: 30_000,
+    queryFn: ({ pageParam }) => fetchApprovedIncidentPage({ scope, pageParam }),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+
+  const incidents = useMemo(
+    () => (incidentsQuery.data?.pages || []).flatMap((page) => page.rows),
+    [incidentsQuery.data]
+  );
+  const evidenceFailed = (incidentsQuery.data?.pages || []).some((page) => page.evidenceFailed);
+  const updatesFailed = (incidentsQuery.data?.pages || []).some((page) => page.updatesFailed);
+  const loading = incidentsQuery.isLoading;
+  const error = incidentsQuery.isError && incidents.length === 0 ? incidentsQuery.error?.message || "Failed to load incidents" : null;
 
   const sortedIncidents = useMemo(() => {
     const list = [...incidents];
@@ -364,73 +385,52 @@ export default function IncidentList() {
         return;
       }
       toast.success("Incident deleted");
-      setIncidents((prev) => prev.filter((i) => i.id !== incidentId));
+      queryClient.setQueryData(queryKey, (old) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            rows: page.rows.filter((row) => row.id !== incidentId),
+          })),
+        };
+      });
     } finally {
       setDeleteBusyId(null);
     }
   };
 
-  const fetchIncidents = useCallback(async () => {
-    const gen = ++loadGen.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchAllQueryPages(() =>
-        scope(supabase.from("incidents").select("*")).eq("status", "approved").order("submitted_at", { ascending: false })
-      );
-      if (gen !== loadGen.current) return;
-      const rows = data || [];
-      const ids = rows.map((i) => i.id);
-      const evidenceMap = {};
-      if (ids.length > 0) {
-        const { data: evRows, error: evErr } = await supabase
-          .from("incident_evidence")
-          .select("*")
-          .in("incident_id", ids)
-          .order("created_at", { ascending: true });
-        if (gen !== loadGen.current) return;
-        if (!evErr && evRows) {
-          for (const row of evRows) {
-            if (!evidenceMap[row.incident_id]) evidenceMap[row.incident_id] = [];
-            evidenceMap[row.incident_id].push(row);
-          }
-        }
-      }
-      const updatesMap = {};
-      if (ids.length > 0) {
-        const { data: suRows, error: suErr } = await supabase
-          .from("incident_section_updates")
-          .select("*")
-          .in("incident_id", ids)
-          .order("created_at", { ascending: true });
-        if (gen !== loadGen.current) return;
-        if (!suErr && suRows) {
-          for (const row of suRows) {
-            if (!updatesMap[row.incident_id]) updatesMap[row.incident_id] = [];
-            updatesMap[row.incident_id].push(row);
-          }
-        }
-      }
-      setIncidents(
-        rows.map((i) => ({
-          ...i,
-          evidenceRows: evidenceMap[i.id] || [],
-          sectionUpdates: updatesMap[i.id] || [],
-        }))
-      );
-    } catch (err) {
-      if (gen !== loadGen.current) return;
-      console.error("Error fetching incidents:", err);
-      setError(err.message);
-      toast.error("Failed to load incidents");
-    } finally {
-      if (gen === loadGen.current) setLoading(false);
-    }
-  }, [scope]);
+  const retryIncidents = () => {
+    void incidentsQuery.refetch();
+  };
+
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    setScrollMargin(el.getBoundingClientRect().top + window.scrollY);
+  }, [sortedIncidents.length, sortBy, evidenceFailed, updatesFailed]);
+
+  const virtualizer = useWindowVirtualizer({
+    count: sortedIncidents.length,
+    estimateSize: () => 420,
+    overscan: 4,
+    scrollMargin,
+    getItemKey: (index) => sortedIncidents[index]?.id ?? index,
+  });
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = incidentsQuery;
 
   useEffect(() => {
-    fetchIncidents();
-  }, [fetchIncidents]);
+    const node = loadMoreRef.current;
+    if (!node || !hasNextPage) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting) && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    }, { rootMargin: "240px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, sortedIncidents.length]);
 
   if (loading) {
     return (
@@ -493,7 +493,7 @@ export default function IncidentList() {
             <FaExclamationTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
             <p className="text-red-700 dark:text-red-300 mb-3">Failed to load incidents</p>
             <button
-              onClick={fetchIncidents}
+              onClick={retryIncidents}
               className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
             >
               <FaSync className="w-4 h-4" />
@@ -511,6 +511,7 @@ export default function IncidentList() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-gray-100 dark:border-gray-700">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {incidents.length} approved report{incidents.length === 1 ? "" : "s"}
+                  {incidentsQuery.hasNextPage ? " loaded" : ""}
                 </p>
                 <label className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
                   <span className="text-gray-600 dark:text-gray-400 whitespace-nowrap font-medium">
@@ -529,17 +530,71 @@ export default function IncidentList() {
                   </select>
                 </label>
               </div>
-              {sortedIncidents.map((incident) => (
-                <IncidentCard
-                  key={incident.id}
-                  incident={incident}
-                  showAdminDelete={showAdminDelete}
-                  onAdminDelete={handleAdminDelete}
-                  deleteBusyId={deleteBusyId}
-                  onOpenDetail={(id) => navigate(`/incidents/${id}`)}
-                  onAdminEdit={(id) => navigate(`/incident/${id}/edit`)}
-                />
-              ))}
+              {(evidenceFailed || updatesFailed) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                  {evidenceFailed ? "Some evidence failed to load — " : "Some official updates failed to load — "}
+                  <button type="button" onClick={retryIncidents} className="font-semibold underline">
+                    Retry
+                  </button>
+                </div>
+              )}
+              <div ref={listRef}>
+                <div
+                  className="relative w-full"
+                  style={{ height: virtualizer.getTotalSize() }}
+                >
+                  {virtualizer.getVirtualItems().map((virtualRow) => {
+                    const incident = sortedIncidents[virtualRow.index];
+                    if (!incident) return null;
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        data-index={virtualRow.index}
+                        ref={virtualizer.measureElement}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          transform: `translateY(${virtualRow.start - virtualizer.options.scrollMargin}px)`,
+                        }}
+                      >
+                        <div className="pb-6">
+                          <IncidentCard
+                            incident={incident}
+                            showAdminDelete={showAdminDelete}
+                            onAdminDelete={handleAdminDelete}
+                            deleteBusyId={deleteBusyId}
+                            onOpenDetail={(id) => navigate(`/incidents/${id}`)}
+                            onAdminEdit={(id) => navigate(`/incident/${id}/edit`)}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {incidentsQuery.hasNextPage && (
+                <div ref={loadMoreRef} className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void incidentsQuery.fetchNextPage()}
+                    disabled={incidentsQuery.isFetchingNextPage}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl text-sm font-medium disabled:opacity-60"
+                  >
+                    <FaSync className={`w-3.5 h-3.5 ${incidentsQuery.isFetchingNextPage ? "animate-spin" : ""}`} />
+                    {incidentsQuery.isFetchingNextPage ? "Loading more…" : "Load more"}
+                  </button>
+                </div>
+              )}
+              {incidentsQuery.isFetchNextPageError && (
+                <p className="text-center text-sm text-red-600 dark:text-red-400">
+                  Could not load more reports —{" "}
+                  <button type="button" onClick={() => void incidentsQuery.fetchNextPage()} className="font-semibold underline">
+                    Retry
+                  </button>
+                </p>
+              )}
             </div>
           )}
         </div>

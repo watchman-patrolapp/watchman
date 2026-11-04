@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
+import { fetchInChunks } from "../utils/fetchInChunks";
 import { FaArrowLeft, FaCamera, FaExclamationTriangle, FaCheckCircle, FaTimes, FaCar, FaTools, FaFileAlt, FaEye, FaUserSecret, FaSearch, FaLink } from "react-icons/fa";
 import toast from "react-hot-toast";
 import EvidenceSection from "../components/evidence/EvidenceSection";
@@ -748,11 +749,9 @@ export default function IncidentForm() {
         const keepEvidenceIds = insertedEvidenceRows.map((r) => r.id).filter(Boolean);
         const staleEvidence = oldEvidenceIds.filter((id) => !keepEvidenceIds.includes(id));
         if (staleEvidence.length > 0) {
-          const { error: delEv } = await supabase
-            .from("incident_evidence")
-            .delete()
-            .in("id", staleEvidence);
-          if (delEv) throw delEv;
+          await fetchInChunks(staleEvidence, (chunk) =>
+            supabase.from("incident_evidence").delete().in("id", chunk)
+          );
         } else if (oldEvidenceIds.length > 0 && evidenceEntries.length === 0) {
           const { error: delEv } = await supabase
             .from("incident_evidence")
@@ -762,11 +761,9 @@ export default function IncidentForm() {
         }
 
         if (oldSuspectIds.length > 0) {
-          const { error: delSus } = await supabase
-            .from("incident_suspects")
-            .delete()
-            .in("id", oldSuspectIds);
-          if (delSus) throw delSus;
+          await fetchInChunks(oldSuspectIds, (chunk) =>
+            supabase.from("incident_suspects").delete().in("id", chunk)
+          );
         }
       }
 

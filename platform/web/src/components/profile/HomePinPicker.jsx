@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, useMap, useMapEvents, ZoomControl } from "react-leaflet";
+import "../../utils/leaflet-icons";
 import toast from "react-hot-toast";
 import { FaCrosshairs, FaSatellite } from "react-icons/fa";
 import { searchNominatim, SEARCH_BIAS } from "../../utils/nominatimLookup";

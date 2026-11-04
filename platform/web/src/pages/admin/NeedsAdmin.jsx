@@ -455,6 +455,14 @@ export default function NeedsAdmin() {
             { key: "cost", label: "Still needed (est.)", value: stillNeeded.pricedCount ? formatEstPrice(stillNeeded.cents) : "-" },
           ]}
         />
+        {items.some((item) => item.ledger_unknown) ? (
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Covered fundraising totals are unknown.{" "}
+            <button type="button" onClick={() => void loadItems()} className="font-semibold underline">
+              Retry
+            </button>
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="relative">
             <Segmented

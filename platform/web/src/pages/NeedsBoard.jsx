@@ -103,6 +103,14 @@ export default function NeedsBoard() {
             </div>
           ) : null}
         </NeedsBanner>
+        {allItems.some((item) => item.ledger_unknown) ? (
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Covered fundraising totals are unknown.{" "}
+            <button type="button" onClick={() => void load()} className="font-semibold underline">
+              Retry
+            </button>
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Segmented
             label="Filter needs"

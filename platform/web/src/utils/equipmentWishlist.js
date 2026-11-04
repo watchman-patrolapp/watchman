@@ -169,12 +169,40 @@ export function randsToCents(value) {
   return Math.round(n * 100);
 }
 
-/** Covered cents for one item from list_wishlist_ledger_totals (0 if none/unavailable). */
+/** Covered cents for one item. null means the ledger could not be read (unknown, not zero). */
 export async function getWishlistItemCoveredCents(itemId) {
   if (!itemId) return 0;
-  const { data } = await supabase.rpc("list_wishlist_ledger_totals");
-  const t = (data || []).find((r) => r.item_id === itemId);
+  let result = await supabase.rpc("list_wishlist_ledger_totals");
+  if (result.error) result = await supabase.rpc("list_wishlist_ledger_totals");
+  if (result.error) return null;
+  const t = (result.data || []).find((r) => r.item_id === itemId);
   return Math.max(Number(t?.covered_cents) || 0, 0);
+}
+
+/** Attach ledger totals. A failed totals RPC is unknown, never a fake R 0. */
+export function mergeWishlistLedgerTotals(items, totalsResult) {
+  if (totalsResult?.error) {
+    return (items || []).map((item) => ({
+      ...item,
+      received_cents: null,
+      spent_cents: null,
+      covered_cents: null,
+      balance_cents: null,
+      ledger_unknown: true,
+    }));
+  }
+  const byItem = new Map((totalsResult?.data || []).map((t) => [t.item_id, t]));
+  return (items || []).map((item) => {
+    const t = byItem.get(item.id);
+    return {
+      ...item,
+      received_cents: Number(t?.received_cents || 0),
+      spent_cents: Number(t?.spent_cents || 0),
+      covered_cents: Number(t?.covered_cents || 0),
+      balance_cents: Number(t?.balance_cents || 0),
+      ledger_unknown: false,
+    };
+  });
 }
 
 /** Pure: pledge summary for the offer dialog. Money in cents; pct null when nothing is left to cover. */
@@ -209,23 +237,14 @@ export async function notifyWishlistOfferPush(offerId) {
 }
 
 export async function listWishlistItems({ status = null, itemId = null } = {}) {
-  const [{ data, error }, totals] = await Promise.all([
-    supabase.rpc("list_wishlist_items", { p_status: status, p_item_id: itemId }),
-    supabase.rpc("list_wishlist_ledger_totals"),
-  ]);
-  // Ledger totals are optional (older DB): missing RPC just means nothing recorded.
-  const byItem = new Map((totals?.data || []).map((t) => [t.item_id, t]));
-  const merged = (data || []).map((i) => {
-    const t = byItem.get(i.id);
-    return {
-      ...i,
-      received_cents: Number(t?.received_cents || 0),
-      spent_cents: Number(t?.spent_cents || 0),
-      covered_cents: Number(t?.covered_cents || 0),
-      balance_cents: Number(t?.balance_cents || 0),
-    };
-  });
-  return { data: merged, error };
+  const itemsResult = await supabase.rpc("list_wishlist_items", { p_status: status, p_item_id: itemId });
+  let totals = await supabase.rpc("list_wishlist_ledger_totals");
+  if (totals.error) totals = await supabase.rpc("list_wishlist_ledger_totals");
+  return {
+    data: mergeWishlistLedgerTotals(itemsResult.data || [], totals),
+    error: itemsResult.error,
+    ledgerError: totals.error || null,
+  };
 }
 
 /* ---------- Transparent ledger (append-only; amounts entered by managers only) ---------- */
@@ -264,13 +283,16 @@ export function wishlistLedgerSummary(rows) {
   return { receivedCents, spentCents, balanceCents: receivedCents - spentCents };
 }
 
-/** Covered vs the full estimate (unit price x qty needed). pct is 0..100. */
+/** Covered vs the full estimate (unit price x qty needed). pct is 0..100. Unknown when the ledger failed. */
 export function wishlistCoverage(item) {
-  const covered = Math.max(Number(item?.covered_cents) || 0, 0);
   const unit = Number(item?.est_unit_price_cents) || 0;
   const target = unit > 0 ? unit * Math.max(Number(item?.quantity_needed) || 1, 1) : 0;
+  if (item?.ledger_unknown) {
+    return { covered: null, target, pct: null, unknown: true };
+  }
+  const covered = Math.max(Number(item?.covered_cents) || 0, 0);
   const pct = target > 0 ? Math.min(100, Math.round((covered / target) * 100)) : 0;
-  return { covered, target, pct };
+  return { covered, target, pct, unknown: false };
 }
 
 export async function listWishlistLedger(itemId) {

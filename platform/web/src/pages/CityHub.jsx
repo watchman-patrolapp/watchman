@@ -8,6 +8,7 @@ import { canManageCityHubPost, canPublishCityHub, homeBackNav } from "../auth/ro
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import CityHubBanner from "../components/cityhub/CityHubBanner";
 import { EMPTY_CITY_HUB_STATS, loadCityHubBannerStats } from "../utils/cityHubStats";
+import { fetchInChunks } from "../utils/fetchInChunks";
 import { cityHubActorId, isCityHubPostUnread, markCityHubVisited, readCityHubLastSeen } from "../utils/cityHubUnread";
 import {
   cityHubDocumentList,
@@ -404,11 +405,9 @@ export default function CityHub() {
 
       let orgNameById = new Map();
       if (authorOrgIds.length > 0) {
-        const { data: orgRows, error: orgError } = await supabase
-          .from("organizations")
-          .select("id, name")
-          .in("id", authorOrgIds);
-        if (orgError) throw orgError;
+        const orgRows = await fetchInChunks(authorOrgIds, (chunk) =>
+          supabase.from("organizations").select("id, name").in("id", chunk)
+        );
         orgNameById = new Map((orgRows || []).map((org) => [org.id, org.name]));
       }
       if (gen !== loadGenRef.current) return;

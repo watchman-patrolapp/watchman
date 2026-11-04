@@ -1,8 +1,7 @@
 // src/chat/components/ChatContainer.jsx
-import React, { useState, useCallback, useEffect, useRef, useReducer } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useReducer, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
-import { MapContainer, TileLayer, CircleMarker, useMap, useMapEvents, ZoomControl } from 'react-leaflet';
 import { useAuth } from '../../auth/useAuth';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useMessageQueue } from '../hooks/useMessageQueue';
@@ -46,6 +45,8 @@ import {
   shouldAlertForChatMessage,
 } from '../utils/chatChannels';
 
+const IncidentPinPicker = lazy(() => import('./IncidentPinPicker'));
+
 const rateLimiter = new RateLimiter(30, 60000);
 const INCIDENT_TYPE_OPTIONS = [
   'Suspicious Activity',
@@ -65,99 +66,6 @@ function localDateTimeParts() {
   const h = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
   return { date: `${y}-${mo}-${day}`, time: `${h}:${min}` };
-}
-
-function IncidentPinPicker({ pin, onPick }) {
-  const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [mapTarget, setMapTarget] = useState(null);
-
-  function MapRecenter({ target }) {
-    const map = useMap();
-    useEffect(() => {
-      if (!target) return;
-      map.setView([target.lat, target.lng], 16, { animate: true });
-    }, [map, target]);
-    return null;
-  }
-
-  function ClickCapture() {
-    useMapEvents({
-      click(e) {
-        onPick({ lat: e.latlng.lat, lng: e.latlng.lng });
-      },
-    });
-    return null;
-  }
-
-  const runSearch = async () => {
-    const q = query.trim();
-    if (!q) return;
-    setSearching(true);
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'NeighbourhoodWatch/1.0' } });
-      if (!res.ok) throw new Error('Search failed');
-      const rows = await res.json();
-      const top = rows?.[0];
-      if (!top) throw new Error('No match found');
-      const lat = Number(top.lat);
-      const lng = Number(top.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('Invalid coordinates');
-      onPick({ lat, lng });
-      setMapTarget({ lat, lng });
-    } catch (e) {
-      toast.error(e.message || 'Could not find location');
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  return (
-    <div className="relative">
-      <MapContainer
-        center={pin ? [pin.lat, pin.lng] : [-33.95, 25.58]}
-        zoom={14}
-        style={{ height: 180, width: '100%', borderRadius: 10 }}
-        scrollWheelZoom
-        zoomControl={false}
-        keyboard={false}
-      >
-        <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <ZoomControl position="bottomright" />
-        <ClickCapture />
-        <MapRecenter target={mapTarget || pin} />
-        {pin && (
-          <CircleMarker center={[pin.lat, pin.lng]} radius={8} pathOptions={{ color: '#0d9488', fillColor: '#14b8a6', fillOpacity: 0.9 }} />
-        )}
-      </MapContainer>
-      <div className="pointer-events-auto absolute top-2 left-2 right-2 z-[1000] flex items-center gap-1 rounded-lg bg-white/95 p-1 shadow dark:bg-gray-900/95">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void runSearch();
-            }
-          }}
-          placeholder="Search place..."
-          className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        />
-        <button
-          type="button"
-          onClick={() => void runSearch()}
-          className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600"
-          disabled={searching}
-        >
-          {searching ? '...' : 'Go'}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 /** Merge realtime INSERT with optimistic row (same user may wait on geocode + slow network). */
@@ -1505,6 +1413,7 @@ export default function ChatContainer() {
                 )}
                 {reportDraft.showMapPicker && (
                   <div className="mt-2">
+                    <Suspense fallback={<div className="h-[180px] animate-pulse rounded-[10px] bg-gray-100 dark:bg-gray-700" />}>
                     <IncidentPinPicker
                       pin={
                         Number.isFinite(Number(reportDraft.pinLat)) &&
@@ -1516,6 +1425,7 @@ export default function ChatContainer() {
                         setReportDraft((p) => ({ ...p, pinLat: lat, pinLng: lng }))
                       }
                     />
+                    </Suspense>
                     <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
                       Tap map to place or move the pin.
                     </p>

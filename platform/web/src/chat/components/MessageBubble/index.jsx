@@ -1,10 +1,13 @@
 // src/chat/components/MessageBubble/index.jsx
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useMemo, useRef, useEffect, useState, lazy, Suspense } from 'react';
 import { supabase } from '../../../supabase/client';
 import { FaChevronLeft, FaChevronRight, FaReply, FaFileAlt } from 'react-icons/fa';
 import { Avatar } from '../common/Avatar';
 import { VoicePlayer } from '../voice/VoicePlayer';
-import { LocationMessage } from './LocationMessage';
+
+const LocationMessage = lazy(() =>
+  import('./LocationMessage').then((mod) => ({ default: mod.LocationMessage }))
+);
 import { TextMessage } from './TextMessage';
 import { ImageMessage } from './ImageMessage';
 import { MessageStatus } from './MessageStatus';
@@ -94,13 +97,15 @@ export const MessageBubble = React.memo(function MessageBubble({
       
       case MessageType.LOCATION:
         return (
-          <LocationMessage 
-            text={message.text}
-            lat={message.location_lat} 
-            lng={message.location_lng} 
-            address={message.location_address}
-            isEmergency={message.is_emergency || message.is_critical}
-          />
+          <Suspense fallback={<p className="text-xs text-gray-500">Loading map…</p>}>
+            <LocationMessage
+              text={message.text}
+              lat={message.location_lat}
+              lng={message.location_lng}
+              address={message.location_address}
+              isEmergency={message.is_emergency || message.is_critical}
+            />
+          </Suspense>
         );
       
       default:

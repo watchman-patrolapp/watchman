@@ -1,4 +1,5 @@
-// src/utils/leaflet-icons.js
+// Default marker images. Imported by each map chunk so Leaflet stays out of the app shell.
+import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
 // Fix for Vite + Leaflet marker icons

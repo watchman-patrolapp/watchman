@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polygon, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import '../../utils/leaflet-icons';
 import { viewConeLatLngs } from '../../utils/hotspotGeometry';
 import { DEFAULT_FOV_DEG } from '../../utils/cameraSuggestions';
 import { hotspotKindLabel } from '../../utils/hotspotKinds';

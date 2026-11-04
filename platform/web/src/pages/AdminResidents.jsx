@@ -10,6 +10,7 @@ import { listCapabilityBadges } from "../utils/orgCapabilities";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import AreaContextBar from "../components/layout/AreaContextBar";
 import { supabase } from "../supabase/client";
+import { fetchInChunks } from "../utils/fetchInChunks";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import { setUserRole } from "../utils/setUserRole";
 import {
@@ -369,19 +370,33 @@ export default function AdminResidents() {
           .map((u) => u.uid);
         let profileMap = {};
         if (residentIds.length > 0) {
-          const { data: profileRows, error: profileErr } = await supabase
-            .from("resident_profiles")
-            .select(
-              "user_id, home_address, verification_date, verification_method, verification_admin_id, notes, patroller_request_status, patroller_request_at"
-            )
-            .in("user_id", residentIds);
+          let profileRows = [];
+          let profileErr = null;
+          try {
+            profileRows = await fetchInChunks(residentIds, (chunk) =>
+              supabase
+                .from("resident_profiles")
+                .select(
+                  "user_id, home_address, verification_date, verification_method, verification_admin_id, notes, patroller_request_status, patroller_request_at"
+                )
+                .in("user_id", chunk)
+            );
+          } catch (err) {
+            profileErr = err;
+          }
           if (profileErr && /patroller_request/i.test(profileErr.message || "")) {
-            const fallback = await supabase
-              .from("resident_profiles")
-              .select("user_id, home_address, verification_date, verification_method, verification_admin_id, notes")
-              .in("user_id", residentIds);
-            for (const row of fallback.data || []) {
-              profileMap[row.user_id] = row;
+            try {
+              const fallback = await fetchInChunks(residentIds, (chunk) =>
+                supabase
+                  .from("resident_profiles")
+                  .select("user_id, home_address, verification_date, verification_method, verification_admin_id, notes")
+                  .in("user_id", chunk)
+              );
+              for (const row of fallback || []) {
+                profileMap[row.user_id] = row;
+              }
+            } catch {
+              /* keep the map empty when the fallback also fails */
             }
           } else if (profileErr && !isRpcNotFoundError(profileErr)) {
             console.warn("AdminResidents: resident_profiles", profileErr.message);

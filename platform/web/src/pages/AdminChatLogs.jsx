@@ -4,7 +4,6 @@ import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
 import { canAccessAdminPanel } from "../auth/staffRoles";
 import { supabase } from "../supabase/client";
-import ExcelJS from 'exceljs';
 import toast from "react-hot-toast";
 import { FaArrowLeft, FaFileExcel, FaFilter, FaTimes } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
@@ -218,6 +217,7 @@ export default function AdminChatLogs() {
       const { data, error } = await query;
       if (error) throw error;
 
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Chat Logs');
       worksheet.columns = [

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
+import { fetchInChunks } from "../utils/fetchInChunks";
 import { 
   FaArrowLeft, 
   FaCheck, 
@@ -106,7 +107,31 @@ function Badge({ children, variant = 'default' }) {
   );
 }
 
-function ModerationCard({ incident, onApprove, onReject, processing }) {
+async function loadEvidenceRows(ids) {
+  const run = () =>
+    fetchInChunks(ids, (chunk) =>
+      supabase.from("incident_evidence").select("*").in("incident_id", chunk).order("created_at", { ascending: true })
+    );
+  try {
+    return { rows: await run(), error: null };
+  } catch {
+    try {
+      return { rows: await run(), error: null };
+    } catch (retryError) {
+      return { rows: [], error: retryError };
+    }
+  }
+}
+
+async function loadEvidenceForIncident(incidentId) {
+  const run = () =>
+    supabase.from("incident_evidence").select("*").eq("incident_id", incidentId).order("created_at", { ascending: true });
+  let result = await run();
+  if (result.error) result = await run();
+  return result;
+}
+
+function ModerationCard({ incident, onApprove, onReject, processing, onRetryEvidence }) {
   const formatDate = (dateStr) => {
     const d = parsePatrolTime(dateStr);
     if (!d) return '—';
@@ -190,7 +215,14 @@ function ModerationCard({ incident, onApprove, onReject, processing }) {
           <FaImage className="w-4 h-4" />
           <span>Evidence</span>
         </div>
-        {(!incident.evidenceRows?.length && normalizeMediaUrls(incident.media_urls).length === 0) ? (
+        {incident.evidenceUnknown ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300">
+            Evidence unknown — the photos could not be loaded.{" "}
+            <button type="button" onClick={() => onRetryEvidence?.(incident.id)} className="font-semibold underline">
+              Retry
+            </button>
+          </p>
+        ) : (!incident.evidenceRows?.length && normalizeMediaUrls(incident.media_urls).length === 0) ? (
           <p className="text-sm text-gray-500 dark:text-gray-400 italic">No evidence attached.</p>
         ) : (
           <StructuredEvidenceList
@@ -287,14 +319,13 @@ export default function IncidentModeration() {
 
       const ids = filtered.map((i) => i.id);
       const evidenceMap = {};
+      let evidenceUnknown = false;
       if (ids.length > 0) {
-        const { data: evRows, error: evErr } = await supabase
-          .from("incident_evidence")
-          .select("*")
-          .in("incident_id", ids)
-          .order("created_at", { ascending: true });
+        const { rows: evRows, error: evErr } = await loadEvidenceRows(ids);
         if (gen !== loadGen.current) return;
-        if (!evErr && evRows) {
+        if (evErr) {
+          evidenceUnknown = true;
+        } else {
           for (const row of evRows) {
             if (!evidenceMap[row.incident_id]) evidenceMap[row.incident_id] = [];
             evidenceMap[row.incident_id].push(row);
@@ -305,7 +336,8 @@ export default function IncidentModeration() {
       setIncidents(
         filtered.map((i) => ({
           ...i,
-          evidenceRows: evidenceMap[i.id] || [],
+          evidenceRows: evidenceUnknown ? null : evidenceMap[i.id] || [],
+          evidenceUnknown,
         }))
       );
       lastFetchTime.current = now;
@@ -394,13 +426,17 @@ export default function IncidentModeration() {
               // Only add if not locally processed — load evidence rows for this incident
               if (!processedIds.current.has(payload.new.id)) {
                 void (async () => {
-                  const { data: ev } = await supabase
-                    .from("incident_evidence")
-                    .select("*")
-                    .eq("incident_id", payload.new.id)
-                    .order("created_at", { ascending: true });
+                  const { data: ev, error: evErr } = await loadEvidenceForIncident(payload.new.id);
+                  if (evErr) {
+                    setIncidents((prev) => [
+                      { ...payload.new, evidenceRows: null, evidenceUnknown: true },
+                      ...prev.filter((i) => i.id !== payload.new.id),
+                    ]);
+                    void fetchPendingIncidents({ silent: true, force: true });
+                    return;
+                  }
                   setIncidents((prev) => [
-                    { ...payload.new, evidenceRows: ev || [] },
+                    { ...payload.new, evidenceRows: ev || [], evidenceUnknown: false },
                     ...prev.filter((i) => i.id !== payload.new.id),
                   ]);
                 })();
@@ -675,6 +711,22 @@ export default function IncidentModeration() {
                 onApprove={handleApprove}
                 onReject={handleReject}
                 processing={processing}
+                onRetryEvidence={(incidentId) => {
+                  void (async () => {
+                    const { data: ev, error: evErr } = await loadEvidenceForIncident(incidentId);
+                    if (evErr) {
+                      toast.error("Evidence still failed to load");
+                      return;
+                    }
+                    setIncidents((prev) =>
+                      prev.map((row) =>
+                        row.id === incidentId
+                          ? { ...row, evidenceRows: ev || [], evidenceUnknown: false }
+                          : row
+                      )
+                    );
+                  })();
+                }}
               />
             ))
           )}

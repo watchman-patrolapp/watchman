@@ -5,17 +5,23 @@ import { Capacitor } from '@capacitor/core'
 import { applyInitialTheme } from './utils/theme'
 import App from './App'
 import './index.css'
-import 'leaflet/dist/leaflet.css'  // ✅ ADD THIS - Leaflet base styles
-import './utils/leaflet-icons'      // ✅ Leaflet icon fix — MUST be before any map loads
 import { AuthProvider } from './auth/AuthProvider'
 import { ActiveOrganizationProvider } from './auth/ActiveOrganizationProvider'
 import ErrorBoundary from './components/ErrorBoundary'
 import { Toaster } from 'react-hot-toast'
+import { lazy, Suspense } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { supabase } from './supabase/client';
 import { initSentry } from './utils/initSentry';
 import { installChunkLoadRecovery } from './utils/chunkLoadRecovery';
+
+const ReactQueryDevtools =
+  import.meta.env.DEV &&
+  lazy(() =>
+    import('@tanstack/react-query-devtools').then((mod) => ({
+      default: mod.ReactQueryDevtools,
+    }))
+  )
 
 installChunkLoadRecovery();
 
@@ -109,7 +115,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <App />
           </ActiveOrganizationProvider>
         </AuthProvider>
-        {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
+        {ReactQueryDevtools ? (
+          <Suspense fallback={null}>
+            <ReactQueryDevtools initialIsOpen={false} />
+          </Suspense>
+        ) : null}
       </ErrorBoundary>
     </QueryClientProvider>
   </React.StrictMode>

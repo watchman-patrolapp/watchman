@@ -6,6 +6,7 @@ import { supabase } from "../supabase/client";
 import PageHeader from "../components/layout/PageHeader";
 import { useScopedOrganization } from "../utils/organizationScope";
 import { formatWatchDateTime } from "../utils/watchTime";
+import { fetchInChunks } from "../utils/fetchInChunks";
 
 function activityTypeStyle(type) {
   const raw = String(type || "Activity").trim();
@@ -126,17 +127,22 @@ export default function ResidentActivityList() {
       if (stillValid()) setEventsByIncidentId({});
       return;
     }
-    const { data: eventRows, error: eventErr } = await supabase
-      .from("resident_report_events")
-      .select("id, incident_id, event_type, title, details, created_at")
-      .in("incident_id", incidentIds)
-      .order("created_at", { ascending: true });
-    if (!stillValid()) return;
-    if (eventErr) {
+    let eventRows = [];
+    try {
+      eventRows = await fetchInChunks(incidentIds, (chunk) =>
+        supabase
+          .from("resident_report_events")
+          .select("id, incident_id, event_type, title, details, created_at")
+          .in("incident_id", chunk)
+          .order("created_at", { ascending: true })
+      );
+    } catch (eventErr) {
+      if (!stillValid()) return;
       console.warn("resident_report_events:", eventErr.message);
       setEventsByIncidentId({});
       return;
     }
+    if (!stillValid()) return;
     const grouped = {};
     for (const eventRow of eventRows || []) {
       if (!grouped[eventRow.incident_id]) grouped[eventRow.incident_id] = [];

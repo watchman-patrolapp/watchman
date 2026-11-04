@@ -3,11 +3,12 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from
 import { supabase } from '../supabase/client';
 import { useAuth } from '../auth/useAuth';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import '../utils/leaflet-icons';
 import { COLOR_MAP, normalizeVehicleType } from './VehicleIcon';
 import { mapVehicleTypeToEmoji } from '../utils/vehicleTypeConstants';
 import { FaMapMarkerAlt, FaUser } from 'react-icons/fa';
 import { enrichPatrolRowsWithAvatars } from '../utils/enrichPatrolAvatars';
+import { fetchInChunks } from '../utils/fetchInChunks';
 import { resolvePatrolAvatarUrl } from '../utils/patrolAvatarUrl';
 import {
   groupUserVehiclesByUserId,
@@ -390,14 +391,17 @@ export default function LivePatrolMap() {
           }
         }
         if (garageRows.length === 0 && patrolUserIds.length > 0) {
-          const { data: directGarage, error: directGarageErr } = await supabase
-            .from('user_vehicles')
-            .select('id, user_id, color, is_primary, make_model, registration, vehicle_type')
-            .in('user_id', patrolUserIds);
-          if (directGarageErr) {
+          try {
+            garageRows = await fetchInChunks(patrolUserIds, (chunk) =>
+              supabase
+                .from('user_vehicles')
+                .select('id, user_id, color, is_primary, make_model, registration, vehicle_type')
+                .in('user_id', chunk)
+            );
+          } catch (directGarageErr) {
             console.warn('LivePatrolMap: user_vehicles fetch failed (map may use stale patrol colour)', directGarageErr.message);
+            garageRows = [];
           }
-          garageRows = directGarage || [];
         }
 
         const vehiclesByUserId = groupUserVehiclesByUserId(garageRows);

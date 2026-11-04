@@ -95,6 +95,29 @@ export function parsePatrolTime(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * True when the patrol overlaps [from, to]. Null bounds are open.
+ * Same earliest/latest rule as logOverlapsSince.
+ */
+export function logOverlapsRange(log, from, to) {
+  const since = from ? parsePatrolTime(from) : null;
+  const until = to ? parsePatrolTime(to) : null;
+  const start = parsePatrolTime(log?.start_time);
+  const end = parsePatrolTime(log?.end_time);
+  if (start || end) {
+    const earliest = start || end;
+    const latest = start && end ? (end > start ? end : start) : (end || start);
+    if (since && latest < since) return false;
+    if (until && earliest > until) return false;
+    return true;
+  }
+  const created = parsePatrolTime(log?.created_at);
+  if (!created) return !since && !until;
+  if (since && created < since) return false;
+  if (until && created > until) return false;
+  return true;
+}
+
 /** True when the patrol belongs in a leaderboard window (week / month). */
 export function logOverlapsSince(log, since, now = new Date()) {
   if (!since) return true;

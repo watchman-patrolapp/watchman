@@ -3,6 +3,7 @@
  */
 
 import { isRpcNotFoundError } from './isRpcNotFound';
+import { fetchInChunks } from './fetchInChunks';
 import { formatWatchDateTime, parsePatrolTime } from './watchTime';
 
 export function userDisplayLabelFromRow(row) {
@@ -63,9 +64,14 @@ export async function fetchUserLabelMap(supabase, userIds) {
     console.warn('user_labels_for_audit:', rpcError.message);
   }
 
-  const { data, error } = await supabase.from('users').select('id, full_name, email').in('id', ids);
-  if (error || !data) return {};
-  return rowsToLabelMap(data);
+  try {
+    const data = await fetchInChunks(ids, (chunk) =>
+      supabase.from('users').select('id, full_name, email').in('id', chunk)
+    );
+    return rowsToLabelMap(data);
+  } catch {
+    return {};
+  }
 }
 
 export function formatAuditDateTime(iso) {

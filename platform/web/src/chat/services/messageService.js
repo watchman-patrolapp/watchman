@@ -10,6 +10,7 @@ import {
 } from '../../utils/organizationScope';
 import { messageMatchesChannel } from '../utils/chatChannels';
 import { subscribeChatMessages } from '../realtime/chatRealtimeClient';
+import { fetchInChunks } from '../../utils/fetchInChunks';
 
 /** Duplicate read row (PK message_id, user_id) — not a failure. */
 function isChatReadDuplicateError(error) {
@@ -195,13 +196,12 @@ class MessageService {
 
   async fetchReactions(messageIds = []) {
     if (!messageIds.length) return [];
-    const { data, error } = await supabase
-      .from('chat_message_reactions')
-      .select('message_id, user_id, reaction')
-      .in('message_id', messageIds);
-
-    if (error) throw error;
-    return data || [];
+    return fetchInChunks(messageIds, (chunk) =>
+      supabase
+        .from('chat_message_reactions')
+        .select('message_id, user_id, reaction')
+        .in('message_id', chunk)
+    );
   }
 
   async sendText({

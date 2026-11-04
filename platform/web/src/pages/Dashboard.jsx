@@ -20,7 +20,8 @@ import {
   playPatrolAutoEnd,
   playPatrolSigninNotification
 } from '../utils/sound';
-import { useChatNotifications, useUnreadCount } from '../chat';
+import { useChatNotifications } from '../chat/hooks/useChatNotifications';
+import { useUnreadCount } from '../chat/hooks/useUnreadCount';
 import {
   CHAT_CHANNEL_PATROL,
   CHAT_CHANNEL_RESIDENT,
