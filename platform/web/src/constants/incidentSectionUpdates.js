@@ -58,7 +58,7 @@ for (const id of EVIDENCE_CATEGORY_ORDER) {
 /**
  * Every `section_key` the app may insert or display. Must match Postgres
  * CHECK (section_key IN (...)) on public.incident_section_updates — see
- * supabase/sql/incident_section_updates_constraints.sql and migrations
+ * platform/supabase/archive/incident_section_updates_constraints.sql and migrations
  * 20260329230000 / 20260329250000.
  *
  * - Details tab: incident_date … reporting_member (narrative form).

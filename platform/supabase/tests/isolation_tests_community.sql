@@ -1,6 +1,6 @@
 -- =============================================================================
 -- G7 - Two-org isolation test script (NOT a migration)
--- platform/supabase/sql/isolation_tests_community.sql
+-- platform/supabase/tests/isolation_tests_community.sql
 -- =============================================================================
 -- WHAT IT DOES
 --   Creates two throwaway organizations (A and B) and throwaway users inside ONE
@@ -39,7 +39,7 @@
 --     "G7 ISOLATION: ALL n CHECKS PASSED (rolled back, nothing saved)"
 --     "G7 ISOLATION: k of n CHECKS FAILED: #row test -> detail | ..."
 --   psql alternative (also shows the full results table first):
---     psql "$DB_URL" -f platform/supabase/sql/isolation_tests_community.sql
+--     psql "$DB_URL" -f platform/supabase/tests/isolation_tests_community.sql
 --   After the run, optional proof nothing persisted (expect 0):
 --     SELECT count(*) FROM public.organizations WHERE name LIKE 'g7-isolation-%';
 --

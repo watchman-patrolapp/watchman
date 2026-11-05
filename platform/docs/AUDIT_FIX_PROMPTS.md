@@ -64,7 +64,7 @@ VERIFY: Run `deno check` on each changed function if deno is installed (otherwis
 ## Prompt 2 — Close cross-tenant RLS holes (Critical)
 
 ```text
-You are working in the Watchman multi-tenant platform repo. Backend is platform/supabase (migrations in platform/supabase/migrations, ad-hoc isolation tests in platform/supabase/sql/isolation_tests_community.sql). Create a branch `fix/rls-tenant-isolation`.
+You are working in the Watchman multi-tenant platform repo. Backend is platform/supabase (migrations in platform/supabase/migrations, ad-hoc isolation tests in platform/supabase/tests/isolation_tests_community.sql). Create a branch `fix/rls-tenant-isolation`.
 
 CONTEXT: Later migrations introduced org isolation helpers (look for current_org_ids(), organization_id columns and the `criminal_profiles_*_org` policies in 20260815028000_intelligence_org_isolation.sql). A static audit found tables that still use the ORIGINAL permissive policies and were never tightened. Re-verify each by reading ALL migrations that touch the table (grep the table name across platform/supabase/migrations, in timestamp order) and, if a Supabase CLI/DB is available, by querying pg_policies. Only fix what is truly still open.
 
@@ -79,7 +79,7 @@ CANDIDATES:
 DO:
 - Write ONE new forward-only migration with a fresh timestamp later than the newest file in migrations/ (do not edit or rename existing migrations). Drop the legacy permissive policies by name (use DROP POLICY IF EXISTS) and create org-scoped replacements that mirror the criminal_profiles_*_org approach: child tables resolve the org via profile_id -> criminal_profiles.organization_id and current_org_ids() (use the exact helper names that exist in this repo). Staff-only write rules where the existing UI is staff-only; check src/pages/intelligence and src/components/intelligence to see who legitimately writes.
 - Make sure no SECURITY DEFINER function you add lacks `set search_path = public` and an explicit auth check, and REVOKE EXECUTE from public/anon on new functions.
-- Extend platform/supabase/sql/isolation_tests_community.sql (or add a sibling isolation_tests_intelligence.sql following the same style) with tests proving: user in org A cannot select/insert/update/delete org B rows in each table above, and a legitimate staff member of org A still can.
+- Extend platform/supabase/tests/isolation_tests_community.sql (or add a sibling isolation_tests_intelligence.sql following the same style) with tests proving: user in org A cannot select/insert/update/delete org B rows in each table above, and a legitimate staff member of org A still can.
 - Check the frontend queries for these tables (grep src) still work under the new policies; list any query that would now return fewer rows.
 
 CONSTRAINTS: Migration must be idempotent and wrapped sensibly; do not touch unrelated tables; do not run it against production. If you can't run SQL locally, say so and give me the exact test steps.

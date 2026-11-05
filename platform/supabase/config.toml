@@ -1,5 +1,13 @@
 # For detailed configuration reference documentation, visit:
 # https://supabase.com/docs/guides/local-development/cli/config
+#
+# LOCAL DEV ONLY. Do not run `supabase config push` against the linked
+# production project (ref pfjcxewlsqmfajrogvdo) with this file. That command
+# would publish site_url http://127.0.0.1:3000, email confirmations off,
+# minimum_password_length 6, and the other [auth.*] values below.
+# `supabase functions deploy` does read the [functions.*] blocks; those
+# verify_jwt = false entries are intentional (the function checks a secret
+# or the user JWT itself). See platform/docs/MIGRATION_VERSION_REPAIR.md.
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
 project_id = "web"

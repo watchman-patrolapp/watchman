@@ -80,7 +80,7 @@ Internal document for **Kyzn / operators** and **legal counsel**. Update when th
 | Item | What was added |
 |------|----------------|
 | Chat 6-month purge | Migration `platform/supabase/migrations/20260401141000_chat_messages_retention_purge.sql` defines `public.run_chat_messages_retention_purge()`. |
-| Schedule chat purge | Run `platform/supabase/sql/schedule_chat_retention_cron.sql` once in the **SQL Editor** after enabling **pg_cron** (Dashboard → Database → Extensions), or call the function from an external cron. |
+| Schedule chat purge | Run `platform/supabase/archive/schedule_chat_retention_cron.sql` once in the **SQL Editor** after enabling **pg_cron** (Dashboard → Database → Extensions), or call the function from an external cron. The migration comment in `20260401141000_chat_messages_retention_purge.sql` still names the old `supabase/sql/` path; that file is applied and was not edited. |
 | Patrol schema / RLS | Migration `platform/supabase/migrations/20260401142000_patrol_locations_consolidated.sql` (canonical chain). |
 | `location-cleanup` Edge Function | If env **`CRON_SECRET`** is set, callers must send header **`x-cron-secret: <same value>`**. Register in `platform/supabase/config.toml` as `[functions.location-cleanup]`. |
 

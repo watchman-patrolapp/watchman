@@ -42,3 +42,18 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://example.supabase.co
           VITE_SUPABASE_ANON_KEY: dummy-anon-key
+
+  migrations:
+    name: migration version prefixes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: platform/web/.nvmrc
+
+      - name: Reject new duplicate migration versions
+        run: node platform/scripts/check-migration-versions.mjs

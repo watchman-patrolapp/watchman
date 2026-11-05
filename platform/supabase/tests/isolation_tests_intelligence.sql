@@ -1,5 +1,5 @@
 -- G7 / Prompt 2 - Intelligence + section-update + feedback isolation
--- Sibling of isolation_tests_community.sql (same harness style).
+-- Sibling of platform/supabase/tests/isolation_tests_community.sql (same harness style).
 -- NOT a migration. Run AFTER applying
 -- 20261104100000_rls_tenant_isolation_intelligence.sql on a non-prod DB.
 --
