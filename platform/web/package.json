@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "predev": "node scripts/check-sound-assets.mjs && node scripts/generate-firebase-messaging-sw.mjs && node scripts/check-asset-budget.mjs",
