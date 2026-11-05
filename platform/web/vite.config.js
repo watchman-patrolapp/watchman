@@ -1,6 +1,12 @@
+import fs from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+
+/** Same document Vercel serves from public/ (plugin is off when VERCEL=1). */
+const webManifest = JSON.parse(
+  fs.readFileSync(new URL('./public/manifest.webmanifest', import.meta.url), 'utf8'),
+);
 
 /** Replaces a leftover production Workbox SW so localhost is not stuck on offline.html. */
 const DEV_DESTROY_STALE_SW = `/* vite-dev: unregister stale PWA workers */
@@ -60,38 +66,13 @@ export default defineConfig(({ mode }) => {
             'mask-icon.svg',
             'app-mark.png',
             'offline.html',
-            'assets/icons/icon-192.webp',
-            'assets/icons/icon-512.webp',
+            'icons/icon-192.png',
+            'icons/icon-512.png',
+            'icons/icon-maskable-512.png',
+            'fonts/inter-latin-wght-normal.woff2',
+            'fonts/inter-latin-ext-wght-normal.woff2',
           ],
-          manifest: {
-            name: 'Neighbourhood Watch',
-            short_name: 'PatrolWatch',
-            description: 'Emergency patrol and neighbourhood watch coordination',
-            theme_color: '#0d9488',
-            background_color: '#0f766e',
-            display: 'standalone',
-            orientation: 'portrait-primary',
-            scope: '/',
-            start_url: '/',
-            icons: [
-              {
-                src: '/assets/icons/icon-192.webp',
-                sizes: '192x192',
-                type: 'image/webp',
-              },
-              {
-                src: '/assets/icons/icon-512.webp',
-                sizes: '512x512',
-                type: 'image/webp',
-              },
-              {
-                src: '/assets/icons/icon-512.webp',
-                sizes: '512x512',
-                type: 'image/webp',
-                purpose: 'any maskable',
-              },
-            ],
-          },
+          manifest: webManifest,
           workbox: {
             // Do not bind navigations to a precached index.html. That handler is
             // cache-first and would keep a stale shell after a deploy. NetworkFirst

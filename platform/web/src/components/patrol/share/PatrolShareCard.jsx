@@ -11,7 +11,7 @@ export const SHARE_CARD_HEIGHT = 500;
 
 const FONT = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 const NUM = { fontVariantNumeric: "tabular-nums", fontFeatureSettings: "'tnum' 1" };
-const MONO = "'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 // react-icons/fa FaCar (same glyph as components/VehicleIcon.jsx), inlined for capture.
 const FA_CAR_PATH =

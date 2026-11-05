@@ -4,8 +4,20 @@ Vite + React SPA deployed on **Vercel** with **Root Directory** = `platform/web`
 
 ## Node.js
 
-- **Local:** use Node **20 LTS** (`nvm use` reads `.nvmrc`, currently `20.18.3`).
-- **CI / Vercel:** `package.json` `engines.node` is `>=20` (matches Vercel’s Node 20 runtime).
+- **Local / CI:** Node **22 LTS**. `.nvmrc` is `22.23.4` (`nvm use`). GitHub Actions reads that file via `actions/setup-node`.
+- **Vercel:** `package.json` `engines.node` is `22.x`, so the Vite build stays on a Node release Vite supports (20.19+ or 22.12+). Node 20.18 is too old for the rolldown binding Vite 8 ships.
+
+## Security headers
+
+`vercel.json` sends HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, and `X-Frame-Options: DENY` on every response. `Content-Security-Policy-Report-Only` covers the app origin plus Supabase (https and wss), Firebase/Google APIs, Sentry, OpenStreetMap tiles, CARTO, ArcGIS imagery, Nominatim, Photon, and Open-Meteo. Images may also be `blob:` or `data:`.
+
+Hashed `/assets/*`, `/fonts/*`, `/sounds/*`, and `/icons/*` are cached for one year, immutable. `no-cache` is limited to `/`, `/index.html`, service workers, the web manifest, and extensionless app routes (those rewrite to the HTML shell).
+
+Promote the policy from report-only to enforcing after about a week of clean reports:
+
+1. In the browser console (or a report endpoint, if you add one), confirm there are no unexpected `Content-Security-Policy-Report-Only` violations on login, patrol map, incident photos, chat, and SOS.
+2. In `platform/web/vercel.json`, rename the header key `Content-Security-Policy-Report-Only` to `Content-Security-Policy`. Leave the value as it is unless a report showed a host that still needs to be allowed.
+3. Redeploy and recheck those same flows. `frame-ancestors 'none'` and `X-Frame-Options: DENY` both stay.
 
 ## Install and build
 
