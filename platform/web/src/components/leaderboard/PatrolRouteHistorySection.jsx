@@ -51,11 +51,12 @@ export default function PatrolRouteHistorySection({ userPatrols, userId, routeRo
   }, [userId]);
 
   useEffect(() => {
+    const fetchedKeys = streetsFetchedRef.current;
     if (!expandedKey) return;
     const latlngs = routeCache[expandedKey];
     if (!latlngs || latlngs.length < 2) return;
-    if (streetsFetchedRef.current.has(expandedKey)) return;
-    streetsFetchedRef.current.add(expandedKey);
+    if (fetchedKeys.has(expandedKey)) return;
+    fetchedKeys.add(expandedKey);
 
     let cancelled = false;
     setStreetsByKey((prev) => ({
@@ -84,7 +85,7 @@ export default function PatrolRouteHistorySection({ userPatrols, userId, routeRo
 
     return () => {
       cancelled = true;
-      streetsFetchedRef.current.delete(expandedKey);
+      fetchedKeys.delete(expandedKey);
     };
   }, [expandedKey, routeCache]);
 

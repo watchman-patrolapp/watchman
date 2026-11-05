@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
@@ -37,7 +37,7 @@ export default function BillingDashboard() {
   });
   const subsGen = useRef(0);
 
-  const loadSubscriptions = async () => {
+  const loadSubscriptions = useCallback(async () => {
     if (!selectedOrgId) return;
     const gen = ++subsGen.current;
     setLoading(true);
@@ -57,12 +57,12 @@ export default function BillingDashboard() {
     } finally {
       if (gen === subsGen.current) setLoading(false);
     }
-  };
+  }, [selectedOrgId]);
 
   useEffect(() => {
     if (!selectedOrgId) return;
     void loadSubscriptions();
-  }, [selectedOrgId]);
+  }, [loadSubscriptions, selectedOrgId]);
 
   useEffect(() => {
     if (!canAccessPlatformConsole(user?.platformRole)) return;

@@ -69,6 +69,7 @@ function FitToItems({ events, cameras, showCameras }) {
     }
     const bounds = L.latLngBounds(latlngs);
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17, animate: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- key serializes events, cameras, and showCameras
   }, [key, map]);
 
   return null;

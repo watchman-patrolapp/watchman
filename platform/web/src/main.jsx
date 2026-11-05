@@ -82,7 +82,9 @@ void registerFcmServiceWorkerWhenNeeded();
 setupFcmNotificationBridge();
 
 initSentry();
-window.supabase = supabase;
+if (import.meta.env.DEV) {
+  window.supabase = supabase;
+}
 
 // Drop stale dev service workers (Workbox) so localhost uses plain network + Vite HMR.
 if (import.meta.env.DEV && typeof navigator !== 'undefined' && navigator.serviceWorker) {

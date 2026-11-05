@@ -28,7 +28,7 @@ function applyMoTemplate(prev, template) {
 /**
  * Expandable MO starter templates — appends to methods / patterns / notes (does not replace).
  */
-export default function MoTemplatePicker({ moSignature, setMoSignature }) {
+export default function MoTemplatePicker({ setMoSignature }) {
   return (
     <div className="mb-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-900/30">
       <p className="mb-2 text-xs font-medium text-gray-800 dark:text-gray-200">MO starter templates</p>

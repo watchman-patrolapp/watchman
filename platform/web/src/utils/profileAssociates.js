@@ -13,7 +13,7 @@ export function normalizeProfileAssociateRow(row, viewerProfileId) {
   const otherId = outgoing ? row.associate_profile_id : row.profile_id;
   const otherProfile = outgoing ? row.associate_profile : row.subject_profile;
 
-  const { subject_profile, associate_profile, ...rest } = row;
+  const { subject_profile, associate_profile: _associateProfile, ...rest } = row;
 
   return {
     ...rest,

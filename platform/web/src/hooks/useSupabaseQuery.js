@@ -81,10 +81,13 @@ export function useSupabaseQuery(queryFn, deps = [], options = {}) {
   }, [user, enabled])
   // Note: queryFnRef is intentionally excluded — it's a ref, always stable.
 
+  // One string key so exhaustive-deps can verify the caller list (a spread cannot be checked).
+  const depsKey = JSON.stringify(deps ?? [])
+
   // Single effect: user/enabled (via fetchData) + caller deps — avoids double-fetch on mount.
   useEffect(() => {
     fetchData()
-  }, [fetchData, ...deps])
+  }, [fetchData, depsKey])
 
   const refetch = useCallback(() => {
     fetchData()

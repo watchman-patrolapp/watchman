@@ -30,6 +30,7 @@ import {
 } from '../utils/getChatGeolocation';
 import { QuickTemplates } from './QuickTemplates'; // ✅ Import external component
 import toast from 'react-hot-toast';
+import { devLog } from '../../utils/devLog';
 
 // ============================================================================
 // INLINE: VoiceRecorder Component (KEPT INTACT - WORKING RELIABLY)
@@ -194,7 +195,7 @@ const VoiceRecorder = React.memo(function VoiceRecorder({ onSend, onCancel, maxD
       return;
     }
     
-    console.log('Sending voice:', { blobSize: audioBlob.size, blobType: audioBlob.type, duration, url: audioUrl });
+    devLog('Sending voice:', { blobSize: audioBlob.size, blobType: audioBlob.type, duration, url: audioUrl });
     onSend(audioBlob, duration, audioUrl);
   }, [audioBlob, duration, audioUrl, onSend]);
 
@@ -523,7 +524,7 @@ export const MessageInput = React.memo(function MessageInput({
 
   // ✅ Voice send handler (unchanged)
   const handleVoiceSend = useCallback(async (blob, duration, previewUrl) => {
-    console.log('handleVoiceSend called:', { blobSize: blob.size, blobType: blob.type, duration, previewUrl });
+    devLog('handleVoiceSend called:', { blobSize: blob.size, blobType: blob.type, duration, previewUrl });
     
     setIsRecording(false);
     

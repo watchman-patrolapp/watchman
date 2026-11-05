@@ -114,10 +114,8 @@ function currentStreakFromDates(sortedDates) {
   return streak;
 }
 
-function holidayIdForDate(date) {
-  const m = date.getMonth() + 1;
-  const day = date.getDate();
-  return SA_FIXED_HOLIDAYS.find((h) => h.month === m && h.day === day)?.id || null;
+function holidayIdForDate(month, day) {
+  return SA_FIXED_HOLIDAYS.find((h) => h.month === month && h.day === day)?.id || null;
 }
 
 /**
@@ -168,7 +166,7 @@ export function buildVolunteerStats(logs, routeRows = [], opts = {}) {
     hourStarts[hour] += 1;
     dowCounts[dow] += 1;
     seasonCounts[saSeason(parts.month - 1)] += 1;
-    const hid = SA_FIXED_HOLIDAYS.find((h) => h.month === parts.month && h.day === parts.day)?.id || null;
+    const hid = holidayIdForDate(parts.month, parts.day);
     if (hid) holidayCounts[hid] += 1;
     if (dow === 5 && parts.day === 13) friday13thCount += 1;
     if (parts.month === 2 && parts.day === 29) leapDayCount += 1;

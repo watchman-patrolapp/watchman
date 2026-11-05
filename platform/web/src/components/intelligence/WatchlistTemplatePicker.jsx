@@ -21,7 +21,7 @@ function appendWatchlistFlag(current, flag) {
 /**
  * Grouped, expandable template chips for watchlist flags.
  */
-export default function WatchlistTemplatePicker({ watchlistFlags, setWatchlistFlags }) {
+export default function WatchlistTemplatePicker({ setWatchlistFlags }) {
   return (
     <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-3 dark:border-amber-700/50 dark:bg-gray-900/40">
       <p className="mb-2 text-xs font-medium text-amber-900 dark:text-amber-200">Quick-add watchlist tags</p>
