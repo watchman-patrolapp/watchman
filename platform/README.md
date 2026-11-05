@@ -12,7 +12,57 @@ This folder holds everything that ships as the product:
 
 **Vercel:** set the project **Root Directory** to `platform/web` (not the repository root).
 
-**Android APK:** from `platform/web`, run `npm run android:sync` then `npm run android:apk:debug` (or open `platform/android` in Android Studio).
+**Android debug APK:** from `platform/web`, run `npm run android:sync` then `npm run android:apk:debug` (or open `platform/android` in Android Studio). On macOS or Linux the Gradle wrapper is `npm run android:apk:debug:unix`.
+
+`applicationId` is `com.watchman.app`. Do not change it. `versionCode` / `versionName` default to **6** / **1.0.5** from [`android/version.properties`](android/version.properties). Override for one build with `-Pwatchman.versionCode` / `-Pwatchman.versionName` or `WATCHMAN_VERSION_CODE` / `WATCHMAN_VERSION_NAME` (flags, then env, then the file). Bump the file with:
+
+```bash
+node platform/android/scripts/bump-version.mjs --bump-code --name 1.0.6
+# or set both explicitly
+node platform/android/scripts/bump-version.mjs --code 7 --name 1.0.6
+```
+
+Play needs a higher `versionCode` on every upload. Confirm the printed values with `cd platform/android && ./gradlew printWatchmanVersion`.
+
+### Android release signing
+
+Release builds are minified (`minifyEnabled`, `shrinkResources`) and must be signed with the upload key. The debug keystore is not used. No keystore, `keystore.properties`, or `google-services.json` belongs in git.
+
+1. Create the upload key **outside the repo** (passwords go in a password manager). Enroll the app in Play App Signing; this keystore is the upload key, and Google holds the app signing key.
+
+   ```bash
+   mkdir -p "$HOME/keys"
+   keytool -genkeypair -v \
+     -keystore "$HOME/keys/watchman-upload.jks" \
+     -alias watchman-upload \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+2. Point Gradle at it. Either copy [`android/keystore.properties.example`](android/keystore.properties.example) to `platform/android/keystore.properties` (gitignored) and fill `storeFile`, `storePassword`, `keyAlias`, `keyPassword`, or export the same values as `WATCHMAN_UPLOAD_STORE_FILE`, `WATCHMAN_UPLOAD_STORE_PASSWORD`, `WATCHMAN_UPLOAD_KEY_ALIAS`, and `WATCHMAN_UPLOAD_KEY_PASSWORD`. A non-blank properties entry overrides the matching env var. `storeFile` may be absolute or relative to `platform/android/`.
+
+3. Build the signed Play App Bundle from `platform/android`:
+
+   ```bash
+   ./gradlew bundleRelease
+   ```
+
+   Windows: `gradlew.bat bundleRelease`. From `platform/web`: `npm run android:bundle:release:unix` (or `android:bundle:release` on Windows). The AAB is `platform/android/app/build/outputs/bundle/release/app-release.aab`. `assembleRelease` / `bundleRelease` fail immediately, naming the missing key, when signing is not configured.
+
+`google-services.json` stays gitignored. Copy [`android/app/google-services.json.example`](android/app/google-services.json.example) (`package_name` `com.watchman.app`) only on a machine that should receive FCM. Without that file the Google Services plugin is not applied.
+
+Cleartext HTTP is off (`usesCleartextTraffic` and `network_security_config`). `allowBackup` is false, so Auto Backup does not export shared preferences or WebView storage. WebView remote debugging is on only when the build is debuggable. `cap sync` writes `res/xml/config.xml` with no Cordova `<access origin="*">` (`cordova.accessOrigins` is `[]` in `web/capacitor.config.json`). Nothing in this app reads that whitelist; Capacitor does not use it for the WebView.
+
+Background tracking while the screen is off is a separate change. See [`docs/ANDROID_BACKGROUND_TRACKING.md`](docs/ANDROID_BACKGROUND_TRACKING.md).
+
+**Release smoke test** (no device in CI): `./gradlew assembleRelease` with the upload key set. Then confirm `app/build/outputs/apk/release/app-release.apk` is signed, `application-debuggable` is absent, `versionCode` is 6 and `versionName` is `1.0.5` unless you overrode them, and `android.permission.ACCESS_BACKGROUND_LOCATION` is absent:
+
+```bash
+apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+aapt dump badging app/build/outputs/apk/release/app-release.apk | head
+```
+
+On a phone: install that APK, sign in, start a patrol, confirm the map still follows you, then put the app in the background and confirm a release build does not show a WebView debug socket (`chrome://inspect` stays empty).
+
 
 **Supabase CLI:** run commands from the repo root or `platform/supabase` as you did before; config paths are under `platform/supabase`.
 

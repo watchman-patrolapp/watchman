@@ -22,6 +22,8 @@
     "android:apk:debug": "npm run android:sync && cd ../android && gradlew.bat assembleDebug",
     "android:apk:debug:clean": "npm run android:sync:clean && cd ../android && gradlew.bat assembleDebug",
     "android:apk:debug:unix": "npm run android:sync && cd ../android && ./gradlew assembleDebug",
+    "android:bundle:release": "cd ../android && gradlew.bat bundleRelease",
+    "android:bundle:release:unix": "cd ../android && ./gradlew bundleRelease",
     "sounds:placeholders": "node scripts/generate-placeholder-sounds.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
