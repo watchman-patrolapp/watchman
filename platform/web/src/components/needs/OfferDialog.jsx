@@ -30,7 +30,7 @@ export default function OfferDialog({ item, onClose, onSent }) {
   const [pledge, setPledge] = useState("");
   const itemId = item?.id;
   const knownCovered = item?.covered_cents;
-  const [fetchedCovered, setFetchedCovered] = useState(null);
+  const [fetchedCovered, setFetchedCovered] = useState(undefined);
 
   useEffect(() => {
     if (kind !== "contribute_cost" || !itemId) return undefined;
@@ -57,7 +57,9 @@ export default function OfferDialog({ item, onClose, onSent }) {
   if (!item) return null;
   const blocked = noteLooksLikePaymentDetails(note);
   const noQuantity = NO_QUANTITY_OFFER_KINDS.includes(kind);
-  const coveredCents = knownCovered != null ? Number(knownCovered) || 0 : fetchedCovered;
+  const coveredCents = !item?.ledger_unknown && knownCovered != null ? Number(knownCovered) || 0 : fetchedCovered;
+  const coveredPending = coveredCents === undefined;
+  const coveredUnknown = coveredCents === null;
   const typedPledge = pledgeRandsToCents(pledge);
   const summary = wishlistPledgeSummary(item, coveredCents ?? 0, Number.isNaN(typedPledge) ? 0 : typedPledge || 0);
 
@@ -128,10 +130,12 @@ export default function OfferDialog({ item, onClose, onSent }) {
                 <dd className="text-right">{formatEstPrice(summary.outstandingCents)}</dd>
                 <dt>Already covered</dt>
                 <dd className="text-right text-emerald-700 dark:text-emerald-300">
-                  {coveredCents == null ? "Loading." : formatEstPrice(summary.covered)}
+                  {coveredPending ? "Loading." : coveredUnknown ? "Unknown" : formatEstPrice(summary.covered)}
                 </dd>
                 <dt className="font-medium">Still to cover</dt>
-                <dd className="text-right font-semibold text-gray-900 dark:text-white">{formatEstPrice(summary.stillToCover)}</dd>
+                <dd className="text-right font-semibold text-gray-900 dark:text-white">
+                  {coveredPending ? "Loading." : coveredUnknown ? "Unknown" : formatEstPrice(summary.stillToCover)}
+                </dd>
               </dl>
             ) : (
               <p>No estimated price yet, so there is no target amount. Any pledge helps.</p>
@@ -142,7 +146,7 @@ export default function OfferDialog({ item, onClose, onSent }) {
                 {summary.pct != null ? ` (${summary.pct}% of what is still to cover)` : ""}
               </p>
             ) : null}
-            {summary.exceeds ? (
+            {!coveredUnknown && !coveredPending && summary.exceeds ? (
               <p className="mt-1 text-amber-700 dark:text-amber-300">
                 {summary.stillToCover > 0
                   ? "This is more than what is still needed. That is fine, the committee will use any extra wisely."

@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { fetchInChunks } from "./fetchInChunks";
 
 const NESTED_SELECT = `
   *,
@@ -50,14 +51,23 @@ async function hydrateMemberships(rows) {
     return list.map(shapeSecurityMembershipRow);
   }
 
-  const [{ data: orgs }, { data: brands }] = await Promise.all([
-    needsOrg
-      ? supabase.from("organizations").select("id, name").in("id", companyIds)
-      : Promise.resolve({ data: [] }),
-    needsBrand
-      ? supabase.from("security_company_branding").select("*").in("security_company_id", companyIds)
-      : Promise.resolve({ data: [] }),
-  ]);
+  let orgs = [];
+  let brands = [];
+  try {
+    [orgs, brands] = await Promise.all([
+      needsOrg
+        ? fetchInChunks(companyIds, (chunk) => supabase.from("organizations").select("id, name").in("id", chunk))
+        : Promise.resolve([]),
+      needsBrand
+        ? fetchInChunks(companyIds, (chunk) =>
+            supabase.from("security_company_branding").select("*").in("security_company_id", chunk)
+          )
+        : Promise.resolve([]),
+    ]);
+  } catch {
+    orgs = [];
+    brands = [];
+  }
 
   const orgById = Object.fromEntries((orgs || []).map((org) => [org.id, org]));
   const brandById = Object.fromEntries(

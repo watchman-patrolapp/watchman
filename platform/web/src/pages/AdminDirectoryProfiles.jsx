@@ -13,6 +13,7 @@ import { isResidentAppRole, normalizeAppRole } from "../auth/roleMatrix";
 import AreaContextBar from "../components/layout/AreaContextBar";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
 import { formatWatchDate, parsePatrolTime } from "../utils/watchTime";
+import { fetchInChunks } from "../utils/fetchInChunks";
 
 const THEMES = {
   patroller: {
@@ -222,12 +223,18 @@ export default function AdminDirectoryProfiles({ variant = "patroller" }) {
         const ids = scopedUsers.map((user) => user.id).filter(Boolean);
         let profileByUser = {};
         if (ids.length) {
-          const { data: profileRows, error: profileErr } = await supabase
-            .from("resident_profiles")
-            .select("user_id, verification_date, verification_method")
-            .in("user_id", ids);
-          if (profileErr && !isRpcNotFoundError(profileErr)) {
-            console.warn("AdminDirectoryProfiles: resident_profiles", profileErr.message);
+          let profileRows = [];
+          try {
+            profileRows = await fetchInChunks(ids, (chunk) =>
+              supabase
+                .from("resident_profiles")
+                .select("user_id, verification_date, verification_method")
+                .in("user_id", chunk)
+            );
+          } catch (profileErr) {
+            if (!isRpcNotFoundError(profileErr)) {
+              console.warn("AdminDirectoryProfiles: resident_profiles", profileErr.message);
+            }
           }
           for (const row of profileRows || []) {
             profileByUser[row.user_id] = row;

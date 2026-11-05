@@ -3,6 +3,7 @@
  * Prefer RPC get_active_patroller_avatars() (SECURITY DEFINER) so patroller avatars work under users RLS.
  */
 import { isRpcNotFoundError } from './isRpcNotFound';
+import { fetchInChunks } from './fetchInChunks';
 
 let avatarsRpcTriedAndMissing = false;
 
@@ -37,13 +38,26 @@ export async function enrichPatrolRowsWithAvatars(supabase, patrolRows) {
     const ids = [...new Set(list.map((p) => p.user_id).filter(Boolean))];
     let users;
     let error;
-    ({ data: users, error } = await supabase.from('users').select('id, avatar_url, phone').in('id', ids));
+    try {
+      users = await fetchInChunks(ids, (chunk) =>
+        supabase.from('users').select('id, avatar_url, phone').in('id', chunk)
+      );
+    } catch (err) {
+      error = err;
+    }
     const missingPhoneCol =
       error?.code === 'PGRST204' &&
       typeof error?.message === 'string' &&
       error.message.toLowerCase().includes('phone');
     if (missingPhoneCol) {
-      ({ data: users, error } = await supabase.from('users').select('id, avatar_url').in('id', ids));
+      try {
+        users = await fetchInChunks(ids, (chunk) =>
+          supabase.from('users').select('id, avatar_url').in('id', chunk)
+        );
+        error = null;
+      } catch (err) {
+        error = err;
+      }
     }
     if (error) {
       if (!avatarsRpcTriedAndMissing) {

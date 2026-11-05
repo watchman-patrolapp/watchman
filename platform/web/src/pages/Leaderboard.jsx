@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
 import { 
@@ -20,102 +21,58 @@ import { DEFAULT_PATROL_ZONE, displayPatrolZone } from "../config/neighborhoodRe
 import { initialsFromName } from "../utils/residentVerification";
 import { buildLeaderboardFunFacts } from "../utils/leaderboardFunFacts";
 import { evaluateLeaderboardBadges } from "../utils/leaderboardBadges";
-import { TIME_RANGES, buildVolunteerStats } from "../utils/volunteerStats";
-import { periodStartDate, logOverlapsSince, watchDayStamp, addCalendarDays, parsePatrolTime, activePatrolAsLog, durationMinutesFromLog } from "../utils/watchTime";
-import { fetchAllQueryPages } from "../utils/fetchPagedRows";
+import { buildVolunteerStats } from "../utils/volunteerStats";
+import { watchDayStamp, addCalendarDays, parsePatrolTime, durationMinutesFromLog, periodStartDate } from "../utils/watchTime";
+import { boundsForRange, last90DayRange, rangeForPreset, rangeLabel } from "../utils/leaderboardRange";
+import {
+  fetchLeaderboardStats,
+  fetchSelfPatrolBundle,
+  leaderboardSelfQueryKey,
+  leaderboardStatsQueryKey,
+} from "../utils/leaderboardQuery";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import FunFactsPanel from "../components/leaderboard/FunFactsPanel";
 import BadgesPanel from "../components/leaderboard/BadgesPanel";
 import VolunteerProfileSheet from "../components/leaderboard/VolunteerProfileSheet";
 import PatrolFuelCard from "../components/leaderboard/PatrolFuelCard";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar
-} from "recharts";
 import toast from "react-hot-toast";
-import PatrolRouteHistorySection from "../components/leaderboard/PatrolRouteHistorySection";
 import MyUpcomingPatrolSignups from "../components/leaderboard/MyUpcomingPatrolSignups";
 import { useScopedOrganization } from "../utils/organizationScope";
 import { useAreaWeather } from "../hooks/useAreaWeather";
 import { useAreaHourlyWeather } from "../hooks/useAreaHourlyWeather";
 import { describeCurrentPatrolWeather, summarizePatrolWeather } from "../utils/patrolWeather";
 import { mergeFuelVehicles } from "../utils/patrolFuelEstimate";
-import { fetchPatrolLocationPoints, fetchPatrolRouteRows } from "../utils/patrolHistoryRoute";
+import { fetchPatrolLocationPoints } from "../utils/patrolHistoryRoute";
 import { usePetrolPrice } from "../hooks/usePetrolPrice";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Recharts 3 defaults initial size to -1; flex/grid parents need a positive seed to avoid console warnings. */
-const CHART_INITIAL = { width: 800, height: 256 };
-const CHART_INITIAL_SHORT = { width: 800, height: 224 };
+const leaderboardCharts = () => import("../components/leaderboard/LeaderboardCharts");
+const TopVolunteersBarChart = lazy(() => leaderboardCharts().then((m) => ({ default: m.TopVolunteersBarChart })));
+const WeeklyTrendChart = lazy(() => leaderboardCharts().then((m) => ({ default: m.WeeklyTrendChart })));
+const FavoriteTimeRadar = lazy(() => leaderboardCharts().then((m) => ({ default: m.FavoriteTimeRadar })));
+const PatrolRouteHistorySection = lazy(() => import("../components/leaderboard/PatrolRouteHistorySection"));
 
 const PERIODS = [
   { id: 'week', label: 'This week' },
   { id: 'month', label: 'This month' },
+  { id: '90d', label: 'Last 90 days' },
   { id: 'all', label: 'All time' },
 ];
 
-function resolveVolunteerName(log, nameByUserId = {}) {
-  const fromLog = String(log?.user_name || "").trim();
-  if (fromLog) return fromLog;
-  const fromProfile = log?.user_id ? String(nameByUserId?.[log.user_id] || "").trim() : "";
-  return fromProfile;
+function ChartSkeleton({ className = "h-64" }) {
+  return <div className={`${className} w-full animate-pulse rounded-xl bg-gray-100 dark:bg-gray-700`} />;
 }
+
+const EMPTY_ROWS = [];
 
 /** Stable key so active_patrols + patrol_logs with different timestamp string forms still dedupe. */
 function patrolIdentityKey(userId, startTime) {
   const t = parsePatrolTime(startTime);
   return `${userId || ""}|${t ? t.toISOString() : String(startTime || "")}`;
-}
-
-function chartAxisName(name) {
-  const raw = String(name || "").trim();
-  if (!raw) return "Volunteer";
-  return raw.split(/\s+/)[0];
-}
-
-function aggregateLeaderboard(logs, nameByUserId = {}) {
-  const stats = {};
-  (logs || []).forEach((log) => {
-    const key = log.user_id || log.user_name;
-    if (!key) return;
-    const resolved = resolveVolunteerName(log, nameByUserId);
-    if (!stats[key]) {
-      stats[key] = {
-        name: resolved,
-        totalMinutes: 0,
-        patrols: 0,
-        userId: log.user_id || null,
-      };
-    }
-    stats[key].totalMinutes += durationMinutesFromLog(log);
-    stats[key].patrols += 1;
-    if (log.user_id && !stats[key].userId) stats[key].userId = log.user_id;
-    if (resolved) stats[key].name = resolved;
-  });
-
-  return Object.values(stats)
-    .sort((a, b) => b.totalMinutes - a.totalMinutes || String(a.name).localeCompare(String(b.name)))
-    .map((item, index) => ({
-      ...item,
-      rank: index + 1,
-      name: item.name || "Volunteer",
-    }));
 }
 
 function formatHoursMinutes(totalMinutes) {
@@ -125,10 +82,6 @@ function formatHoursMinutes(totalMinutes) {
   if (h <= 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
-}
-
-function minutesToChartHours(totalMinutes) {
-  return Math.round((Math.max(0, Number(totalMinutes) || 0) / 60) * 10) / 10;
 }
 
 // ---------------------------------------------------------------------------
@@ -362,72 +315,6 @@ function ActivityHeatmap({ patrolData }) {
   );
 }
 
-function RadarPeriodTick({ x, y, payload, textAnchor }) {
-  const lines = String(payload?.value || "").split(/\s+/).filter(Boolean);
-  return (
-    <text x={x} y={y} textAnchor={textAnchor || "middle"} fill="#6b7280" fontSize={11}>
-      {lines.map((line, i) => (
-        <tspan
-          key={`${line}-${i}`}
-          x={x}
-          dy={i === 0 ? (lines.length > 1 ? "-0.45em" : "0.35em") : "1.15em"}
-        >
-          {line}
-        </tspan>
-      ))}
-    </text>
-  );
-}
-
-function FavoriteTimeRadar({ timeDistribution }) {
-  const data = Object.entries(timeDistribution).map(([period, count]) => ({
-    period: TIME_RANGES[period].label,
-    count: count || 0,
-    fullMark: Math.max(...Object.values(timeDistribution), 1)
-  }));
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 min-w-0">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        <FaClock className="text-violet-500" />
-        Patrol Preferences
-      </h3>
-      <div className="h-72 w-full min-w-0 min-h-[18rem] overflow-visible">
-        <ResponsiveContainer
-          width="100%"
-          height="100%"
-          minWidth={0}
-          minHeight={200}
-          initialDimension={CHART_INITIAL}
-        >
-          <RadarChart
-            data={data}
-            cx="50%"
-            cy="50%"
-            outerRadius="45%"
-            margin={{ top: 24, right: 36, bottom: 24, left: 36 }}
-          >
-            <PolarGrid stroke="#e5e7eb" />
-            <PolarAngleAxis dataKey="period" tickLine={false} tick={(props) => <RadarPeriodTick {...props} />} />
-            <PolarRadiusAxis angle={90} domain={[0, 'auto']} tick={false} />
-            <Radar
-              name="Your Patrols"
-              dataKey="count"
-              stroke="#8b5cf6"
-              fill="#8b5cf6"
-              fillOpacity={0.3}
-            />
-            <Tooltip 
-              contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }}
-              formatter={(val) => [val, 'Patrols']}
-            />
-          </RadarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
 function RecentPatrols({ patrols }) {
   const recentPatrols = (patrols || []).slice(0, 5);
 
@@ -502,146 +389,71 @@ function RecentPatrols({ patrols }) {
 export default function Leaderboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { scope, activeOrganizationId } = useScopedOrganization();
+  const { activeOrganizationId } = useScopedOrganization();
   const petrol = usePetrolPrice(activeOrganizationId || user?.organizationId);
-  
-  const [allLogs, setAllLogs] = useState([]);
-  const [userStats, setUserStats] = useState(null);
-  const [userPatrols, setUserPatrols] = useState([]);
-  /** Rows from patrol_routes for the signed-in user (optional table). */
-  const [patrolRouteRows, setPatrolRouteRows] = useState([]);
+
+  const [range, setRange] = useState(() => last90DayRange());
   const [locationPoints, setLocationPoints] = useState([]);
-  const [avatarByUserId, setAvatarByUserId] = useState({});
-  const [nameByUserId, setNameByUserId] = useState({});
-  const [vehicleByUserId, setVehicleByUserId] = useState({});
-  const [period, setPeriod] = useState("week");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [selectedVolunteer, setSelectedVolunteer] = useState(null);
-  const fetchGenRef = useRef(0);
 
-  const fetchData = useCallback(async () => {
-    const runId = ++fetchGenRef.current;
-    setLoading(true);
-    setError(null);
-    
-    try {
-      // Fetch all patrol logs
-      let logs;
-      try {
-        logs = await fetchAllQueryPages(() =>
-          scope(
-            supabase
-              .from("patrol_logs")
-              .select("user_name, duration_minutes, start_time, end_time, zone, user_id, created_at")
-          ).order("start_time", { ascending: false })
-        );
-      } catch (err) {
-        if (!/created_at/i.test(String(err?.message || err))) throw err;
-        logs = await fetchAllQueryPages(() =>
-          scope(
-            supabase
-              .from("patrol_logs")
-              .select("user_name, duration_minutes, start_time, end_time, zone, user_id")
-          ).order("start_time", { ascending: false })
-        );
-      }
-      if (runId !== fetchGenRef.current) return;
+  const bounds = useMemo(() => boundsForRange(range), [range]);
+  const isAllTime = !bounds.from && !bounds.to;
+  const periodLabel = rangeLabel(range);
+  const preset = range.preset;
 
-      let activeLogs = [];
-      try {
-        const { data: active, error: activeError } = await scope(
-          supabase.from("active_patrols").select("user_name, start_time, user_id, zone")
-        );
-        if (!activeError && Array.isArray(active) && active.length) {
-          const now = new Date();
-          const started = new Set(
-            logs.map((log) => patrolIdentityKey(log.user_id, log.start_time))
-          );
-          activeLogs = active
-            .map((row) => activePatrolAsLog(row, now))
-            .filter((row) => !started.has(patrolIdentityKey(row.user_id, row.start_time)));
-        }
-      } catch {
-        activeLogs = [];
-      }
-      if (runId !== fetchGenRef.current) return;
+  const boardQuery = useQuery({
+    queryKey: leaderboardStatsQueryKey(activeOrganizationId, bounds.from, bounds.to),
+    enabled: Boolean(activeOrganizationId),
+    staleTime: 60_000,
+    queryFn: () => fetchLeaderboardStats(activeOrganizationId, bounds.from, bounds.to),
+  });
+  const allTimeQuery = useQuery({
+    queryKey: leaderboardStatsQueryKey(activeOrganizationId, null, null),
+    enabled: Boolean(activeOrganizationId) && !isAllTime,
+    staleTime: 5 * 60_000,
+    queryFn: () => fetchLeaderboardStats(activeOrganizationId, null, null),
+  });
+  const selfQuery = useQuery({
+    queryKey: leaderboardSelfQueryKey(user?.id, activeOrganizationId),
+    enabled: Boolean(user?.id && activeOrganizationId),
+    staleTime: 60_000,
+    queryFn: () => fetchSelfPatrolBundle(user),
+  });
 
-      const combinedLogs = [...activeLogs, ...logs];
-      setAllLogs(combinedLogs);
-
-      let profileNames = {};
-      const userIds = [...new Set(combinedLogs.map((log) => log.user_id).filter(Boolean))];
-      if (userIds.length > 0) {
-        try {
-          const [{ data: avatars }, fuelVehicles] = await Promise.all([
-            supabase.from("users").select("id, avatar_url, car_type, full_name").in("id", userIds),
-            supabase.rpc("list_watch_fuel_vehicles").then(({ data, error }) => (error ? [] : data || [])),
-          ]);
-          if (runId !== fetchGenRef.current) return;
-          const map = {};
-          (avatars || []).forEach((row) => {
-            if (!row?.id) return;
-            map[row.id] = row.avatar_url || null;
-            const label = String(row.full_name || "").trim();
-            if (label) profileNames[row.id] = label;
-          });
-          setAvatarByUserId(map);
-          setNameByUserId(profileNames);
-          setVehicleByUserId(mergeFuelVehicles({
-            userRows: avatars || [],
-            rpcRows: Array.isArray(fuelVehicles) ? fuelVehicles : [],
-            selfUser: user,
-          }));
-        } catch {
-          if (runId !== fetchGenRef.current) return;
-          profileNames = {};
-          setAvatarByUserId({});
-          setNameByUserId({});
-          setVehicleByUserId(mergeFuelVehicles({ selfUser: user }));
-        }
-      } else {
-        setAvatarByUserId({});
-        setNameByUserId({});
-        setVehicleByUserId(mergeFuelVehicles({ selfUser: user }));
-      }
-
-      const sorted = aggregateLeaderboard(combinedLogs, profileNames);
-
-      // Calculate current user's detailed stats
-      const userLogs = combinedLogs.filter(log => log.user_id === user?.id);
-      let routeRows = [];
-      if (user?.id) {
-        try {
-          routeRows = await fetchPatrolRouteRows(supabase, user.id);
-        } catch {
-          routeRows = [];
-        }
-      }
-      if (runId !== fetchGenRef.current) return;
-      setPatrolRouteRows(routeRows);
-
-      const idx = sorted.findIndex((s) => s.userId === user?.id);
-      const allTimeRank = idx >= 0 ? idx + 1 : null;
-      const stats = buildVolunteerStats(userLogs, routeRows, { globalRank: allTimeRank });
-      setUserStats(stats);
-      setUserPatrols(userLogs);
-
-    } catch (err) {
-      if (runId !== fetchGenRef.current) return;
-      console.error("Error fetching data:", err);
-      setError(err.message);
-      toast.error("Failed to load leaderboard");
-    } finally {
-      if (runId === fetchGenRef.current) setLoading(false);
+    const leaderboard = boardQuery.data ?? EMPTY_ROWS;
+  const allTimeBoard = isAllTime ? leaderboard : (allTimeQuery.data ?? EMPTY_ROWS);
+  const userPatrols = selfQuery.data?.logs ?? EMPTY_ROWS;
+  const patrolRouteRows = selfQuery.data?.routeRows ?? EMPTY_ROWS;
+  const avatarByUserId = useMemo(() => {
+    const map = {};
+    for (const entry of allTimeBoard.length ? allTimeBoard : leaderboard) {
+      if (entry.userId) map[entry.userId] = entry.avatarUrl || null;
     }
-  }, [user, scope]);
+    for (const entry of leaderboard) {
+      if (entry.userId && entry.avatarUrl) map[entry.userId] = entry.avatarUrl;
+    }
+    return map;
+  }, [allTimeBoard, leaderboard]);
+  const vehicleByUserId = useMemo(
+    () => mergeFuelVehicles({
+      userRows: leaderboard.filter((entry) => entry.userId).map((entry) => ({
+        id: entry.userId,
+        car_type: entry.carType,
+      })),
+      rpcRows: selfQuery.data?.fuelVehicles ?? EMPTY_ROWS,
+      selfUser: user,
+    }),
+    [leaderboard, selfQuery.data, user]
+  );
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const loading = boardQuery.isLoading || (Boolean(user?.id && activeOrganizationId) && selfQuery.isLoading);
+  const error = boardQuery.isError ? (boardQuery.error?.message || "Failed to load leaderboard") : null;
 
-  const periodLabel = PERIODS.find((p) => p.id === period)?.label || "All time";
+  const refreshLeaderboard = () => {
+    void boardQuery.refetch();
+    void allTimeQuery.refetch();
+    void selfQuery.refetch();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -656,29 +468,25 @@ export default function Leaderboard() {
     };
   }, [user?.id, userPatrols]);
 
-  const leaderboard = useMemo(() => {
-    const start = periodStartDate(period);
-    const logs = start
-      ? allLogs.filter((log) => logOverlapsSince(log, start))
-      : allLogs;
-    return aggregateLeaderboard(logs, nameByUserId);
-  }, [allLogs, period, nameByUserId]);
-
   const topThree = leaderboard.slice(0, 3);
   const myPeriodEntry = leaderboard.find((entry) => entry.userId === user?.id) || null;
   const nextUp = myPeriodEntry && myPeriodEntry.rank > 1
     ? leaderboard.find((entry) => entry.rank === myPeriodEntry.rank - 1)
     : null;
-  const allTimeBoard = useMemo(() => aggregateLeaderboard(allLogs, nameByUserId), [allLogs, nameByUserId]);
   const selectedAllTimeRank = selectedVolunteer
     ? allTimeBoard.find((entry) =>
         (selectedVolunteer.userId && entry.userId === selectedVolunteer.userId)
         || entry.name === selectedVolunteer.name
       )?.rank ?? null
     : null;
+  const allTimeRank = allTimeBoard.find((entry) => entry.userId === user?.id)?.rank ?? null;
+  const userStats = useMemo(
+    () => buildVolunteerStats(userPatrols, patrolRouteRows, { globalRank: allTimeRank }),
+    [userPatrols, patrolRouteRows, allTimeRank]
+  );
 
   const currentWeather = useAreaWeather(activeOrganizationId);
-  const hourlyWeather = useAreaHourlyWeather(activeOrganizationId, allLogs);
+  const hourlyWeather = useAreaHourlyWeather(activeOrganizationId, userPatrols);
   const weatherNow = useMemo(
     () => describeCurrentPatrolWeather(currentWeather),
     [currentWeather]
@@ -734,7 +542,7 @@ export default function Leaderboard() {
             <ThemeToggle variant="toolbar" />
             <button
               type="button"
-              onClick={fetchData}
+              onClick={refreshLeaderboard}
               disabled={loading}
               className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white rounded-xl transition text-sm font-medium shadow-sm"
             >
@@ -758,12 +566,40 @@ export default function Leaderboard() {
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 text-center">
             <FaExclamationTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
             <p className="text-red-700 dark:text-red-300">{error}</p>
+            <button
+              type="button"
+              onClick={refreshLeaderboard}
+              className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium"
+            >
+              <FaSync className="w-4 h-4" />
+              Retry
+            </button>
           </div>
         )}
 
         {/* 🏆 TOP SECTION: Global Leaderboard */}
         <div className="space-y-6">
-          <PeriodTabs period={period} onChange={setPeriod} />
+          <PeriodTabs period={preset} onChange={(next) => setRange(rangeForPreset(next))} />
+          <div className="flex flex-wrap items-end justify-center gap-3">
+            <label className="text-sm text-gray-600 dark:text-gray-300">
+              From
+              <input
+                type="date"
+                value={range.from}
+                onChange={(event) => setRange((prev) => ({ ...prev, preset: "custom", from: event.target.value }))}
+                className="ml-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+              />
+            </label>
+            <label className="text-sm text-gray-600 dark:text-gray-300">
+              To
+              <input
+                type="date"
+                value={range.to}
+                onChange={(event) => setRange((prev) => ({ ...prev, preset: "custom", to: event.target.value }))}
+                className="ml-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+              />
+            </label>
+          </div>
 
           {/* Podium: 2nd, 1st, 3rd with true height difference */}
           {topThree.length > 0 && (
@@ -812,7 +648,7 @@ export default function Leaderboard() {
             <YourStanding
               entry={myPeriodEntry}
               nextUp={nextUp}
-              periodId={period}
+              periodId={preset}
               periodLabel={periodLabel}
               hasPatrolsThisPeriod={Boolean(myPeriodEntry)}
             />
@@ -825,7 +661,7 @@ export default function Leaderboard() {
                 No patrols {periodLabel.toLowerCase()} yet
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {period === "all"
+                {preset === "all"
                   ? "Complete a patrol to appear here."
                   : "Be the first on the board — or switch to all time."}
               </p>
@@ -849,51 +685,9 @@ export default function Leaderboard() {
               
               {/* Mini bar chart — values are hours (not raw minutes) so the Y-axis unit is honest */}
               <div className="p-6 pb-4 border-b border-gray-100 dark:border-gray-700 min-w-0 overflow-visible">
-                <div className="h-64 w-full min-w-0 min-h-[16rem]">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                    minWidth={0}
-                    minHeight={256}
-                    initialDimension={CHART_INITIAL_SHORT}
-                  >
-                    <BarChart
-                      data={leaderboard.slice(0, 10).map((entry) => ({
-                        ...entry,
-                        hours: minutesToChartHours(entry.totalMinutes),
-                      }))}
-                      margin={{ top: 8, right: 20, left: 12, bottom: 56 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis
-                        dataKey="name"
-                        type="category"
-                        tick={{ fontSize: 11 }}
-                        interval={0}
-                        minTickGap={0}
-                        angle={-40}
-                        textAnchor="end"
-                        height={80}
-                        tickMargin={8}
-                        tickFormatter={chartAxisName}
-                      />
-                      <YAxis tick={{ fontSize: 11 }} unit="h" />
-                      <Tooltip 
-                        formatter={(val, _name, item) => [
-                          formatHoursMinutes(item?.payload?.totalMinutes ?? val * 60),
-                          'Hours',
-                        ]}
-                        contentStyle={{ borderRadius: 8 }}
-                      />
-                      <Bar 
-                        dataKey="hours" 
-                        fill="#0d9488" 
-                        radius={[4, 4, 0, 0]}
-                        name="Hours"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <Suspense fallback={<ChartSkeleton />}>
+                  <TopVolunteersBarChart leaderboard={leaderboard} />
+                </Suspense>
               </div>
 
               {/* Table */}
@@ -1047,7 +841,9 @@ export default function Leaderboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
               <ActivityHeatmap patrolData={userPatrols} />
               <div className="space-y-6 min-w-0">
-                <FavoriteTimeRadar timeDistribution={userStats.timeDistribution} />
+                <Suspense fallback={<ChartSkeleton className="h-72" />}>
+                  <FavoriteTimeRadar timeDistribution={userStats.timeDistribution} />
+                </Suspense>
                 <PatrolFuelCard
                   vehicle={vehicleByUserId[user?.id]}
                   stats={userStats}
@@ -1056,7 +852,7 @@ export default function Leaderboard() {
                   locationPoints={locationPoints}
                   priceZarPerLitre={petrol.price}
                   onPriceChange={petrol.setPrice}
-                  defaultPeriod={period}
+                  defaultPeriod={preset === "month" ? "month" : preset === "all" ? "all" : "week"}
                   onSaveArea={async () => {
                     const result = await petrol.saveArea();
                     if (result?.ok) toast.success("Neighbourhood petrol price saved");
@@ -1128,43 +924,21 @@ export default function Leaderboard() {
             )}
 
             {user?.id && userPatrols.length > 0 && (
-              <PatrolRouteHistorySection
-                userId={user.id}
-                userPatrols={userPatrols}
-                routeRows={patrolRouteRows}
-              />
+              <Suspense fallback={<ChartSkeleton className="h-40" />}>
+                <PatrolRouteHistorySection
+                  userId={user.id}
+                  userPatrols={userPatrols}
+                  routeRows={patrolRouteRows}
+                />
+              </Suspense>
             )}
 
             {/* Weekly Trend */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 min-w-0">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">8-Week Trend</h3>
-              <div className="h-64 w-full min-w-0 min-h-[16rem]">
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                  minWidth={0}
-                  minHeight={200}
-                  initialDimension={CHART_INITIAL}
-                >
-                  <LineChart data={userStats.weeklyTrend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="week" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} unit="h" />
-                    <Tooltip 
-                      contentStyle={{ borderRadius: 8 }}
-                      formatter={(val) => [`${val}h`, 'Hours']}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="hours" 
-                      stroke="#10b981" 
-                      strokeWidth={3}
-                      dot={{ fill: '#10b981', r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <Suspense fallback={<ChartSkeleton />}>
+                <WeeklyTrendChart weeklyTrend={userStats.weeklyTrend} />
+              </Suspense>
             </div>
 
             <RecentPatrols patrols={userPatrols} />
@@ -1172,7 +946,16 @@ export default function Leaderboard() {
         )}
 
         {/* Empty State for New Users */}
-        {!userStats && !loading && (
+        {selfQuery.isError && !loading && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 text-center">
+            <p className="text-red-700 dark:text-red-300 mb-3">Could not load your patrol stats.</p>
+            <button type="button" onClick={() => void selfQuery.refetch()} className="text-sm font-medium underline text-red-700 dark:text-red-300">
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!userStats && !loading && !selfQuery.isError && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-12 text-center">
             <FaTrophy className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Ready for the board?</h3>
@@ -1192,8 +975,11 @@ export default function Leaderboard() {
       {selectedVolunteer && (
         <VolunteerProfileSheet
           volunteer={selectedVolunteer}
-          allLogs={allLogs}
-          periodId={period}
+          logs={selectedVolunteer.userId === user?.id ? userPatrols : undefined}
+          rangeFrom={bounds.from}
+          rangeTo={bounds.to}
+          periodLabel={periodLabel}
+          showRangeSummary={!isAllTime}
           allTimeRank={selectedAllTimeRank}
           avatarUrl={avatarByUserId[selectedVolunteer.userId]}
           vehicle={vehicleByUserId[selectedVolunteer.userId]}

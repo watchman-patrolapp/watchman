@@ -9,6 +9,7 @@ import { MessageType } from "../chat/utils/constants";
 import { sanitizeInput } from "../chat/utils/security";
 import { enqueueChatQueueItem } from "../chat/utils/chatQueueStorage";
 import { isRpcNotFoundError } from "./isRpcNotFound";
+import { fetchInChunks } from "./fetchInChunks";
 import {
   buildPendingSosQueueItem,
   buildSosChatQueueItem,
@@ -357,8 +358,15 @@ async function attachNeighborhoodNames(alerts) {
     ),
   ];
   if (missingIds.length === 0) return alerts;
-  const { data, error } = await supabase.from("organizations").select("id, name").in("id", missingIds);
-  if (error || !data?.length) return alerts;
+  let data = [];
+  try {
+    data = await fetchInChunks(missingIds, (chunk) =>
+      supabase.from("organizations").select("id, name").in("id", chunk)
+    );
+  } catch {
+    return alerts;
+  }
+  if (!data.length) return alerts;
   const names = Object.fromEntries(
     data.map((row) => [row.id, String(row.name || "").trim()]).filter(([, name]) => name)
   );

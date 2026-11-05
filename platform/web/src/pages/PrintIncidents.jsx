@@ -7,6 +7,7 @@ import { downloadDomAsPdf } from '../utils/downloadDomAsPdf';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { useScopedOrganization } from '../utils/organizationScope';
 import { formatWatchDate, watchDayStamp } from '../utils/watchTime';
+import { fetchInChunks } from '../utils/fetchInChunks';
 
 export default function PrintIncidents() {
   const navigate = useNavigate();
@@ -81,12 +82,16 @@ export default function PrintIncidents() {
         const ids = rows.map((i) => i.id);
         const counts = {};
         if (ids.length > 0) {
-          const { data: suRows, error: suErr } = await supabase
-            .from('incident_section_updates')
-            .select('incident_id')
-            .in('incident_id', ids);
+          let suRows = [];
+          try {
+            suRows = await fetchInChunks(ids, (chunk) =>
+              supabase.from('incident_section_updates').select('incident_id').in('incident_id', chunk)
+            );
+          } catch {
+            suRows = [];
+          }
           if (cancelled) return;
-          if (!suErr && suRows) {
+          if (suRows.length) {
             for (const r of suRows) {
               counts[r.incident_id] = (counts[r.incident_id] || 0) + 1;
             }

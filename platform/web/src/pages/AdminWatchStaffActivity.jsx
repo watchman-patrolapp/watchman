@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaFileExcel, FaHistory, FaSearch } from "react-icons/fa";
 import toast from "react-hot-toast";
-import ExcelJS from "exceljs";
 import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import { useAuth } from "../auth/useAuth";
@@ -362,6 +361,7 @@ export default function AdminWatchStaffActivity() {
         before = batch[batch.length - 1].created_at;
       }
 
+      const ExcelJS = (await import("exceljs")).default;
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Audit log");
       sheet.columns = [

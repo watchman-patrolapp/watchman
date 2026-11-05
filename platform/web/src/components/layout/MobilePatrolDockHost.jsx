@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth';
-import { useUnreadCount } from '../../chat';
+import { useUnreadCount } from '../../chat/hooks/useUnreadCount';
 import {
   CHAT_CHANNEL_PATROL,
   CHAT_CHANNEL_RESIDENT,

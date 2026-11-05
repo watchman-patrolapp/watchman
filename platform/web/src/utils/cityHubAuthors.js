@@ -1,4 +1,5 @@
 import { isRpcNotFoundError } from "./isRpcNotFound";
+import { fetchInChunks } from "./fetchInChunks";
 
 const CITY_HUB_AUTHOR_ROLE_LABELS = {
   admin: "Main admin",
@@ -89,10 +90,15 @@ export async function fetchCityHubAuthorProfiles(supabase, userIds) {
   const stillMissing = ids.filter((id) => !byId.has(id));
   if (stillMissing.length === 0) return byId;
 
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, full_name, email, phone, role, avatar_url, organization_id")
-    .in("id", stillMissing);
-  if (error || !data) return byId;
-  return new Map([...byId, ...rowsToAuthorMap(data)]);
+  try {
+    const data = await fetchInChunks(stillMissing, (chunk) =>
+      supabase
+        .from("users")
+        .select("id, full_name, email, phone, role, avatar_url, organization_id")
+        .in("id", chunk)
+    );
+    return new Map([...byId, ...rowsToAuthorMap(data)]);
+  } catch {
+    return byId;
+  }
 }

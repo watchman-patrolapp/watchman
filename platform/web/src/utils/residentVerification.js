@@ -2,6 +2,7 @@ import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "./isRpcNotFound";
 import { normalizeAppRole } from "../auth/roleMatrix";
 import { NOTICE_LIFE_MS, NOTICE_PIN_MS } from "./areaBroadcasts";
+import { fetchInChunks } from "./fetchInChunks";
 
 export const RESIDENT_VOUCH_THRESHOLD = 2;
 
@@ -35,17 +36,19 @@ function staffVerifiedByLabel(actor) {
 
 export async function fetchResidentVouchers(residentIds) {
   if (!residentIds?.length) return [];
-  const { data, error } = await supabase
-    .from("resident_verification_vouchers")
-    .select("resident_user_id, voucher_user_id")
-    .in("resident_user_id", residentIds);
-  if (error) {
+  try {
+    return await fetchInChunks(residentIds, (chunk) =>
+      supabase
+        .from("resident_verification_vouchers")
+        .select("resident_user_id, voucher_user_id")
+        .in("resident_user_id", chunk)
+    );
+  } catch (error) {
     if (!isRpcNotFoundError(error)) {
       console.warn("resident_verification_vouchers:", error.message);
     }
     return [];
   }
-  return data || [];
 }
 
 export function vouchSummaryForResident(vouchers, residentId, currentUserId) {
@@ -195,14 +198,17 @@ export function filterDashboardNeighbourhoodActivity(rows, now = Date.now()) {
 async function attachSosResolvedAt(rows) {
   const missing = (rows || []).filter((row) => row?.is_sos && row.resolved_at === undefined);
   if (!missing.length) return rows || [];
-  const { data: alerts, error } = await supabase
-    .from("sos_alerts")
-    .select("incident_id, resolved_at, created_at")
-    .in(
-      "incident_id",
-      missing.map((row) => row.id)
+  let alerts = [];
+  try {
+    alerts = await fetchInChunks(
+      missing.map((row) => row.id),
+      (chunk) =>
+        supabase.from("sos_alerts").select("incident_id, resolved_at, created_at").in("incident_id", chunk)
     );
-  if (error || !alerts?.length) return rows || [];
+  } catch {
+    return rows || [];
+  }
+  if (!alerts.length) return rows || [];
   const latest = {};
   for (const alert of alerts) {
     const prev = latest[alert.incident_id];

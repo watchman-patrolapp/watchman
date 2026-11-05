@@ -56,6 +56,9 @@ export const GRADIENT_BTN = "bg-gradient-to-r from-teal-600 to-emerald-600 text-
 /** "R X of R Y covered" from the public ledger (shown once anything is recorded). */
 function CoveredBar({ item }) {
   if (item.status === "cancelled") return null;
+  if (item.ledger_unknown) {
+    return <p className="text-xs font-medium text-amber-800 dark:text-amber-200">Covered amount unknown</p>;
+  }
   if (!(Number(item.received_cents) > 0 || Number(item.spent_cents) > 0)) return null;
   const { covered, target, pct } = wishlistCoverage(item);
   const label = target

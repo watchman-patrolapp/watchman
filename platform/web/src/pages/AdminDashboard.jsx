@@ -1,5 +1,5 @@
 // src/pages/AdminDashboard.jsx
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
@@ -8,13 +8,8 @@ import { canAccessPlatformConsole } from "../auth/platformRoles";
 import { canPreviewResidentHome, canManageEmergencyDirectory, canPostAreaBroadcast, canUseHouseholdMode, isGlobalAppRole, isHouseholdModeRole, canReviewPatrollerRequests, normalizeAppRole } from "../auth/roleMatrix";
 import { supabase } from "../supabase/client";
 import { useSupabaseQuery } from "../hooks/useSupabaseQuery";
-import ExcelJS from 'exceljs';
 import toast from 'react-hot-toast';
 import { FaCar, FaTrash, FaArrowLeft, FaFileExcel, FaPrint, FaFilePdf, FaUsers, FaClock, FaShieldAlt, FaTrophy, FaWalking, FaBicycle, FaMapMarkerAlt, FaPhone, FaStopwatch, FaToolbox } from "react-icons/fa";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, CartesianGrid, Legend
-} from "recharts";
 import VehicleIcon, { COLOR_HEX, normalizeVehicleType, PatrolInfoIcon } from '../components/VehicleIcon';
 import LivePatrolMap from '../components/LivePatrolMap';
 import ShareStatusBadge from '../components/patrol/share/ShareStatusBadge';
@@ -41,6 +36,14 @@ import { canManageEquipment as canManageEquipmentRole, equipmentAdminBadgeCount 
 import { useEquipmentPendingCounts } from '../hooks/useEquipmentPendingCounts';
 import { useNewWishlistOffersCount } from '../hooks/useNewWishlistOffersCount';
 import { countPendingPatrollerRequests } from '../utils/residentVerification';
+
+const adminCharts = () => import('../components/admin/AdminPatrolCharts');
+const AdminVolunteerHoursChart = lazy(() => adminCharts().then((m) => ({ default: m.AdminVolunteerHoursChart })));
+const AdminLast7Chart = lazy(() => adminCharts().then((m) => ({ default: m.AdminLast7Chart })));
+
+function ChartSkeleton() {
+  return <div className="h-[220px] w-full animate-pulse rounded-xl bg-gray-100 dark:bg-gray-700" />;
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -532,6 +535,7 @@ export default function AdminDashboard() {
     if (exporting) return;
     setExporting(true);
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Patrol Logs');
       worksheet.columns = [
@@ -868,27 +872,9 @@ export default function AdminDashboard() {
                 No completed patrols in the log yet. Hours appear after volunteers end patrols (or after auto-end / admin force-end).
               </p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={stats.topVolunteers} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.5} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} unit="h" />
-                  <Tooltip
-                    formatter={(val, key) => [key === 'hours' ? `${val} h` : val, key === 'hours' ? 'Hours' : 'Patrols']}
-                    labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      color: '#111827',
-                      borderRadius: 8,
-                      border: '1px solid #e5e7eb',
-                      fontSize: 12,
-                    }}
-                    labelStyle={{ color: '#111827', fontWeight: 600 }}
-                    itemStyle={{ color: '#0f766e' }}
-                  />
-                  <Bar dataKey="hours" fill="#0d9488" radius={[4, 4, 0, 0]} name="hours" />
-                </BarChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartSkeleton />}>
+                <AdminVolunteerHoursChart data={stats.topVolunteers} />
+              </Suspense>
             )}
           </div>
 
@@ -909,26 +895,9 @@ export default function AdminDashboard() {
             ) : stats.last7.every(d => d.patrols === 0) ? (
               <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No patrols logged in the last 7 days.</p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={stats.last7} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.5} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      color: '#111827',
-                      borderRadius: 8,
-                      border: '1px solid #e5e7eb',
-                      fontSize: 12,
-                    }}
-                    labelStyle={{ color: '#111827', fontWeight: 600 }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="patrols" stroke="#0d9488" strokeWidth={2} dot={{ r: 3 }} name="Patrols" />
-                  <Line type="monotone" dataKey="hours" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} name="Hours" />
-                </LineChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartSkeleton />}>
+                <AdminLast7Chart data={stats.last7} />
+              </Suspense>
             )}
           </div>
         </div>

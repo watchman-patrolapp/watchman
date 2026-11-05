@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import '../../utils/leaflet-icons';
 import { segmentLatLngsForDisplay } from '../../utils/patrolHistoryRoute';
 
 const DEFAULT_CENTER = [-33.95, 25.58];

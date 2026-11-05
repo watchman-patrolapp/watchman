@@ -1,11 +1,21 @@
-// src/pages/EmergencyChatNew.jsx
-import React from 'react';
-import ChatContainer from '../chat/components/ChatContainer';
+import { lazy, Suspense } from 'react';
+import BrandedLoader from '../components/layout/BrandedLoader';
+
+const ChatContainer = lazy(() => import('../chat/components/ChatContainer'));
 
 /**
- * New Emergency Chat using modular architecture
- * Import this in your router to test alongside existing EmergencyChat.jsx
+ * Patrol chat. The container (and its map picker) load on this route, not with the app shell.
  */
 export default function EmergencyChatNew() {
-  return <ChatContainer />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <BrandedLoader message="Loading chat…" size="lg" />
+        </div>
+      }
+    >
+      <ChatContainer />
+    </Suspense>
+  );
 }

@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { FaTimes, FaTrophy, FaFire, FaClock } from "react-icons/fa";
 import { supabase } from "../../supabase/client";
 import { initialsFromName } from "../../utils/residentVerification";
 import { buildLeaderboardFunFacts } from "../../utils/leaderboardFunFacts";
 import { evaluateLeaderboardBadges } from "../../utils/leaderboardBadges";
-import { buildVolunteerStats, logsForVolunteer } from "../../utils/volunteerStats";
-import { periodStartDate, logOverlapsSince, durationMinutesFromLog } from "../../utils/watchTime";
+import { buildVolunteerStats } from "../../utils/volunteerStats";
+import { durationMinutesFromLog, logOverlapsRange } from "../../utils/watchTime";
 import { summarizePatrolWeather } from "../../utils/patrolWeather";
 import { fetchPatrolLocationPoints, fetchPatrolRouteRows } from "../../utils/patrolHistoryRoute";
+import { fetchUserPatrolLogs, leaderboardVolunteerQueryKey } from "../../utils/leaderboardQuery";
+import { useAreaHourlyWeather } from "../../hooks/useAreaHourlyWeather";
+import { useScopedOrganization } from "../../utils/organizationScope";
 import FunFactsPanel from "./FunFactsPanel";
 import BadgesPanel from "./BadgesPanel";
 import PatrolFuelCard from "./PatrolFuelCard";
 import BrandedLoader from "../layout/BrandedLoader";
+
+const EMPTY_LOGS = [];
 
 function formatHoursMinutes(totalMinutes) {
   const mins = Math.max(0, Math.round(totalMinutes || 0));
@@ -24,8 +30,11 @@ function formatHoursMinutes(totalMinutes) {
 
 export default function VolunteerProfileSheet({
   volunteer,
-  allLogs,
-  periodId = "all",
+  logs,
+  rangeFrom = null,
+  rangeTo = null,
+  periodLabel = "All time",
+  showRangeSummary = false,
   allTimeRank,
   avatarUrl,
   vehicle = null,
@@ -35,19 +44,24 @@ export default function VolunteerProfileSheet({
   weatherNow = null,
   onClose,
 }) {
+  const { activeOrganizationId } = useScopedOrganization();
   const [routeRows, setRouteRows] = useState([]);
   const [locationPoints, setLocationPoints] = useState([]);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
+  const logsQuery = useQuery({
+    queryKey: leaderboardVolunteerQueryKey(volunteer?.userId),
+    enabled: logs === undefined && Boolean(volunteer?.userId),
+    staleTime: 60_000,
+    queryFn: () => fetchUserPatrolLogs(volunteer.userId),
+  });
 
-  const patrols = useMemo(
-    () => logsForVolunteer(allLogs, volunteer),
-    [allLogs, volunteer]
+  const patrols = logs !== undefined ? logs : (logsQuery.data ?? EMPTY_LOGS);
+  const periodPatrols = useMemo(
+    () => patrols.filter((log) => logOverlapsRange(log, rangeFrom, rangeTo)),
+    [patrols, rangeFrom, rangeTo]
   );
-  const periodPatrols = useMemo(() => {
-    const start = periodStartDate(periodId);
-    if (!start) return patrols;
-    return patrols.filter((log) => logOverlapsSince(log, start));
-  }, [patrols, periodId]);
+  const fetchedWeather = useAreaHourlyWeather(activeOrganizationId, logs === undefined ? patrols : []);
+  const weatherLookup = logs === undefined ? fetchedWeather : hourlyWeather;
   const periodMinutes = periodPatrols.reduce((sum, log) => sum + durationMinutesFromLog(log), 0);
 
   useEffect(() => {
@@ -100,8 +114,8 @@ export default function VolunteerProfileSheet({
   );
 
   const weatherSummary = useMemo(
-    () => summarizePatrolWeather(patrols, hourlyWeather),
-    [patrols, hourlyWeather]
+    () => summarizePatrolWeather(patrols, weatherLookup),
+    [patrols, weatherLookup]
   );
 
   const facts = useMemo(
@@ -162,9 +176,9 @@ export default function VolunteerProfileSheet({
                 {allTimeRank ? `All-time rank #${allTimeRank}` : "Volunteer"}
                 {stats ? ` · ${formatHoursMinutes(stats.totalMinutes)} all time · ${stats.totalPatrols} patrols` : ""}
               </p>
-              {periodId !== "all" && (
+              {showRangeSummary && (
                 <p className="text-sm font-medium text-teal-700 dark:text-teal-300 mt-0.5">
-                  {periodId === "week" ? "This week" : "This month"}: {formatHoursMinutes(periodMinutes)} · {periodPatrols.length} patrol{periodPatrols.length === 1 ? "" : "s"}
+                  {periodLabel}: {formatHoursMinutes(periodMinutes)} · {periodPatrols.length} patrol{periodPatrols.length === 1 ? "" : "s"}
                 </p>
               )}
             </div>
@@ -180,10 +194,17 @@ export default function VolunteerProfileSheet({
         </div>
 
         <div className="p-5 space-y-5">
-          {loadingRoutes && !stats ? (
+          {logsQuery.isLoading || (loadingRoutes && !stats) ? (
             <div className="py-10 flex justify-center">
               <BrandedLoader message="Loading achievements…" size="md" />
             </div>
+          ) : logsQuery.isError ? (
+            <p className="text-sm text-center text-red-600 dark:text-red-400 py-8">
+              Could not load this volunteer&apos;s patrols.{" "}
+              <button type="button" onClick={() => void logsQuery.refetch()} className="font-semibold underline">
+                Retry
+              </button>
+            </p>
           ) : !stats ? (
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
               No patrols recorded for this volunteer yet.
