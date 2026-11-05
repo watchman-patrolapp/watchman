@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaTimes } from "react-icons/fa";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { supabase } from "../../supabase/client";
 import {
   CITY_HUB_SHARE_POST_TYPES,

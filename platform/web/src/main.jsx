@@ -8,7 +8,7 @@ import './index.css'
 import { AuthProvider } from './auth/AuthProvider'
 import { ActiveOrganizationProvider } from './auth/ActiveOrganizationProvider'
 import ErrorBoundary from './components/ErrorBoundary'
-import { Toaster } from 'react-hot-toast'
+import AppToaster from './components/layout/AppToaster'
 import { lazy, Suspense } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { supabase } from './supabase/client';
@@ -113,7 +113,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <ErrorBoundary>
         <AuthProvider>
           <ActiveOrganizationProvider>
-            <Toaster position="top-right" />
+            <AppToaster />
             <App />
           </ActiveOrganizationProvider>
         </AuthProvider>

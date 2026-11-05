@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import CapabilityBadge from "../community/CapabilityBadge";
 import { capabilityErrorMessage, listMyCapabilityGrants, revokeCapability } from "../../utils/orgCapabilities";
 import { capabilityLabel } from "../../auth/capabilities";

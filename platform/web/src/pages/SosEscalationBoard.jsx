@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { FaEnvelope, FaMapMarkerAlt, FaPhone, FaUser } from "react-icons/fa";
 import { useAuth } from "../auth/useAuth";
 import { canAccessAdminPanel } from "../auth/staffRoles";

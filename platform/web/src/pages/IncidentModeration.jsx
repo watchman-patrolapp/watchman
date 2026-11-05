@@ -16,7 +16,7 @@ import {
   FaSync,
   FaSpinner
 } from "react-icons/fa";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import StructuredEvidenceList, { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceList";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";

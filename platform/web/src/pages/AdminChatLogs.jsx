@@ -4,7 +4,7 @@ import { useAuth } from "../auth/useAuth";
 import { hasHydratedAppRole } from "../auth/appRole";
 import { canAccessAdminPanel } from "../auth/staffRoles";
 import { supabase } from "../supabase/client";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { FaArrowLeft, FaFileExcel, FaFilter, FaTimes } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { FaPhone, FaSearch, FaTimes, FaUserFriends } from "react-icons/fa";
 import { isRpcNotFoundError } from "../../utils/isRpcNotFound";
 import {

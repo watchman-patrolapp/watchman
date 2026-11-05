@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import {
   CONTRIBUTE_COST_HELP,
   NO_QUANTITY_OFFER_KINDS,

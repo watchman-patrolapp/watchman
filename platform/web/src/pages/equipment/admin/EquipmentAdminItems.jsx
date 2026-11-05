@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../../utils/notify";
 import { FaPlus, FaTimes } from "react-icons/fa";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";

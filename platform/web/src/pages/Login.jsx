@@ -3,9 +3,23 @@ import { useNavigate, Link } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useAuth } from "../auth/useAuth";
 import AuthShell from "../components/layout/AuthShell";
-import BrandedLoader from "../components/layout/BrandedLoader";
+import Button from "../components/ui/Button";
+import FormField from "../components/ui/FormField";
+import IconButton from "../components/ui/IconButton";
 import { setPreferSessionAuth } from "../supabase/authStorage";
 import { formatAuthErrorMessage } from "../utils/authErrorMessage";
+
+function emailErrorFor(value) {
+  const email = value.trim();
+  if (!email) return "Email is required.";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Enter a valid email address.";
+  return "";
+}
+
+function passwordErrorFor(value) {
+  if (!value) return "Password is required.";
+  return "";
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -15,17 +29,25 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [staySignedIn, setStaySignedIn] = useState(true);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     if (loading) return;
+    const nextEmailError = emailErrorFor(email);
+    const nextPasswordError = passwordErrorFor(password);
+    setEmailError(nextEmailError);
+    setPasswordError(nextPasswordError);
     setError("");
+    if (nextEmailError || nextPasswordError) return;
+
     setLoading(true);
     try {
       setPreferSessionAuth(!staySignedIn);
-      const { error } = await signIn(email, password);
-      if (error) throw error;
+      const { error: signInError } = await signIn(email, password);
+      if (signInError) throw signInError;
       navigate("/dashboard");
     } catch (err) {
       console.error("Login error:", err.message);
@@ -37,114 +59,112 @@ export default function Login() {
 
   return (
     <AuthShell>
-      {loading ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/35 backdrop-blur-[2px] dark:bg-black/45"
-          role="status"
-          aria-live="polite"
-          aria-busy="true"
-        >
-          <span className="sr-only">Signing in</span>
-          <div className="rounded-2xl bg-white/95 p-8 shadow-xl dark:bg-gray-800/95">
-            <BrandedLoader message="Signing in…" size="md" />
-          </div>
-        </div>
-      ) : null}
       <form
         onSubmit={handleLogin}
-        className="card w-full max-w-md p-6 sm:p-8 space-y-4"
+        className="card w-full max-w-md space-y-4 p-6 sm:p-8"
+        noValidate
       >
-        <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
-          Sign in
-        </h2>
-
         <div>
-          <label htmlFor="login-email" className="sr-only">Email</label>
+          <h2 className="text-center text-2xl font-bold text-text-primary">Sign in</h2>
+          <p className="mt-1 text-center text-sm text-text-secondary">
+            Use the email and password for your watch account.
+          </p>
+        </div>
+
+        <FormField id="login-email" label="Email" required error={emailError}>
           <input
             id="login-email"
             type="email"
             name="email"
-            placeholder="Email"
+            inputMode="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="you@example.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input border"
-            autoComplete="email"
-            required
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (emailError) setEmailError(emailErrorFor(e.target.value));
+            }}
+            onBlur={() => setEmailError(emailErrorFor(email))}
+            className="input border w-full"
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label htmlFor="login-password" className="sr-only">Password</label>
+        <FormField id="login-password" label="Password" required error={passwordError}>
           <div className="relative">
             <input
               id="login-password"
               type={showPassword ? "text" : "password"}
               name="password"
+              autoComplete="current-password"
               placeholder="Password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input border w-full pr-10"
-              autoComplete="current-password"
-              required
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (passwordError) setPasswordError(passwordErrorFor(e.target.value));
+              }}
+              onBlur={() => setPasswordError(passwordErrorFor(password))}
+              className="input border w-full pr-12"
+              aria-invalid={passwordError ? true : undefined}
+              aria-describedby={passwordError ? "login-password-error" : undefined}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 rounded-r"
-              aria-label={showPassword ? "Hide password" : "Show password"}
+            <IconButton
+              label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((value) => !value)}
+              className="absolute inset-y-0 right-0 text-text-secondary hover:text-text-primary"
             >
               {showPassword ? (
-                <FaEyeSlash className="w-4 h-4" aria-hidden />
+                <FaEyeSlash className="h-4 w-4" aria-hidden />
               ) : (
-                <FaEye className="w-4 h-4" aria-hidden />
+                <FaEye className="h-4 w-4" aria-hidden />
               )}
-            </button>
+            </IconButton>
           </div>
-          <div className="mt-1.5 text-right">
-            <Link
-              to="/forgot-password"
-              className="text-sm text-teal-600 dark:text-teal-400 font-medium hover:underline"
-            >
-              Forgot password?
-            </Link>
-          </div>
+        </FormField>
+
+        <div className="text-right">
+          <Link to="/forgot-password" className="text-sm font-medium text-text-link underline">
+            Forgot password?
+          </Link>
         </div>
 
-        <label className="flex items-start gap-3 cursor-pointer text-sm text-gray-600 dark:text-gray-400">
+        <label className="flex cursor-pointer items-start gap-3 text-sm text-text-secondary">
           <input
             type="checkbox"
             checked={staySignedIn}
             onChange={(e) => setStaySignedIn(e.target.checked)}
-            className="mt-1 rounded border-gray-300 dark:border-gray-600 text-teal-600 focus:ring-teal-500"
+            className="mt-1 h-4 w-4 rounded border-strong"
           />
           <span>
-            <span className="font-medium text-gray-800 dark:text-gray-200">Stay signed in on this device</span>
-            <span className="block text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+            <span className="font-medium text-text-primary">Stay signed in on this device</span>
+            <span className="mt-0.5 block text-sm text-text-tertiary">
               Turn off on a shared computer — you’ll be signed out when you close the browser.
             </span>
           </span>
         </label>
 
-        {error && (
-          <p className="text-red-600 dark:text-red-400 text-sm text-center" role="alert">
+        {error ? (
+          <p className="text-center text-sm text-danger" role="alert">
             {error}
           </p>
-        )}
+        ) : null}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn-primary w-full"
-        >
+        <p className="sr-only" aria-live="polite">
+          {loading ? "Signing in" : ""}
+        </p>
+
+        <Button type="submit" loading={loading} className="w-full">
           {loading ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
 
-        <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-center text-sm text-text-secondary">
           Don’t have an account?{" "}
           <button
             type="button"
             onClick={() => navigate("/register")}
-            className="text-teal-600 dark:text-teal-400 font-semibold hover:underline"
+            className="font-semibold text-text-link underline"
           >
             Register
           </button>

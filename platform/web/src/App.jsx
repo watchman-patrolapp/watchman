@@ -31,6 +31,8 @@ import PageSkeleton from "./components/layout/PageSkeleton";
 import MobilePatrolDockHost from "./components/layout/MobilePatrolDockHost";
 import HardwareBackNavHost from "./components/layout/HardwareBackNavHost";
 import ScrollToTop from "./components/layout/ScrollToTop";
+import SkipLink from "./components/layout/SkipLink";
+import OfflineBanner from "./components/layout/OfflineBanner";
 import PermissionsPrimerModal from "./components/PermissionsPrimerModal";
 
 /** One-time permission intro (location + notifications) after sign-in; not tied to a single page. */
@@ -43,6 +45,8 @@ function PermissionFlowHost() {
 // Lazy load page components
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsOfUse = lazy(() => import("./pages/TermsOfUse"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const PatrolSchedule = lazy(() => import("./pages/PatrolSchedule"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
@@ -150,6 +154,8 @@ function AppRoutes() {
     <Suspense fallback={<PageSkeleton message="Loading…" />}>
       <Routes>
         {ShareCardFixtures ? <Route path="/dev/share-card" element={<ShareCardFixtures />} /> : null}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfUse />} />
         <Route
           path="/login"
           element={
@@ -1034,13 +1040,19 @@ function AppRoutes() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <ScrollToTop />
-      <PermissionFlowHost />
-      <AppRoutes />
-      <HardwareBackNavHost />
-      <MobilePatrolDockHost />
-    </BrowserRouter>
+    <>
+      <SkipLink />
+      <div id="main-content" tabIndex={-1}>
+        <OfflineBanner />
+        <BrowserRouter>
+          <ScrollToTop />
+          <PermissionFlowHost />
+          <AppRoutes />
+          <HardwareBackNavHost />
+          <MobilePatrolDockHost />
+        </BrowserRouter>
+      </div>
+    </>
   );
 }
 

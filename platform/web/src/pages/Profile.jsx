@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { canUseHouseholdMode, isHouseholdModeRole, isResidentAppRole } from '../auth/roleMatrix';
 import { supabase } from '../supabase/client';
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import { FaUser, FaMapMarkerAlt, FaCar, FaSave, FaEnvelope, FaPhone, FaLock, FaExclamationTriangle, FaCheck, FaShieldAlt } from 'react-icons/fa';
 import ThemeToggle from '../components/ThemeToggle';
 import AppNotificationBell from '../components/layout/AppNotificationBell';

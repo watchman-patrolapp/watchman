@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import HotspotPinPicker from './HotspotPinPicker';
 import { insertCameraSpot, updateCameraSpot } from '../../utils/hotspotService';
 import { compassLabel } from '../../utils/cameraSuggestions';

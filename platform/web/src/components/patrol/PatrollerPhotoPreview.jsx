@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FaTimes, FaExpand, FaCompress, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import useDialogA11y from '../../hooks/useDialogA11y';
 import { getInitials } from '../../chat/utils/formatters';
 import { useCriminalPhotoSrcList } from '../../utils/criminalPhotos';
 
@@ -19,6 +20,7 @@ export default function PatrollerPhotoPreview({
   const [fullHeight, setFullHeight] = useState(false);
   const safeInitial = Number.isFinite(initialIndex) ? initialIndex : 0;
   const [slideIndex, setSlideIndex] = useState(safeInitial);
+  const dialogRef = useDialogA11y(open);
 
   const urls = useMemo(() => {
     if (Array.isArray(imageUrls) && imageUrls.length > 0) {
@@ -94,6 +96,7 @@ export default function PatrollerPhotoPreview({
 
   const content = (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-[2000] flex flex-col items-center justify-center bg-black/80 p-4"
       role="dialog"
       aria-modal="true"

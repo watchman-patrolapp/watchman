@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { FaBullhorn } from "react-icons/fa";
 import { useAuth } from "../auth/useAuth";
 import { canPostAreaBroadcast, homeBackNav } from "../auth/roleMatrix";

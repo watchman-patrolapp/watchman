@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase/client";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import PageHeader from "../components/layout/PageHeader";
 
 export default function PilotReadiness() {

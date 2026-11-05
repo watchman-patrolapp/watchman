@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { supabase } from '../supabase/client';
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import {
   FaCar,
   FaBicycle,

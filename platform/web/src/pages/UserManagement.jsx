@@ -7,7 +7,7 @@ import { useActiveOrganization } from "../auth/useActiveOrganization";
 import AreaContextBar from "../components/layout/AreaContextBar";
 import { supabase } from "../supabase/client"; // ✅ Supabase client
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { FaTrash } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";

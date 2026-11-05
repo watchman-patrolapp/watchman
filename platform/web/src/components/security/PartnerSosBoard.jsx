@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { FaBell, FaEnvelope, FaMapMarkerAlt, FaPhone, FaUser } from "react-icons/fa";
 import { supabase } from "../../supabase/client";
 import { markChatVisited } from "../../chat/utils/markChatVisited";

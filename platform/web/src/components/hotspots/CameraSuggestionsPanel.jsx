@@ -1,6 +1,6 @@
 import { suggestionCopy } from '../../utils/cameraSuggestions';
 import { upsertCameraCheck } from '../../utils/hotspotService';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 
 const STATUSES = [
   { id: 'checked', label: 'Checked' },

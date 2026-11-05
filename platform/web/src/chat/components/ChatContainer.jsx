@@ -21,7 +21,7 @@ import { MessageInput } from './MessageInput';
 import { OfflineBanner } from './OfflineBanner';
 import { playChatNotification, playMessageSent } from '../../utils/sound';
 import { devLog } from '../../utils/devLog';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import { markChatVisited } from '../utils/markChatVisited';
 import { getChatGeolocationPosition } from '../utils/getChatGeolocation';
 import { captureChatError } from '../utils/chatTelemetry';

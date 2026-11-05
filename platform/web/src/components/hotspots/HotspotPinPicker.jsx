@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, CircleMarker, useMap, useMapEvents, ZoomControl } from 'react-leaflet';
 import '../../utils/leaflet-icons';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import { searchNominatim, reverseLabel, SEARCH_BIAS } from '../../utils/nominatimLookup';
 
 const DEFAULT_CENTER = [SEARCH_BIAS.lat, SEARCH_BIAS.lng];

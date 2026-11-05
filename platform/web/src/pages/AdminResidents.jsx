@@ -30,7 +30,7 @@ import {
   formatAwayRange,
   listHouseholdsAway,
 } from "../utils/residentAway";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { FaEnvelope, FaPhone, FaSearch, FaSms, FaTrash } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";

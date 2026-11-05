@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
 import PageHeader from "../components/layout/PageHeader";

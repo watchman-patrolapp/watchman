@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { FaCheck, FaLock, FaSearch, FaUser } from "react-icons/fa";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
 import {
   FaClipboardList,
   FaComment,
@@ -15,6 +14,9 @@ import {
   FaUserShield,
   FaBoxOpen,
 } from "react-icons/fa";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
+import Skeleton from "../components/ui/Skeleton";
 import { supabase } from "../supabase/client";
 import { useAuth } from "../auth/useAuth";
 import { canPreviewResidentHome, canUseHouseholdMode, isHouseholdModeRole } from "../auth/roleMatrix";
@@ -145,6 +147,8 @@ export default function ResidentDashboard() {
   const isResidentModerator = hasCap("resident_moderator");
   const isStreetRep = hasCap("resident_broadcaster");
   const [activity, setActivity] = useState([]);
+  const [activityState, setActivityState] = useState("loading");
+  const reloadActivity = useRef(async () => {});
   const [verification, setVerification] = useState("unknown");
   // D16: conditional tile, only when the needs board has open items. Missing RPC reads as 0.
   const [neededCount, setNeededCount] = useState(0);
@@ -200,15 +204,17 @@ export default function ResidentDashboard() {
         setPendingCount(0);
       }
     };
-    const loadActivity = async ({ notifyError = false } = {}) => {
+    const loadActivity = async () => {
       const { data: feedRows, error: feedError } = await listResidentNeighbourhoodActivity(50);
-      if (feedError && !isRpcNotFoundError(feedError) && notifyError && !ignore) {
-        toast.error("Could not load neighbourhood activity.");
+      if (ignore) return;
+      if (feedError && !isRpcNotFoundError(feedError)) {
+        setActivityState((current) => (current === "ready" ? current : "error"));
+        return;
       }
-      if (!ignore && !feedError) {
-        setActivity(feedRows || []);
-      }
+      if (!feedError) setActivity(feedRows || []);
+      setActivityState("ready");
     };
+    reloadActivity.current = loadActivity;
     const loadBroadcasts = async () => {
       const gen = ++broadcastGen.current;
       const notices = await listAreaBroadcasts(20);
@@ -216,7 +222,7 @@ export default function ResidentDashboard() {
       setBroadcasts(notices.data || []);
     };
     void loadProfile();
-    void loadActivity({ notifyError: true });
+    void loadActivity();
     void (async () => {
       await pingResidentPresence();
       const [civicRow, away] = await Promise.all([getMyHouseholdCivic(), getMyAway(user.id)]);
@@ -581,10 +587,22 @@ export default function ResidentDashboard() {
               Your reports
             </button>
           </div>
-          {activityFeed.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
-              No recent neighbourhood activity.
-            </div>
+          {activityState === "loading" ? (
+            <Skeleton lines={4} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800" />
+          ) : activityState === "error" ? (
+            <ErrorState
+              title="Could not load neighbourhood activity"
+              message="Check your connection and try again."
+              onRetry={() => {
+                setActivityState("loading");
+                void reloadActivity.current();
+              }}
+            />
+          ) : activityFeed.length === 0 ? (
+            <EmptyState
+              title="No recent neighbourhood activity."
+              message="Notices and reports from your area will show up here."
+            />
           ) : (
             <ul className="space-y-2">
               {activityFeed.map((row, index) => {

@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { useEffect, useRef } from "react";
 import { useAuth } from "../auth/useAuth";
 import PageSkeleton from "./layout/PageSkeleton";

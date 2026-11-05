@@ -36,7 +36,7 @@ import FunFactsPanel from "../components/leaderboard/FunFactsPanel";
 import BadgesPanel from "../components/leaderboard/BadgesPanel";
 import VolunteerProfileSheet from "../components/leaderboard/VolunteerProfileSheet";
 import PatrolFuelCard from "../components/leaderboard/PatrolFuelCard";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import MyUpcomingPatrolSignups from "../components/leaderboard/MyUpcomingPatrolSignups";
 import { useScopedOrganization } from "../utils/organizationScope";
 import { useAreaWeather } from "../hooks/useAreaWeather";

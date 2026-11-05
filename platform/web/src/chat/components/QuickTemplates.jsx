@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { FaTimes, FaBolt, FaExclamationTriangle, FaEye, FaCheck, FaClipboard } from 'react-icons/fa';
 import { QUICK_TEMPLATES, CATEGORY_COLORS, EmergencyLevel } from '../utils/constants';
 import { playPanicSiren } from '../../utils/sound';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 
 const categoryIcons = {
   emergency: FaExclamationTriangle,

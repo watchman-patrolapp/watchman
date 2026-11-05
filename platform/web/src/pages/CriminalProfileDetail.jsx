@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { supabase } from '../supabase/client';
 import { safeInternalReturnPath } from '../utils/safeReturnPath';
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import { 
   FaArrowLeft, 
   FaEdit, 

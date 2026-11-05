@@ -30,19 +30,35 @@
   --color-primary-50: #f0fdfa;
   --color-primary-100: #ccfbf1;
   --color-primary-500: #14b8a6;
-  --color-primary-600: #0d9488;
-  --color-primary-700: #0f766e;
+  --color-primary-600: #0d9488; /* brand accent — UI chrome, not small text */
+  --color-primary-700: #0f766e; /* AA button fill and link text */
+  --color-primary-800: #115e59;
   --color-primary-900: #134e4a;
-  
-  /* Semantic Colors */
-  --color-success: #10b981;
+  --color-on-primary: #ffffff;
+  --color-primary-edge: #0f766e;
+
+  /* Semantic fills pass 4.5:1 with their on-* text. Badge pairs use *-light / *-text. */
+  --color-success: #047857;
+  --color-success-hover: #065f46;
   --color-success-light: #d1fae5;
-  --color-warning: #f59e0b;
+  --color-success-text: #065f46;
+  --color-on-success: #ffffff;
+  --color-warning: #92400e;
+  --color-warning-hover: #78350f;
   --color-warning-light: #fef3c7;
-  --color-danger: #ef4444;
+  --color-warning-text: #78350f;
+  --color-on-warning: #ffffff;
+  --color-danger: #b91c1c;
+  --color-danger-hover: #991b1b;
   --color-danger-light: #fee2e2;
-  --color-info: #3b82f6;
+  --color-danger-text: #991b1b;
+  --color-on-danger: #ffffff;
+  --color-info: #1d4ed8;
+  --color-info-hover: #1e40af;
   --color-info-light: #dbeafe;
+  --color-info-text: #1e3a8a;
+  --color-on-info: #ffffff;
+  --color-focus: #0f766e;
   
   /* Vehicle Colors - High Contrast */
   --vehicle-red: #dc2626;
@@ -80,8 +96,8 @@
   --color-border-strong: rgba(60, 50, 35, 0.22);
   --color-text-primary: #2c2a27;
   --color-text-secondary: #5a5855;
-  --color-text-tertiary: #8c8985;
-  --color-text-link: #3b6fbf;
+  --color-text-tertiary: #5c5955;
+  --color-text-link: #0f766e;
 
   /* Shadows — warm neutrals (light) */
   --shadow-soft: 0 1px 3px rgba(60, 50, 35, 0.08), 0 1px 2px rgba(60, 50, 35, 0.05);
@@ -125,8 +141,19 @@
   --color-border-strong: rgba(94, 234, 212, 0.28);
   --color-text-primary: #ecfdf5;
   --color-text-secondary: #a7d4c8;
-  --color-text-tertiary: #6b9a8c;
+  --color-text-tertiary: #8fb8ab;
   --color-text-link: #7dd3fc;
+  --color-focus: #5eead4;
+  --color-primary-edge: #5eead4;
+
+  --color-success-light: #064e3b;
+  --color-success-text: #d1fae5;
+  --color-warning-light: #451a03;
+  --color-warning-text: #fde68a;
+  --color-danger-light: #450a0a;
+  --color-danger-text: #fecaca;
+  --color-info-light: #172554;
+  --color-info-text: #bfdbfe;
 
   --shadow-soft: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px 0 rgba(0, 24, 20, 0.4);
   --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -1px rgba(0, 32, 28, 0.35);
@@ -142,6 +169,7 @@
     scroll-behavior: auto;
     overflow-anchor: none;
     color-scheme: light;
+    accent-color: #0d9488;
   }
 
   html.dark {
@@ -201,15 +229,34 @@
   }
   
   .btn-primary {
-    @apply btn bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500 shadow-lg shadow-teal-500/30;
+    @apply btn focus:ring-primary-700;
+    background-color: var(--color-primary-700);
+    color: var(--color-on-primary);
+    box-shadow: inset 0 0 0 2px var(--color-primary-edge);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-primary-800);
   }
   
   .btn-success {
-    @apply btn bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500 shadow-lg shadow-emerald-500/30;
+    @apply btn shadow-md;
+    background-color: var(--color-success);
+    color: var(--color-on-success);
+  }
+
+  .btn-success:hover:not(:disabled) {
+    background-color: var(--color-success-hover);
   }
   
   .btn-danger {
-    @apply btn bg-red-500 text-white hover:bg-red-600 focus:ring-red-500 shadow-lg shadow-red-500/30;
+    @apply btn shadow-md;
+    background-color: var(--color-danger);
+    color: var(--color-on-danger);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background-color: var(--color-danger-hover);
   }
   
   .btn-secondary {
@@ -240,19 +287,27 @@
   }
   
   .badge-success {
-    @apply badge bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300;
+    @apply badge;
+    background-color: var(--color-success-light);
+    color: var(--color-success-text);
   }
   
   .badge-warning {
-    @apply badge bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300;
+    @apply badge;
+    background-color: var(--color-warning-light);
+    color: var(--color-warning-text);
   }
   
   .badge-danger {
-    @apply badge bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300;
+    @apply badge;
+    background-color: var(--color-danger-light);
+    color: var(--color-danger-text);
   }
   
   .badge-info {
-    @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300;
+    @apply badge;
+    background-color: var(--color-info-light);
+    color: var(--color-info-text);
   }
   
   /* Form Inputs */
@@ -374,6 +429,34 @@
 
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-400 dark:bg-gray-500;
+}
+
+/* Visible keyboard focus for controls that do not set their own ring.
+   Components that use Tailwind focus:outline-none keep their own focus-visible ring. */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+#main-content:focus {
+  outline: none;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: max(0.75rem, env(safe-area-inset-top, 0px));
+  z-index: 200;
+  transform: translateY(-200%);
+  border-radius: 0.75rem;
+  background: var(--color-primary-700);
+  color: var(--color-on-primary);
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+}
+
+.skip-link:focus {
+  transform: none;
 }
 
 /* Print styles */

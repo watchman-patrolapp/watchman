@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { FaFileInvoice, FaPlus, FaPrint, FaQrcode, FaSpinner } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { getSignedUrl, uploadPrivateFile } from "../../utils/communityMedia";

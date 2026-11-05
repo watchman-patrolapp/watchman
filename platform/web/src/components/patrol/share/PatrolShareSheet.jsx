@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaWhatsapp, FaTimes, FaCar, FaPhone, FaMapMarkerAlt, FaCopy, FaDownload } from "react-icons/fa";
-import toast from "react-hot-toast";
+import toast from "../../../utils/notify";
+import useDialogA11y from "../../../hooks/useDialogA11y";
 import PatrolShareCard, { SHARE_CARD_HEIGHT, SHARE_CARD_WIDTH } from "./PatrolShareCard";
 import {
   DEFAULT_SHARE_PREFS,
@@ -76,6 +77,7 @@ export default function PatrolShareSheet({ kind, patrol: rawPatrol, organization
   const [canCopyImage] = useState(() => canCopyImageToClipboard());
   const [toolBusy, setToolBusy] = useState(null);
   const tz = timeZone || DEFAULT_SHARE_TIME_ZONE;
+  const dialogRef = useDialogA11y(true);
 
   const model = useMemo(
     () => buildShareCardModel({ kind, patrol, organizationName, timeZone: tz, appName: SHARE_APP_NAME, showVehicle: prefs.vehicle }),
@@ -180,6 +182,7 @@ export default function PatrolShareSheet({ kind, patrol: rawPatrol, organization
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center p-0 sm:p-4 bg-black/50"
       role="dialog"
       aria-modal="true"
@@ -192,7 +195,7 @@ export default function PatrolShareSheet({ kind, patrol: rawPatrol, organization
             <h2 id="patrol-share-title" className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">Post it to your watch WhatsApp group</p>
           </div>
-          <button type="button" onClick={onClose} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Close">
+          <button type="button" onClick={onClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Close">
             <FaTimes className="w-4 h-4" />
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import CapabilityBadge from "../community/CapabilityBadge";
 import { isRpcNotFoundError } from "../../utils/isRpcNotFound";
 import { capabilityErrorMessage, listCapabilityGrants, revokeCapability } from "../../utils/orgCapabilities";

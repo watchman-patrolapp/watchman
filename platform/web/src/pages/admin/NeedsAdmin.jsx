@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaEllipsisH, FaInbox, FaList, FaThLarge, FaToolbox } from "react-icons/fa";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { useActiveOrganization } from "../../auth/useActiveOrganization";
 import PageHeader from "../../components/layout/PageHeader";
 import ThemeToggle from "../../components/ThemeToggle";

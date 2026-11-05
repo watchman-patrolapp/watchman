@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { useAuth } from "../auth/useAuth";
 import { canPostAreaBroadcast, homeBackNav } from "../auth/roleMatrix";
 import PageHeader from "../components/layout/PageHeader";

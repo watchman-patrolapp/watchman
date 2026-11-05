@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { FaCalendarAlt } from "react-icons/fa";
 import { useAuth } from "../../auth/useAuth";
 import { isRpcNotFoundError } from "../../utils/isRpcNotFound";

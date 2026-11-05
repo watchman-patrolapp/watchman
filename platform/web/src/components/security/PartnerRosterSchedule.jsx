@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { FaChevronLeft, FaChevronRight, FaPhone, FaUsers } from "react-icons/fa";
 import { supabase } from "../../supabase/client";
 import BrandedLoader from "../layout/BrandedLoader";

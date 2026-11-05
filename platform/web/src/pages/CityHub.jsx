@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { FaPen, FaArchive, FaTrash, FaTimes, FaImage, FaFilePdf, FaEnvelope, FaPhone, FaUser } from "react-icons/fa";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";

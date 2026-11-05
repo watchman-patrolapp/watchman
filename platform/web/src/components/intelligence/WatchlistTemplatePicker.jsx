@@ -1,7 +1,7 @@
 import React from 'react';
 import { FaChevronDown, FaPlus } from 'react-icons/fa';
 import { WATCHLIST_FLAG_TEMPLATE_GROUPS } from '../../data/intelligenceTaxonomy';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 
 function appendWatchlistFlag(current, flag) {
   const trimmed = flag.trim();

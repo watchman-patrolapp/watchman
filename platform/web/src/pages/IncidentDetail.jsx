@@ -24,7 +24,7 @@ import {
   canAddIncidentSectionUpdates,
   evidenceCategoryToSectionKey,
 } from '../constants/incidentSectionUpdates';
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { useAuth } from '../auth/useAuth';
 import ThemeToggle from '../components/ThemeToggle';

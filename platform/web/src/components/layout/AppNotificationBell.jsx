@@ -56,8 +56,10 @@ export default function AppNotificationBell({ variant = "toolbar" }) {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className={`relative flex h-9 w-9 items-center justify-center rounded-full ${VARIANT[variant] || VARIANT.toolbar}`}
+        className={`relative flex h-11 w-11 items-center justify-center rounded-full ${VARIANT[variant] || VARIANT.toolbar}`}
         aria-label={unreadCount ? `${unreadCount} unread notifications` : "Notifications"}
+        aria-expanded={open}
+        aria-haspopup="true"
       >
         <FaBell className="h-4 w-4" />
         {unreadCount > 0 ? (
