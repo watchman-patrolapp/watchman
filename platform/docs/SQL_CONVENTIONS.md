@@ -2,6 +2,14 @@
 
 Rules for every new migration in `platform/supabase/migrations`. The grant rules and the SECURITY DEFINER checklist come from `NEW_FEATURES_BLUEPRINT.md` §4.5 and §12.7. Copy the checklist into the PR description when a migration adds or replaces a SECURITY DEFINER function.
 
+## Migration files
+
+1. The version prefix is a unique 14-digit timestamp, `YYYYMMDDHHMMSS`, and the file is `<version>_<concern>.sql`. One concern per file.
+2. Never edit a migration that may already be applied. Add a forward migration. `supabase migration list` (from `platform/supabase`, project linked) is how you prove a version is absent on the remote. This repo was checked with no CLI link and no Docker, so every file that already existed is treated as applied. See `MIGRATION_VERSION_REPAIR.md`.
+3. Put each statement on its own line. A semicolon at the end of a line is the separator. Do not concatenate the next statement onto that same line. `20261031071000_wishlist_multi_photos.sql` does this on the grants (the `list_wishlist_items` GRANT and the following `REVOKE` share one line). Postgres still runs it. New files must not copy that.
+4. Before commit, from the repo root: `npm run check:migrations` (`platform/scripts/check-migration-versions.mjs`). CI runs the same script. It fails when two files share a version that is not in the historical allowlist. The allowlist is only the four pairs already in the tree (`20260329240000`, `20260329250000`, `20260815031000`, `20260815076000`). Do not add a new prefix to it. Removing a pair from the tree is fine; delete that prefix from the allowlist in the same commit.
+5. Ad-hoc SQL Editor scripts do not go in `migrations/`. Isolation checks live in `platform/supabase/tests/`. One-off scripts that already shipped live in `platform/supabase/archive/`. Local demo rows go in `platform/supabase/seed.sql`, which `supabase db reset` loads and `supabase db push` does not.
+
 `20260820080000_advisor_rpc_harden.sql` revoked `PUBLIC` and `anon` once. New functions receive `EXECUTE` for `PUBLIC` again, so each migration repeats the grants below.
 
 ## Grant convention

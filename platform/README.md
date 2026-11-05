@@ -8,7 +8,7 @@ This folder holds everything that ships as the product:
 | `android/` | **Capacitor Android project** (native shell, bundled web assets, plugins). Built with Gradle from this folder; `capacitor.config.json` in `web/` sets `"android": { "path": "../android" }`. |
 | `supabase/` | Database migrations, Edge Functions, and Supabase project config. |
 | `docs/` | Privacy, user guides, operational runbooks, and [`SCALE_ROADMAP.md`](docs/SCALE_ROADMAP.md) (where we are / pending / next). |
-| `scripts/` | Small maintenance scripts (e.g. scheduled location cleanup helper). |
+| `scripts/` | Maintenance scripts, including `check-migration-versions.mjs` (duplicate migration versions). |
 
 **Vercel:** set the project **Root Directory** to `platform/web` (not the repository root).
 
@@ -64,7 +64,16 @@ aapt dump badging app/build/outputs/apk/release/app-release.apk | head
 On a phone: install that APK, sign in, start a patrol, confirm the map still follows you, then put the app in the background and confirm a release build does not show a WebView debug socket (`chrome://inspect` stays empty).
 
 
-**Supabase CLI:** run commands from the repo root or `platform/supabase` as you did before; config paths are under `platform/supabase`.
+**Supabase CLI:** run commands from `platform/supabase`. `config.toml` is the local stack. Do not `supabase config push` it to production. Layout:
+
+| Path | Purpose |
+|------|---------|
+| `supabase/migrations/` | Applied history. Do not edit a file that may already be on production. New work is a new timestamped file. |
+| `supabase/tests/` | Isolation scripts (`isolation_tests_community.sql`, `isolation_tests_intelligence.sql`). Not migrations. |
+| `supabase/archive/` | Old SQL Editor scripts. Not migrations. Do not re-run them to "fix" drift. |
+| `supabase/seed.sql` | Local `db reset` only. Sample security companies stay in migration `20260815059000`. |
+
+`npm run check:migrations` (repo root) fails when a new migration reuses a version prefix. Four historical pairs are allowlisted. See [`docs/SQL_CONVENTIONS.md`](docs/SQL_CONVENTIONS.md) and [`docs/MIGRATION_VERSION_REPAIR.md`](docs/MIGRATION_VERSION_REPAIR.md). Storage URL follow-up: [`docs/STORAGE_PRIVACY_PLAN.md`](docs/STORAGE_PRIVACY_PLAN.md).
 
 ## Edge Function secrets
 

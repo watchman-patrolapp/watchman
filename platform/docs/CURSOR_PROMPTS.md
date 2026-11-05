@@ -16,7 +16,7 @@
 4. **Change the date prefix** of the migration file name to the day you run it, and keep the order. Never reuse a timestamp, and never edit an applied migration.
 5. **The agent stops and shows you the diff.** Review it, then apply the migration to a **staging** Supabase project first (SQL editor). Run the manual checks, then commit and push yourself.
 6. **After each phase:**
-   - run `platform/supabase/sql/isolation_tests_community.sql` (created in G7) on staging;
+   - run `platform/supabase/tests/isolation_tests_community.sql` (created in G7) on staging;
    - tick the box below;
    - add the migration to the "Apply on Supabase" table in `platform/docs/SCALE_ROADMAP.md`.
 7. **If the agent says a function body differs from the blueprint**, trust the repo. The blueprint SQL is a draft; the agent must copy the **latest** definition (found with `rg`) and apply only the described change.
@@ -42,7 +42,7 @@
 | [ ] | 4 | G4 — Storage write lockdown + safe path helpers | `20261003004000_storage_write_hardening.sql` | G3 |
 | [ ] | 5 | G5 — Users privilege guard + SQL grant convention doc | `20261022001000_users_privilege_guard.sql` | G1, G2 |
 | [ ] | 6 | G6 — Notification preferences | `20261003006000_notification_prefs.sql` | — |
-| [ ] | 7 | G7 — Two-org isolation test script | `platform/supabase/sql/isolation_tests_community.sql` | G1–G6 |
+| [ ] | 7 | G7 — Two-org isolation test script | `platform/supabase/tests/isolation_tests_community.sql` | G1–G6 |
 | [ ] | 8 | P0a — Capability grants (backend) | `20261003010000_org_capability_grants.sql` | G2 |
 | [ ] | 9 | P0b — Capability frontend + content reports + community buckets | `20261003012000_…`, `20261003020000_…` | P0a, G4 |
 | [ ] | 10 | P1 — Resident moderators & street reps | `20261003011000_…`, `20261003013000_…` | P0b, G1 |
@@ -121,7 +121,7 @@ TESTS / MANUAL CHECKS TO RUN
 - Two browsers (resident + admin): hide on one, it vanishes on the other.
 - Try edit after 16 minutes → error message toast.
 - npm run lint in platform/web.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -188,7 +188,7 @@ TESTS / MANUAL CHECKS TO RUN
 - Promote a test resident in /admin/residents → row appears.
 - Delete a test user → row appears, user gone.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -247,7 +247,7 @@ TESTS / MANUAL CHECKS TO RUN
 - Staging with two orgs: create local contact in A, check B doesn't see it.
 - Try editing a city-wide police entry as NW admin → error toast.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -318,7 +318,7 @@ TESTS / MANUAL CHECKS TO RUN
 - Staging: report an incident with photo as resident (works); try supabase.storage.from('security-branding').upload('<other company id>/x.png', file) in devtools → 403.
 - Delete an incident as moderator → photos removed.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -378,7 +378,7 @@ TESTS / MANUAL CHECKS TO RUN
 - Promote via /admin/residents as NW admin → works.
 - Switch working area as a multi-org member → works.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -438,7 +438,7 @@ TESTS / MANUAL CHECKS TO RUN
 - Staging: mute broadcast push on a test phone, post a notice → no push, bell shows it.
 - Trigger an SOS → push arrives.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -447,7 +447,7 @@ When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or a
 
 ## 7. G7 — Two-org isolation test script
 
-**Depends on:** G1–G6 · **Migration:** `platform/supabase/sql/isolation_tests_community.sql (not a migration)`
+**Depends on:** G1–G6 · **Migration:** `platform/supabase/tests/isolation_tests_community.sql (not a migration)`
 
 ````text
 You are working in the Watchman repo (React 19 + Vite + Capacitor 8 web app in platform/web, Supabase backend in platform/supabase). Task: G7 — Two-org isolation test script.
@@ -461,7 +461,7 @@ READ FIRST (context)
 - @platform/supabase/migrations/20260815028000_intelligence_org_isolation.sql
 
 SCOPE
-Create platform/supabase/sql/isolation_tests_community.sql with helpers pg_temp.as_user(uuid), pg_temp.expect_error(sql, like), pg_temp.expect_rows(sql, n); psql variables for test user ids; assertions for §14 rows that exist after G1–G6 (rows 3, 24–33). Add a short README block at the top. OUT: CI integration.
+Create platform/supabase/tests/isolation_tests_community.sql with helpers pg_temp.as_user(uuid), pg_temp.expect_error(sql, like), pg_temp.expect_rows(sql, n); psql variables for test user ids; assertions for §14 rows that exist after G1–G6 (rows 3, 24–33). Add a short README block at the top. OUT: CI integration.
 
 STEPS
 1. Write the script per §4.7, wrapped in BEGIN … ROLLBACK.
@@ -469,7 +469,7 @@ STEPS
 3. Document how to run: psql "$STAGING_DB_URL" -v a_res=… -v a_admin=… -v b_res=… -v b_admin=… -f …
 
 MIGRATION FILE
-platform/supabase/sql/isolation_tests_community.sql (not a migration)
+platform/supabase/tests/isolation_tests_community.sql (not a migration)
 
 CONSTRAINTS (apply to everything you write):
 - Follow existing patterns in the files above: text + CHECK (no enums), SECURITY DEFINER + SET search_path = public, role normalisation replace(lower(trim(role::text)),'-','_'), DROP POLICY IF EXISTS before CREATE POLICY, SAST via timezone('Africa/Johannesburg', now()). React: lazy pages in App.jsx, PageHeader + homeBackNav(), existing Tailwind card classes, isRpcNotFoundError fallbacks ("Run the … SQL in Supabase first").
@@ -487,7 +487,7 @@ ACCEPTANCE CRITERIA
 
 TESTS / MANUAL CHECKS TO RUN
 - Run on staging; paste output in the PR description.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -540,7 +540,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging SQL: run §14 rows 1 and 13 via the G7 script (add them).
 - Check activity_logs rows for grant/revoke.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -594,7 +594,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging: report a notice twice; upload test via devtools to own and other org paths.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -653,7 +653,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging walkthrough of §6.10 with two orgs.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -709,7 +709,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging: create item as NW admin, offer as resident in A, check B can't see it; respond to the offer.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -768,7 +768,7 @@ TESTS / MANUAL CHECKS TO RUN
 - Staging: add item + 3 units, print labels, open a QR URL on a phone.
 - Try ledger UPDATE in SQL editor → error.
 - npm run lint && npm run build.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -823,7 +823,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging with custodian + 2 patrollers through flows A, B, D.
 - npm run lint && npm run build.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -842,7 +842,7 @@ Patroller-to-patroller handover with request → accept → two-party code hands
 
 READ FIRST (context)
 - @platform/docs/NEW_FEATURES_BLUEPRINT.md (§10.3 flows C/E/F, §10.4 state machine, §10.6 transfers, §10.7, §10.10, §10.12, D18, D21, D22)
-- @platform/supabase/sql/schedule_chat_retention_cron.sql
+- @platform/supabase/archive/schedule_chat_retention_cron.sql
 - @platform/supabase/functions/notify-resident-event/index.ts
 - @platform/web/src/components/layout/AppNotificationBell.jsx
 - @platform/web/src/utils/equipment.js
@@ -880,7 +880,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging: run flows C, E, F; call select public.run_equipment_housekeeping() manually with backdated rows.
 - npm run lint && npm run build.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -935,7 +935,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging + Android device: scan QR, go offline, report incident, reconnect.
 - npm run lint && npm run build.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -986,7 +986,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging search tests from §9.12.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -1033,7 +1033,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging walkthrough.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -1083,7 +1083,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging checks per sub-feature.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -1130,7 +1130,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging walkthrough.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -1178,7 +1178,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging walkthrough.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````
@@ -1225,7 +1225,7 @@ ACCEPTANCE CRITERIA
 TESTS / MANUAL CHECKS TO RUN
 - Staging walkthroughs.
 - npm run lint.
-- Add/extend the matching assertions in platform/supabase/sql/isolation_tests_community.sql (if it exists).
+- Add/extend the matching assertions in platform/supabase/tests/isolation_tests_community.sql (if it exists).
 
 When done: STOP AND SHOW ME THE DIFF BEFORE COMMITTING. Do not commit, push or apply SQL.
 ````

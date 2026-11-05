@@ -166,7 +166,7 @@ Confirmed by reading the repo at commit `55c5225` (21 Aug 2026), plus the untrac
 | Patrol & equipment grounding | `patrol_slots (id, date, start_time, end_time, zone, volunteer_uid, volunteer_name, organization_id)`, unique `(organization_id, date, start_time, volunteer_uid)`, written by `PatrolSchedule.jsx`; `patroller_profiles (user_id, organization_id, training_certified, certification_date, status active/inactive/suspended)`; `user_vehicles` (`Vehicles.jsx`); offline helpers `chat/hooks/useNetworkStatus.js`, `chat/components/OfflineBanner.jsx`, `chat_messages.client_message_id` idempotency (`20260820050000`), `@capacitor/preferences`; libs `exceljs`, `html2pdf.js`, `recharts`; no QR library; no test runner (eslint only) |
 | Definer hardening | `20260820080000_advisor_rpc_harden.sql` revoked PUBLIC/anon on existing SECURITY DEFINER functions once and moved internal ones (`notify_app_user`, `write_staff_activity`, trigger functions) to service_role. New functions must repeat this (§4.5 convention) |
 | SQL style | `text` + `CHECK (... IN (...))` instead of enums. `SECURITY DEFINER` + `SET search_path = public`. Every function gets `REVOKE ALL … FROM PUBLIC; GRANT EXECUTE … TO authenticated, service_role`. `DROP POLICY IF EXISTS` before `CREATE POLICY`. Role comparisons use `replace(lower(trim(role::text)), '-', '_')`. SAST dates use `timezone('Africa/Johannesburg', now())`. |
-| Cron | `pg_cron` in schema `extensions`; job `chat_messages_retention_6mo` (`platform/supabase/sql/schedule_chat_retention_cron.sql`) |
+| Cron | `pg_cron` in schema `extensions`; job `chat_messages_retention_6mo` (`platform/supabase/archive/schedule_chat_retention_cron.sql`) |
 | Latest migration | `20260827010000_end_patrol_idempotent.sql` (untracked). New files must sort **after** it. |
 
 > **Note on the emergency directory:** `emergency_directory_entries` is global (city-wide). An NW admin who adds a doctor today adds it for every neighbourhood, and can even edit the police number. **v2 fixes this in G3** (default D12): entries get a nullable `organization_id`, and civic numbers stay city-wide but only global staff can edit them.
@@ -185,7 +185,7 @@ These fix problems found **in the code that exists today**. They also lay the gr
 | G4 | **Storage writes are wide open.** Policies on `incident-photos` (`20260328163000`), `city-hub-photos` (`20260815034000`/`035000`), `emergency-directory` and `security-branding` (`20260815074000`/`076000`) check only `bucket_id`, so **any signed-in user can overwrite or delete any file** in those buckets (e.g. replace incident evidence or a watch logo). `20260820090000` only removed public listing. The `criminal-photos` bucket is used in code but has **no policies in the repo** (verify live). | **High** | Lock writes to the right people using the path's first segment, which already identifies the owner entity: `incident-photos/{incident_id}/…`, `city-hub-photos/{post_id}/…`, `security-branding/{company_id}/…`. Emergency directory moves to `{org_id or 'global'}/…`. Add safe helpers `try_uuid()`, `storage_path_org_id()`, `storage_path_in_caller_org()` (used by P0). Reads are unchanged, so existing public URLs keep working. | M |
 | G5 | **User-row self-escalation not provably blocked.** The base `users` RLS policies live in the dashboard, not the repo. `AdminResidents.jsx` promotes with a direct `supabase.from("users").update({ role })`, so some UPDATE policy allows writes to `role`. Nothing in the repo stops an NW admin setting `role = 'admin'`, or a user editing their own `verified` / `organization_id`. | **High** (verify live) | `BEFORE UPDATE` guard trigger on `public.users`. When the caller is a client (`current_user = 'authenticated'`), it blocks: self-changes to privileged columns; non-global-staff setting a global role (`admin`, `technical_support`) or `platform_role`; and edits to users outside the caller's org. SECURITY DEFINER RPCs (running as owner) are unaffected. Also document the grant convention. | S |
 | G6 | **No notification preferences.** Every push and in-app notice is all-or-nothing. New features add many more kinds (needs board, equipment, reviews). | Medium (spam → uninstalls) | `user_notification_prefs` + `should_notify(user, kind, channel)`. SOS / emergency kinds can never be muted. Profile → Notifications UI. `notify_app_user` callers and `notify-resident-event` check it. | M |
-| G7 | **No automated isolation proof.** The roadmap item "Isolation proof" is manual. There's no test framework, only eslint. | Medium | `platform/supabase/sql/isolation_tests_community.sql`: a transaction-wrapped script that impersonates users via `set_config('request.jwt.claims', …)` and `SET LOCAL ROLE authenticated`, asserts with `RAISE EXCEPTION`, then rolls back. Extend it in every phase. | S |
+| G7 | **No automated isolation proof.** The roadmap item "Isolation proof" is manual. There's no test framework, only eslint. | Medium | `platform/supabase/tests/isolation_tests_community.sql`: a transaction-wrapped script that impersonates users via `set_config('request.jwt.claims', …)` and `SET LOCAL ROLE authenticated`, asserts with `RAISE EXCEPTION`, then rolls back. Extend it in every phase. | S |
 
 > **Do not edit applied migrations.** Every fix is a **new** file that `CREATE OR REPLACE`s functions and `DROP POLICY IF EXISTS` / `CREATE POLICY`s policies. Before writing each one, `rg` for the latest definition of the function you replace and copy that body, because several functions were redefined more than once.
 
@@ -586,7 +586,7 @@ GRANT EXECUTE ON FUNCTION public.is_mandatory_notification_kind(text) TO authent
 
 **UI:** Profile → **Notifications** section (`components/profile/NotificationPrefs.jsx`) has one row per kind with two toggles and optional quiet hours. Mandatory kinds show a lock icon with "Safety alerts can't be turned off". Daily digest (§11.3) builds on this table.
 
-### 4.7 G7 — Isolation test harness `platform/supabase/sql/isolation_tests_community.sql`
+### 4.7 G7 — Isolation test harness `platform/supabase/tests/isolation_tests_community.sql`
 
 ```sql
 -- Run in the SQL editor against a STAGING project (never prod). Everything rolls back.
@@ -3137,7 +3137,8 @@ END $$;
 REVOKE ALL ON FUNCTION public.run_equipment_housekeeping() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.run_equipment_housekeeping() TO service_role;
 
--- platform/supabase/sql/schedule_equipment_cron.sql (run once in SQL editor, like schedule_chat_retention_cron.sql):
+-- schedule_equipment_cron.sql was never added. Chat cron lives at
+-- platform/supabase/archive/schedule_chat_retention_cron.sql (run once in the SQL editor):
 -- SELECT cron.schedule('equipment_housekeeping', '*/15 * * * *', $$SELECT public.run_equipment_housekeeping();$$);
 
 -- RLS for incidents/maintenance/stocktakes: SELECT for members (incident description + kind are visible to
@@ -3482,7 +3483,7 @@ Latest existing: `20260827010000_end_patrol_idempotent.sql` (untracked; don't to
 | `20261003004000_storage_write_hardening.sql` | G4 | §4.4 + `try_uuid`, `storage_path_org_id`, `storage_path_in_caller_org` |
 | `20261003005000_users_privilege_guard.sql` | G5 | §4.5 (+ new doc `platform/docs/SQL_CONVENTIONS.md`) |
 | `20261003006000_notification_prefs.sql` | G6 | §4.6 |
-| `platform/supabase/sql/isolation_tests_community.sql` | G7 | §4.7 (not a migration; staging only) |
+| `platform/supabase/tests/isolation_tests_community.sql` | G7 | §4.7 (not a migration; staging only) |
 | `20261003010000_org_capability_grants.sql` | P0 | §5.4 |
 | `20261003011000_area_broadcast_moderators.sql` | P1 | §6.5 |
 | `20261003012000_community_content_reports.sql` | P0/P1 | §5.5 (broadcast branch; later files extend `report_community_content`) |
@@ -3548,7 +3549,7 @@ Set up **Org A = Theescombe**, **Org B = Lorraine** (or a test org). Users: A-re
 | 32 | A-nw_admin `update users set role='patroller'` on a B member | forbidden (G5) |
 | 33 | A-resident mutes `sos` in prefs | still delivered (`should_notify` = true) |
 
-Automate the RPC-level checks as a SQL script using `set_config('request.jwt.claims', …)` per user in a transaction (`platform/supabase/sql/isolation_tests_community.sql`), or as Playwright/Vitest later.
+Automate the RPC-level checks as a SQL script using `set_config('request.jwt.claims', …)` per user in a transaction (`platform/supabase/tests/isolation_tests_community.sql`), or as Playwright/Vitest later.
 
 ---
 
