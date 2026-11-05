@@ -20,6 +20,7 @@ import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { OfflineBanner } from './OfflineBanner';
 import { playChatNotification, playMessageSent } from '../../utils/sound';
+import { devLog } from '../../utils/devLog';
 import toast from 'react-hot-toast';
 import { markChatVisited } from '../utils/markChatVisited';
 import { getChatGeolocationPosition } from '../utils/getChatGeolocation';
@@ -901,7 +902,7 @@ export default function ChatContainer() {
     try {
       // Upload to Supabase storage
       const { url: storageUrl } = await storageService.uploadVoice(blob, duration);
-      console.log('Voice uploaded to:', storageUrl);
+      devLog('Voice uploaded to:', storageUrl);
       
       // Send message to database
       const sent = await messageService.sendVoice({
@@ -917,7 +918,7 @@ export default function ChatContainer() {
         clientMessageId: localId,
       });
 
-      console.log('Message saved to DB:', sent);
+      devLog('Message saved to DB:', sent);
 
       // Clean up temporary object URL
       objectUrlManager.revoke(localId);
@@ -1004,7 +1005,7 @@ export default function ChatContainer() {
         }
       } catch (e) {
         if (e?.name !== 'AbortError') {
-          console.log('Geocoding failed (non-critical):', e);
+          devLog('Geocoding failed (non-critical):', e);
         }
       }
 

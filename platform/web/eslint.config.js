@@ -5,7 +5,12 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'dev-dist']),
+  globalIgnores([
+    'dist/**',
+    'dev-dist/**',
+    'android/**',
+    '../android/app/src/main/assets/**',
+  ]),
   {
     files: ['**/*.{js,jsx}'],
     ignores: ['dev-dist/**'],

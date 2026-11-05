@@ -108,17 +108,17 @@ export default function UpcomingScheduledPatrollers({ className = "", refreshNon
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
-  const [nowTick, setNowTick] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const scrollRef = useRef(null);
   const [overflow, setOverflow] = useState(false);
 
   // Recompute when the clock ticks so a long-lived tab crosses midnight correctly
   const fetchRange = useMemo(() => {
-    const today = new Date();
+    const today = new Date(nowMs);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     return { start: toLocalDateStr(today), end: toLocalDateStr(tomorrow) };
-  }, [nowTick]);
+  }, [nowMs]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,12 +160,12 @@ export default function UpcomingScheduledPatrollers({ className = "", refreshNon
   }, [load]);
 
   useEffect(() => {
-    const id = window.setInterval(() => setNowTick((t) => t + 1), 60_000);
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
 
   const upcoming = useMemo(() => {
-    const now = Date.now();
+    const now = Math.max(nowMs, Date.now());
     const horizon = now + WINDOW_MS;
     const list = [];
 
@@ -192,7 +192,7 @@ export default function UpcomingScheduledPatrollers({ className = "", refreshNon
       deduped.push(slot);
     }
     return deduped;
-  }, [rows, nowTick]);
+  }, [rows, nowMs]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;

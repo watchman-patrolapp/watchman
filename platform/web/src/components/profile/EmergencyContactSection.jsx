@@ -40,22 +40,17 @@ export default function EmergencyContactSection({ user, onSaved, slot = 1 }) {
     ? user?.emergencyContactUserId || ""
     : user?.emergencyContact2UserId || "";
 
+  const syncedContact = fieldsFromUser(user, slot);
   useEffect(() => {
-    const next = fieldsFromUser(user, slot);
-    setLinkedUserId(next.linkedUserId);
-    setName(next.name);
-    setPhone(next.phone);
-    setRelationship(next.relationship);
+    setLinkedUserId(syncedContact.linkedUserId);
+    setName(syncedContact.name);
+    setPhone(syncedContact.phone);
+    setRelationship(syncedContact.relationship);
   }, [
-    slot,
-    user?.emergencyContactUserId,
-    user?.emergencyContactName,
-    user?.emergencyContactPhone,
-    user?.emergencyContactRelationship,
-    user?.emergencyContact2UserId,
-    user?.emergencyContact2Name,
-    user?.emergencyContact2Phone,
-    user?.emergencyContact2Relationship,
+    syncedContact.linkedUserId,
+    syncedContact.name,
+    syncedContact.phone,
+    syncedContact.relationship,
   ]);
 
   useEffect(() => {

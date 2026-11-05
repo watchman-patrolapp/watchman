@@ -1,7 +1,7 @@
 import React from 'react';
 import { isChunkLoadError, reloadOnceForChunkError } from '../utils/chunkLoadRecovery';
 
-const isDev = import.meta.env?.DEV ?? process.env.NODE_ENV === 'development';
+const isDev = import.meta.env.DEV;
 
 class ErrorBoundary extends React.Component {
   constructor(props) {

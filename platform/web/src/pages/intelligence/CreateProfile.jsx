@@ -148,6 +148,8 @@ export default function CreateProfile() {
     const incidentId = searchParams.get('incident');
     const evidenceId = searchParams.get('evidence');
     if (!incidentId || !evidenceId) return;
+    // Org scope arrives after auth; don't consume the one-shot prefill until it is known.
+    if (!activeOrganizationId) return;
 
     prefillFromIncidentRef.current = true;
 
@@ -232,7 +234,7 @@ export default function CreateProfile() {
         prefillFromIncidentRef.current = false;
       }
     })();
-  }, [searchParams]);
+  }, [searchParams, activeOrganizationId, includeUnscoped]);
 
   useEffect(() => {
     if (fieldGuideTopic == null) return;

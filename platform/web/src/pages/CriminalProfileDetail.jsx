@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { supabase } from '../supabase/client';
@@ -221,11 +221,7 @@ export default function CriminalProfileDetail() {
     return () => clearTimeout(t);
   }, [associateSearchQuery, location.search, id, associatesDraft, activeOrganizationId, includeUnscoped]);
 
-  useEffect(() => {
-    fetchProfile();
-  }, [id, activeOrganizationId, includeUnscoped]);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     const gen = ++loadGen.current;
     try {
       setLoading(true);
@@ -279,7 +275,11 @@ export default function CriminalProfileDetail() {
     } finally {
       if (gen === loadGen.current) setLoading(false);
     }
-  };
+  }, [id, activeOrganizationId, includeUnscoped, navigate]);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   const handleSave = async () => {
     if (saving) return;

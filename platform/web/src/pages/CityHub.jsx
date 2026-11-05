@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { FaPen, FaArchive, FaTrash, FaTimes, FaImage, FaFilePdf, FaEnvelope, FaPhone, FaUser } from "react-icons/fa";
@@ -382,7 +382,8 @@ export default function CityHub() {
     visibility: "city_wide",
   });
 
-  const loadPosts = async () => {
+  const actorId = cityHubActorId(user);
+  const loadPosts = useCallback(async () => {
     const gen = ++loadGenRef.current;
     setLoading(true);
     try {
@@ -448,17 +449,16 @@ export default function CityHub() {
     } finally {
       if (gen === loadGenRef.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    const uid = cityHubActorId(user);
-    visitSeenAtRef.current = readCityHubLastSeen(uid);
-    if (uid) markCityHubVisited(uid);
+    visitSeenAtRef.current = readCityHubLastSeen(actorId);
+    if (actorId) markCityHubVisited(actorId);
     void loadPosts();
     return () => {
-      if (uid) markCityHubVisited(uid);
+      if (actorId) markCityHubVisited(actorId);
     };
-  }, [user?.id, user?.uid]);
+  }, [actorId, loadPosts]);
 
   const photoFilesRef = useRef(photoFiles);
   photoFilesRef.current = photoFiles;

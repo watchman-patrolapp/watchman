@@ -30,7 +30,7 @@ export default function ActiveSosBanner() {
       if (gen !== loadGen.current) return;
       setAlerts([]);
     }
-  }, [activeOrganizationId, includeUnscoped, user?.organizationId, user?.id]);
+  }, [activeOrganizationId, includeUnscoped, user]);
 
   useEffect(() => {
     void load();

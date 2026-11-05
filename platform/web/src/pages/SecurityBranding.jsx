@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { FaCog, FaImage, FaUpload } from "react-icons/fa";
 import PageHeader from "../components/layout/PageHeader";
@@ -30,7 +30,7 @@ export default function SecurityBranding() {
   const [contactPersonName, setContactPersonName] = useState("");
   const loadGen = useRef(0);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const gen = ++loadGen.current;
     setLoading(true);
     try {
@@ -62,11 +62,11 @@ export default function SecurityBranding() {
     } finally {
       if (gen === loadGen.current) setLoading(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const brandingRef = useRef({
     logoUrl: "",

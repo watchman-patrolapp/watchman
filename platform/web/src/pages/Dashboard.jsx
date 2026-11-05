@@ -483,17 +483,33 @@ export default function Dashboard() {
     }
   }, [activePatrol?.user_id, user?.id, isTracking, startTracking]);
 
+  // Vehicle columns only — GPS updates replace activePatrol without changing these.
+  const patrolSyncUserId = activePatrol?.user_id;
+  const patrolSyncVehicleId = activePatrol?.vehicle_id;
+  const patrolSyncVehicleColor = activePatrol?.vehicle_color;
+  const patrolSyncMakeModel = activePatrol?.vehicle_make_model;
+  const patrolSyncVehicleReg = activePatrol?.vehicle_reg;
+  const patrolSyncVehicleType = activePatrol?.vehicle_type;
+
   // Keep active_patrols vehicle_* in sync with user_vehicles (map reads DB; stale color after vehicle swap)
   useEffect(() => {
-    if (!user?.id || !activePatrol || activePatrol.user_id !== user.id) return;
+    if (!user?.id || !patrolSyncUserId || patrolSyncUserId !== user.id) return;
     if (!user.vehicles?.length) return;
+    const patrolSnapshot = {
+      user_id: patrolSyncUserId,
+      vehicle_id: patrolSyncVehicleId,
+      vehicle_color: patrolSyncVehicleColor,
+      vehicle_make_model: patrolSyncMakeModel,
+      vehicle_reg: patrolSyncVehicleReg,
+      vehicle_type: patrolSyncVehicleType,
+    };
     let cancelled = false;
     (async () => {
       const { updated, data } = await syncActivePatrolVehicleFromVehicleList(
         supabase,
         user.id,
         user.vehicles,
-        activePatrol
+        patrolSnapshot
       );
       if (cancelled || !updated || !data) return;
       setActivePatrol(data);
@@ -503,11 +519,12 @@ export default function Dashboard() {
   }, [
     user?.id,
     user?.vehicles,
-    activePatrol?.user_id,
-    activePatrol?.vehicle_id,
-    activePatrol?.vehicle_color,
-    activePatrol?.vehicle_make_model,
-    activePatrol?.vehicle_reg,
+    patrolSyncUserId,
+    patrolSyncVehicleId,
+    patrolSyncVehicleColor,
+    patrolSyncMakeModel,
+    patrolSyncVehicleReg,
+    patrolSyncVehicleType,
   ]);
 
   // --- Patrol logic ---

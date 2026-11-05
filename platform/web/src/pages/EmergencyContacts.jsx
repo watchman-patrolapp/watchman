@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -439,7 +439,7 @@ export default function EmergencyContacts() {
   const [togglingId, setTogglingId] = useState(null);
   const loadGen = useRef(0);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const gen = ++loadGen.current;
     setLoading(true);
     try {
@@ -462,11 +462,11 @@ export default function EmergencyContacts() {
     } finally {
       if (gen === loadGen.current) setLoading(false);
     }
-  };
+  }, [canManage]);
 
   useEffect(() => {
     void load();
-  }, [canManage]);
+  }, [load]);
 
   const uploadMedia = async (kind, file) => {
     if (!file || !form) return;

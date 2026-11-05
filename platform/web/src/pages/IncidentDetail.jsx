@@ -404,7 +404,7 @@ export default function IncidentDetail() {
     } finally {
       setMigrateLegacyBusy(false);
     }
-  }, [id, incident, user?.id, evidence, fetchIncidentDetails]);
+  }, [id, incident, user?.id, evidence, fetchIncidentDetails, migrateLegacyBusy]);
 
   const handleAdminDelete = async () => {
     if (deleteBusy) return;

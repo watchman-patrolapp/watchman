@@ -21,6 +21,7 @@ export const MessageList = React.memo(function MessageList({
 }) {
   const useVirtual = messages.length >= APP_CONFIG.CHAT_VIRTUALIZATION_THRESHOLD;
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual's useVirtualizer returns functions the compiler cannot memoize
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => containerRef.current,

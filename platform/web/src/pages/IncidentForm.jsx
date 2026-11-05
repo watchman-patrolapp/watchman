@@ -342,7 +342,7 @@ export default function IncidentForm() {
       console.warn("Incident draft restore failed:", e);
     }
     setDraftHydrated(true);
-  }, []);
+  }, [isEditMode]);
 
   useEffect(() => {
     if (!draftHydrated || isEditMode) return;
@@ -875,7 +875,7 @@ export default function IncidentForm() {
       } else {
         try {
           sessionStorage.removeItem(INCIDENT_DRAFT_STORAGE_KEY);
-        } catch (_) {
+        } catch {
           /* ignore */
         }
         toast.success("Incident reported successfully with structured evidence!");
