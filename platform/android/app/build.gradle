@@ -3,6 +3,90 @@ apply plugin: 'com.android.application'
 // Workaround for https://issuetracker.google.com/issues/325307775
 task prepareKotlinBuildScriptModel {}
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def propertyOrEnv = { String propName, String envName ->
+    def fromFile = keystoreProperties.getProperty(propName)
+    if (fromFile != null && fromFile.trim()) {
+        return fromFile.trim()
+    }
+    def fromEnv = System.getenv(envName)
+    if (fromEnv != null && fromEnv.trim()) {
+        return fromEnv.trim()
+    }
+    return null
+}
+
+// keystore.properties (gitignored) wins per key when non-blank; otherwise CI env.
+def releaseStoreFile = propertyOrEnv('storeFile', 'WATCHMAN_UPLOAD_STORE_FILE')
+def releaseStorePassword = propertyOrEnv('storePassword', 'WATCHMAN_UPLOAD_STORE_PASSWORD')
+def releaseKeyAlias = propertyOrEnv('keyAlias', 'WATCHMAN_UPLOAD_KEY_ALIAS')
+def releaseKeyPassword = propertyOrEnv('keyPassword', 'WATCHMAN_UPLOAD_KEY_PASSWORD')
+
+def releaseSigningValues = [
+    storeFile    : releaseStoreFile,
+    storePassword: releaseStorePassword,
+    keyAlias     : releaseKeyAlias,
+    keyPassword  : releaseKeyPassword,
+]
+def missingReleaseSigning = []
+releaseSigningValues.each { key, value ->
+    if (!value) {
+        missingReleaseSigning << key
+    }
+}
+def releaseSigningReady = missingReleaseSigning.isEmpty()
+
+def resolveStoreFile = { String path ->
+    def store = new File(path)
+    if (!store.isAbsolute()) {
+        store = new File(rootProject.projectDir, path)
+    }
+    return store
+}
+
+def versionProperties = new Properties()
+def versionPropertiesFile = rootProject.file('version.properties')
+if (versionPropertiesFile.exists()) {
+    versionPropertiesFile.withInputStream { versionProperties.load(it) }
+}
+
+// Precedence: -Pwatchman.versionCode / versionName, then WATCHMAN_VERSION_*,
+// then platform/android/version.properties, then the historical defaults.
+def resolveVersion = { String fileKey, String gradleProp, String envName, String fallback ->
+    if (project.hasProperty(gradleProp)) {
+        def fromGradle = project.property(gradleProp)?.toString()?.trim()
+        if (fromGradle) {
+            return fromGradle
+        }
+    }
+    def fromEnv = System.getenv(envName)
+    if (fromEnv != null && fromEnv.trim()) {
+        return fromEnv.trim()
+    }
+    def fromFile = versionProperties.getProperty(fileKey)
+    if (fromFile != null && fromFile.trim()) {
+        return fromFile.trim()
+    }
+    return fallback
+}
+
+def appVersionName = resolveVersion('VERSION_NAME', 'watchman.versionName', 'WATCHMAN_VERSION_NAME', '1.0.5')
+def appVersionCodeRaw = resolveVersion('VERSION_CODE', 'watchman.versionCode', 'WATCHMAN_VERSION_CODE', '6')
+def appVersionCode
+try {
+    appVersionCode = Integer.parseInt(appVersionCodeRaw)
+    if (appVersionCode < 1) {
+        throw new NumberFormatException('non-positive')
+    }
+} catch (NumberFormatException ignored) {
+    throw new GradleException("watchman versionCode must be a positive integer, got '${appVersionCodeRaw}'. Edit platform/android/version.properties or set -Pwatchman.versionCode / WATCHMAN_VERSION_CODE.")
+}
+
 android {
     namespace "com.watchman.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -10,8 +94,8 @@ android {
         applicationId "com.watchman.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 6
-        versionName "1.0.5"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -19,11 +103,66 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    if (releaseSigningReady) {
+        signingConfigs {
+            release {
+                storeFile resolveStoreFile(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
         }
+    }
+}
+
+def releaseSigningError = """
+Release signing is not configured. Refusing to build an unsigned release.
+Set every value below. A non-blank keystore.properties entry overrides the matching env var.
+
+  platform/android/keystore.properties (gitignored; copy keystore.properties.example):
+    storeFile, storePassword, keyAlias, keyPassword
+  or environment variables:
+    WATCHMAN_UPLOAD_STORE_FILE
+    WATCHMAN_UPLOAD_STORE_PASSWORD
+    WATCHMAN_UPLOAD_KEY_ALIAS
+    WATCHMAN_UPLOAD_KEY_PASSWORD
+
+Missing: ${missingReleaseSigning.join(', ')}
+See platform/README.md (Android release signing). Do not sign release with the debug keystore.
+""".stripIndent().trim()
+
+gradle.taskGraph.whenReady { graph ->
+    def needsReleaseSigning = graph.allTasks.any { task ->
+        task.name in ['assembleRelease', 'bundleRelease', 'packageRelease', 'signReleaseBundle']
+    }
+    if (!needsReleaseSigning) {
+        return
+    }
+    if (!releaseSigningReady) {
+        throw new GradleException(releaseSigningError)
+    }
+    def store = resolveStoreFile(releaseStoreFile)
+    if (!store.isFile()) {
+        throw new GradleException("Upload keystore not found at ${store}. storeFile is a path; passwords stay in keystore.properties or WATCHMAN_UPLOAD_* env vars. See platform/README.md.")
+    }
+}
+
+tasks.register('printWatchmanVersion') {
+    doLast {
+        println "applicationId=com.watchman.app"
+        println "versionCode=${appVersionCode}"
+        println "versionName=${appVersionName}"
+        println "releaseSigningReady=${releaseSigningReady}"
     }
 }
 

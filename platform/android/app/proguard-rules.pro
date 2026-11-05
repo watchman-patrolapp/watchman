@@ -1,21 +1,41 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Release minify (R8). Capacitor's android library also ships these plugin
+# rules as consumer ProGuard files; they are repeated here so a release build
+# still keeps the bridge if that wiring changes.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Capacitor v3+ plugins are discovered by annotation.
+-keep @com.getcapacitor.annotation.CapacitorPlugin public class * {
+    @com.getcapacitor.annotation.PermissionCallback <methods>;
+    @com.getcapacitor.annotation.ActivityCallback <methods>;
+    @com.getcapacitor.annotation.Permission <methods>;
+    @com.getcapacitor.PluginMethod public <methods>;
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+-keep public class * extends com.getcapacitor.Plugin { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Capacitor v2 annotations. Deprecated, still referenced by older plugins.
+-keep @com.getcapacitor.NativePlugin public class * {
+    @com.getcapacitor.PluginMethod public <methods>;
+}
+
+# Cordova plugins copied in by cap sync.
+-keep public class * extends org.apache.cordova.** {
+    public <methods>;
+    public <fields>;
+}
+
+# WebView Javascript interface used by the Capacitor bridge.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keepattributes JavascriptInterface
+
+# Firebase Cloud Messaging is a dependency of @capacitor/push-notifications.
+# The AAR ships its own consumer rules; these keep the service entry points.
+-keep class com.google.firebase.messaging.** { *; }
+-keep class com.google.firebase.iid.** { *; }
+-keep class com.capacitorjs.plugins.pushnotifications.** { *; }
+-dontwarn com.google.firebase.**
+
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,Exceptions
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

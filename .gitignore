@@ -57,6 +57,7 @@ platform/android/app/google-services.json
 # Android / Java signing keys (never commit; rotate any key that was ever pushed)
 *.keystore
 *.jks
+platform/android/keystore.properties
 
 # Never commit Firebase Admin / service account JSON (server secrets)
 *firebase-adminsdk*.json

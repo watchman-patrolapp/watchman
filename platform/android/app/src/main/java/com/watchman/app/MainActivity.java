@@ -8,8 +8,12 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Remote WebView debugging follows the debuggable flag. Release builds
+        // are not debuggable, so inspection stays off there.
         if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             WebView.setWebContentsDebuggingEnabled(true);
+        } else {
+            WebView.setWebContentsDebuggingEnabled(false);
         }
         super.onCreate(savedInstanceState);
     }
