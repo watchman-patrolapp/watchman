@@ -25,9 +25,10 @@ import {
   wishlistErrorMessage,
   setWishlistItemAcquired,
   wishlistItemPhotoPaths,
-  wishlistPhotoUrl,
   wishlistStillNeededCents,
 } from "../../utils/equipmentWishlist";
+import PrivateMediaImg from "../../components/media/PrivateMediaImg";
+import { COMMUNITY_MEDIA_BUCKET } from "../../utils/communityMedia";
 import { canManageEquipment, createEquipmentFromWishlist, equipmentErrorMessage, listEquipmentWishlistLinks } from "../../utils/equipment";
 
 const BTN =
@@ -277,7 +278,7 @@ export default function NeedsAdmin() {
     [groupOffers, kindFilter]
   );
   const selectedItem = useMemo(() => items.find((i) => i.id === offerItemId) || null, [items, offerItemId]);
-  const selectedThumb = selectedItem ? wishlistPhotoUrl(wishlistItemPhotoPaths(selectedItem)[0]) : null;
+  const selectedThumb = selectedItem ? wishlistItemPhotoPaths(selectedItem)[0] : null;
 
   const showItems = (filter) => {
     setTab("items");
@@ -602,7 +603,7 @@ export default function NeedsAdmin() {
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-900">
                 {selectedThumb ? (
-                  <img src={selectedThumb} alt="" className="h-full w-full object-contain" />
+                  <PrivateMediaImg stored={selectedThumb} bucket={COMMUNITY_MEDIA_BUCKET} alt="" className="h-full w-full object-contain" />
                 ) : (
                   <FaInbox className="h-4 w-4 text-gray-400" aria-hidden="true" />
                 )}

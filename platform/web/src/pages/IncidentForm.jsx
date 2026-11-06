@@ -638,15 +638,11 @@ export default function IncidentForm() {
 
               if (uploadError) {
                 console.error("Upload error:", uploadError);
-                toast.error(
-                  `Photo upload failed: ${uploadError.message}. Check Supabase Storage bucket "incident-photos" exists and your role can upload.`,
-                  { duration: 8000 }
-                );
+                toast.error("That photo could not be saved. Try again.", { duration: 8000 });
                 continue;
               }
 
-              const { data: urlData } = supabase.storage.from("incident-photos").getPublicUrl(filePath);
-              photoURLs.push(urlData.publicUrl);
+              photoURLs.push(filePath);
             }
           }
 

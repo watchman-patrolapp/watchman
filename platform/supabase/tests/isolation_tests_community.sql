@@ -2102,6 +2102,105 @@ SELECT pg_temp.check('P3d', 'Org A hash chain still verifies',
 SELECT pg_temp.expect_error('P3d', 'patroller cannot read equipment_client_events',
   pg_temp.id('eq_p1'), 'SELECT 1 FROM public.equipment_client_events', 'permission denied');
 
+-- -----------------------------------------------------------------------------
+-- Private media (incident-photos, community-media, city-hub copies)
+-- Other-org members cannot read private objects. Any signed-in user can read
+-- a published City Hub copy. anon cannot read either. Metadata rows only.
+-- -----------------------------------------------------------------------------
+DO $media_fx$
+BEGIN
+  INSERT INTO g7_ids (k, v) VALUES
+    ('media_inc', gen_random_uuid()),
+    ('media_post', gen_random_uuid()),
+    ('media_archived', gen_random_uuid());
+
+  INSERT INTO public.incidents (
+    id, organization_id, type, description, location, status,
+    reporter_id, submitted_by, submitted_by_name, submitted_at
+  ) VALUES (
+    pg_temp.id('media_inc'), pg_temp.id('org_a'), 'theft', 'G7 private media', 'Street A', 'pending',
+    pg_temp.id('a_res'), pg_temp.id('a_res'), 'G7 a_res', now()
+  );
+
+  INSERT INTO public.city_hub_posts (
+    id, author_organization_id, type, title, content, visibility, status, created_by_user_id
+  ) VALUES
+    (pg_temp.id('media_post'), pg_temp.id('org_a'), 'general', 'G7 media post', 'Copy', 'city_wide', 'published', pg_temp.id('a_admin')),
+    (pg_temp.id('media_archived'), pg_temp.id('org_a'), 'general', 'G7 archived media', 'Hidden', 'city_wide', 'archived', pg_temp.id('a_admin'));
+
+  INSERT INTO storage.objects (bucket_id, name) VALUES
+    ('incident-photos', pg_temp.id('media_inc') || '/scene.jpg'),
+    ('community-media', pg_temp.id('org_a') || '/needs/g7/a.jpg'),
+    ('city-hub-photos', pg_temp.id('media_post') || '/copy_0.jpg'),
+    ('city-hub-photos', pg_temp.id('media_archived') || '/copy_0.jpg');
+END
+$media_fx$;
+
+SELECT pg_temp.expect_rows('media', 'Org A resident can read the Org A incident photo',
+  pg_temp.id('a_res'),
+  format('SELECT 1 FROM storage.objects WHERE bucket_id = ''incident-photos'' AND name = %L',
+    pg_temp.id('media_inc') || '/scene.jpg'), 1);
+SELECT pg_temp.expect_rows('media', 'Org B admin cannot read the Org A incident photo',
+  pg_temp.id('b_admin'),
+  format('SELECT 1 FROM storage.objects WHERE bucket_id = ''incident-photos'' AND name = %L',
+    pg_temp.id('media_inc') || '/scene.jpg'), 0);
+SELECT pg_temp.expect_rows('media', 'Org A resident can read Org A community-media',
+  pg_temp.id('a_res'),
+  format('SELECT 1 FROM storage.objects WHERE bucket_id = ''community-media'' AND name = %L',
+    pg_temp.id('org_a') || '/needs/g7/a.jpg'), 1);
+SELECT pg_temp.expect_rows('media', 'Org B admin cannot read Org A community-media',
+  pg_temp.id('b_admin'),
+  format('SELECT 1 FROM storage.objects WHERE bucket_id = ''community-media'' AND name = %L',
+    pg_temp.id('org_a') || '/needs/g7/a.jpg'), 0);
+SELECT pg_temp.expect_rows('media', 'signed-in Org B resident can read a published City Hub copy',
+  pg_temp.id('b_res'),
+  format('SELECT 1 FROM storage.objects WHERE bucket_id = ''city-hub-photos'' AND name = %L',
+    pg_temp.id('media_post') || '/copy_0.jpg'), 1);
+SELECT pg_temp.expect_rows('media', 'signed-in user cannot read an archived City Hub copy',
+  pg_temp.id('b_res'),
+  format('SELECT 1 FROM storage.objects WHERE bucket_id = ''city-hub-photos'' AND name = %L',
+    pg_temp.id('media_archived') || '/copy_0.jpg'), 0);
+
+DO $anon_media$
+DECLARE
+  v_bucket text;
+  v_name text;
+  v_n int;
+  v_ok boolean;
+  v_detail text;
+  v_pair text;
+BEGIN
+  FOREACH v_pair IN ARRAY ARRAY[
+    'incident-photos|' || pg_temp.id('media_inc') || '/scene.jpg',
+    'community-media|' || pg_temp.id('org_a') || '/needs/g7/a.jpg',
+    'city-hub-photos|' || pg_temp.id('media_post') || '/copy_0.jpg'
+  ]
+  LOOP
+    v_bucket := split_part(v_pair, '|', 1);
+    v_name := split_part(v_pair, '|', 2);
+    v_ok := false;
+    v_detail := '';
+    BEGIN
+      PERFORM pg_temp.as_user(pg_temp.id('b_res'), 'anon');
+      EXECUTE format(
+        'SELECT count(*) FROM storage.objects WHERE bucket_id = %L AND name = %L',
+        v_bucket, v_name
+      ) INTO v_n;
+      v_ok := v_n = 0;
+      v_detail := format('rows %s', v_n);
+      PERFORM pg_temp.as_postgres();
+    EXCEPTION WHEN others THEN
+      PERFORM pg_temp.as_postgres();
+      v_ok := SQLERRM ~* 'permission denied';
+      v_detail := SQLERRM;
+    END;
+    INSERT INTO g7_results (matrix_row, test, ok, detail)
+    VALUES ('media', 'anon cannot read ' || v_bucket, v_ok, v_detail);
+  END LOOP;
+  PERFORM pg_temp.as_postgres();
+END
+$anon_media$;
+
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2

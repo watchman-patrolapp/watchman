@@ -81,9 +81,8 @@ export async function uploadCommunityImage({ orgId, feature, entityId, file, ind
   const { error } = await supabase.storage
     .from(COMMUNITY_MEDIA_BUCKET)
     .upload(path, upload, { contentType: upload.type, upsert: false });
-  if (error) throw error;
-  const { data } = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path);
-  return { path, publicUrl: data?.publicUrl ?? null };
+  if (error) throw new Error("That image could not be saved. Try again.");
+  return { path };
 }
 
 /** Upload to the private bucket. `subPath` is relative to {orgId}/, e.g. "equipment/<unit>/invoice". */

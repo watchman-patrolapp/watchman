@@ -23,6 +23,7 @@ import { FaPlus, FaTimes, FaUpload, FaArrowLeft, FaExpand } from 'react-icons/fa
 import ThemeToggle from '../../components/ThemeToggle';
 import PatrollerPhotoPreview from '../../components/patrol/PatrollerPhotoPreview';
 import CriminalPhotoImg from '../../components/intelligence/CriminalPhotoImg';
+import { INCIDENT_PHOTOS_BUCKET, prefixedMediaRef } from '../../utils/privateMediaPath';
 import { removeCriminalPhoto } from '../../utils/criminalPhotos';
 import SightingsLogEditor from '../../components/intelligence/SightingsLogEditor';
 import {
@@ -372,7 +373,13 @@ export default function CreateProfile() {
         return;
       }
 
-      const allPhotoUrls = photos.map(p => p.url).filter(Boolean);
+      const allPhotoUrls = photos
+        .map((p) => {
+          if (!p.url) return '';
+          if (p.fromIncident) return prefixedMediaRef(p.url, INCIDENT_PHOTOS_BUCKET) || '';
+          return p.url;
+        })
+        .filter(Boolean);
       const sanitizedSightings = sanitizeSightingsLogForDb(sightingsLog);
       const legacySeen = syncLegacyLastSeenFromSightings(sanitizedSightings);
 

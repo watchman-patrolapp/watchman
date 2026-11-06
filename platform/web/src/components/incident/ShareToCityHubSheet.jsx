@@ -3,11 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { FaTimes } from "react-icons/fa";
 import toast from "../../utils/notify";
 import { supabase } from "../../supabase/client";
+import PrivateMediaImg from "../media/PrivateMediaImg";
+import { MAX_CITY_HUB_PHOTOS } from "../../utils/cityHubPhotos";
 import {
   CITY_HUB_SHARE_POST_TYPES,
   buildCityHubShareDraft,
+  loadIncidentShareMedia,
   publishIncidentToCityHub,
 } from "../../utils/cityHubShare";
+import { copyMediaToCityHub, friendlyMediaMessage } from "../../utils/privateMedia";
+import { INCIDENT_PHOTOS_BUCKET } from "../../utils/privateMediaPath";
 
 export default function ShareToCityHubSheet({
   open,
@@ -31,6 +36,8 @@ export default function ShareToCityHubSheet({
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hydrating, setHydrating] = useState(false);
+  const [mediaChoices, setMediaChoices] = useState([]);
+  const [selectedMedia, setSelectedMedia] = useState(() => new Set());
 
   const draft = useMemo(
     () =>
@@ -49,6 +56,8 @@ export default function ShareToCityHubSheet({
 
     setConfirmed(false);
     setBusy(false);
+    setMediaChoices([]);
+    setSelectedMedia(new Set());
 
     const hydrate = async () => {
       const needsProfiles = linkedProfilesProp == null;
@@ -56,10 +65,15 @@ export default function ShareToCityHubSheet({
       if (!needsProfiles && !needsSuspects) {
         setLinkedProfiles(linkedProfilesProp || []);
         setIncidentSuspects(incidentSuspectsProp || []);
-        return;
       }
       setHydrating(true);
       try {
+        const mediaPromise = loadIncidentShareMedia(incident.id);
+        if (!needsProfiles && !needsSuspects) {
+          const choices = await mediaPromise;
+          if (!cancelled) setMediaChoices(choices);
+          return;
+        }
         const [profileResult, suspectResult] = await Promise.all([
           needsProfiles
             ? supabase
@@ -74,6 +88,8 @@ export default function ShareToCityHubSheet({
         if (cancelled) return;
         if (!profileResult.error) setLinkedProfiles(profileResult.data || []);
         if (!suspectResult.error) setIncidentSuspects(suspectResult.data || []);
+        const choices = await mediaPromise;
+        if (!cancelled) setMediaChoices(choices);
       } catch (err) {
         console.warn("City Hub share hydrate:", err);
       } finally {
@@ -121,12 +137,36 @@ export default function ShareToCityHubSheet({
         content: content.trim(),
         relatedProfileId: includeProfile ? profileId || null : null,
       });
+      const chosen = mediaChoices.filter((choice) => selectedMedia.has(choice.key)).slice(0, MAX_CITY_HUB_PHOTOS);
+      if (chosen.length > 0 && post?.id) {
+        const dests = [];
+        for (const choice of chosen) {
+          const dest = await copyMediaToCityHub(post.id, choice.stored, choice.bucket);
+          if (dest) dests.push(dest);
+        }
+        if (dests.length > 0) {
+          const { error: photoError } = await supabase
+            .from("city_hub_posts")
+            .update({ photo_urls: dests })
+            .eq("id", post.id);
+          if (photoError) console.error(photoError);
+        }
+        if (dests.length !== chosen.length) {
+          toast.error(friendlyMediaMessage("copy"));
+        }
+      }
       toast.success("Shared to City Hub.");
       onShared?.(post);
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Could not share to City Hub.");
+      const raw = String(err?.message || "");
+      const friendly = err.alreadyShared || raw.includes("CITY_HUB_ALREADY_SHARED") || raw.includes("already shared")
+        ? "This incident was already shared to City Hub."
+        : raw.toLowerCase().includes("only approved")
+          ? "Only approved incidents can be shared to City Hub."
+          : friendlyMediaMessage("share");
+      toast.error(friendly);
       if (err.alreadyShared) {
         onShared?.(err.existing || null);
         onClose();
@@ -170,8 +210,49 @@ export default function ShareToCityHubSheet({
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="px-4 py-3 overflow-y-auto flex-1 min-h-0 space-y-3">
             <p className="text-xs text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-              Prefill excludes reporter name, witnesses, street address, photos, anonymous-tip source, and SAPS numbers.
+              Prefill excludes reporter name, witnesses, street address, anonymous-tip source, and SAPS numbers. Photos are copied only if you select them.
             </p>
+
+            {mediaChoices.length > 0 ? (
+              <fieldset className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                <legend className="px-1 text-sm font-medium text-gray-800 dark:text-gray-200">
+                  Photos to copy
+                </legend>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Up to {MAX_CITY_HUB_PHOTOS}. Other neighborhoods see the copies. Originals stay in this neighborhood.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {mediaChoices.map((choice) => {
+                    const checked = selectedMedia.has(choice.key);
+                    const atCap = selectedMedia.size >= MAX_CITY_HUB_PHOTOS && !checked;
+                    return (
+                      <label key={choice.key} className={`relative block ${atCap ? "opacity-50" : ""}`}>
+                        <input
+                          type="checkbox"
+                          className="absolute left-1 top-1 z-10"
+                          checked={checked}
+                          disabled={busy || atCap}
+                          onChange={(event) => {
+                            setSelectedMedia((prev) => {
+                              const next = new Set(prev);
+                              if (event.target.checked) next.add(choice.key);
+                              else next.delete(choice.key);
+                              return next;
+                            });
+                          }}
+                        />
+                        <PrivateMediaImg
+                          stored={choice.stored}
+                          bucket={INCIDENT_PHOTOS_BUCKET}
+                          alt=""
+                          className="h-20 w-full rounded-md object-cover"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ) : null}
 
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Post type

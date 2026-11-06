@@ -17,8 +17,10 @@ import { connectionTypeLabel } from '../data/profileIncidentLinkTaxonomy';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { belongsToActiveOrganization, useScopedOrganization } from '../utils/organizationScope';
 import { formatWatchDate, formatWatchDateTime, watchDayStamp } from '../utils/watchTime';
+import PrivateMediaImg from '../components/media/PrivateMediaImg';
+import { INCIDENT_PHOTOS_BUCKET } from '../utils/privateMediaPath';
 
-/** Renders public image URLs for screen + print/PDF (browser must be able to fetch the URL). */
+/** Signs incident photos for screen and print. A saved PDF embeds the signed URL, which expires in about an hour. */
 function EvidenceImageGrid({ urls, altPrefix }) {
   if (!urls?.length) return null;
   return (
@@ -28,8 +30,9 @@ function EvidenceImageGrid({ urls, altPrefix }) {
           key={`${url}-${idx}`}
           className="mx-auto max-w-full print:break-inside-avoid"
         >
-          <img
-            src={url}
+          <PrivateMediaImg
+            stored={url}
+            bucket={INCIDENT_PHOTOS_BUCKET}
             alt={`${altPrefix} photo ${idx + 1}`}
             loading="eager"
             decoding="async"
