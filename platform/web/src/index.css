@@ -487,12 +487,14 @@ header.sticky.top-0 {
   outline: none;
 }
 
+/* Hidden above the viewport, including the status-bar inset. translateY(-200%)
+   alone leaves the rounded bottom on screen once top is the Android inset. */
 .skip-link {
-  position: absolute;
+  position: fixed;
   left: 1rem;
-  top: max(0.75rem, var(--safe-area-top));
+  top: 0;
   z-index: 200;
-  transform: translateY(-200%);
+  transform: translateY(calc(-100% - var(--safe-area-top) - 0.75rem));
   border-radius: 0.75rem;
   background: var(--color-primary-700);
   color: var(--color-on-primary);
@@ -500,7 +502,9 @@ header.sticky.top-0 {
   padding: 0.75rem 1rem;
 }
 
-.skip-link:focus {
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: max(0.75rem, var(--safe-area-top));
   transform: none;
 }
 
