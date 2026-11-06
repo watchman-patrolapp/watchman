@@ -8,8 +8,9 @@ import {
   setWishlistItemPhotos,
   upsertWishlistItem,
   wishlistErrorMessage,
-  wishlistPhotoUrl,
 } from "../../utils/equipmentWishlist";
+import PrivateMediaImg from "../media/PrivateMediaImg";
+import { COMMUNITY_MEDIA_BUCKET } from "../../utils/communityMedia";
 
 const INPUT =
   "mt-1 w-full rounded-lg border border-gray-400 bg-white px-3 py-2 text-sm font-normal text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/30 dark:border-gray-500 dark:bg-gray-900 dark:text-white";
@@ -35,7 +36,6 @@ function photosFromPaths(paths) {
 }
 
 export function PhotoTile({ photo, index, count, disabled, onMove, onRemove, onDragStart, onDrop }) {
-  const src = photo.preview || wishlistPhotoUrl(photo.path);
   return (
     <li
       draggable={!disabled}
@@ -45,7 +45,11 @@ export function PhotoTile({ photo, index, count, disabled, onMove, onRemove, onD
       className="relative overflow-hidden rounded-lg border border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-900"
     >
       <div className="relative aspect-square w-full">
-        {src ? <img src={src} alt={`Photo ${index + 1}`} className="h-full w-full object-contain" /> : null}
+        {photo.preview ? (
+          <img src={photo.preview} alt={`Photo ${index + 1}`} className="h-full w-full object-contain" />
+        ) : photo.path ? (
+          <PrivateMediaImg stored={photo.path} bucket={COMMUNITY_MEDIA_BUCKET} alt={`Photo ${index + 1}`} className="h-full w-full object-contain" />
+        ) : null}
         {index === 0 ? (
           <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow">
             <FaStar className="h-2.5 w-2.5" aria-hidden /> Cover

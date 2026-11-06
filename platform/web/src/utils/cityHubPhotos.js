@@ -45,13 +45,10 @@ async function uploadCityHubFile(postId, file, index, prefix) {
     upsert: false,
   });
   if (error) {
-    throw new Error(
-      error.message ||
-        `Could not upload ${file.name}. Run the City Hub photos/PDF SQL if the bucket is missing.`
-    );
+    console.error(error);
+    throw new Error("That file could not be saved. Try again.");
   }
-  const { data } = supabase.storage.from(CITY_HUB_PHOTO_BUCKET).getPublicUrl(filePath);
-  return data?.publicUrl || "";
+  return filePath;
 }
 
 export async function uploadCityHubPhotos(postId, files) {

@@ -8,6 +8,8 @@ import {
 } from '../../constants/incidentSectionUpdates';
 import { connectionTypeLabel } from '../../data/profileIncidentLinkTaxonomy';
 import { formatWatchDateTime, parsePatrolTime } from '../../utils/watchTime';
+import { useSignedMediaSrcList } from '../../utils/privateMedia';
+import { INCIDENT_PHOTOS_BUCKET } from '../../utils/privateMediaPath';
 
 export const EVIDENCE_CATEGORY_LABELS = {
   scene_photos: 'Scene evidence',
@@ -195,6 +197,27 @@ export default function StructuredEvidenceList({
   migrateLegacyBusy = false,
 }) {
   const [lightbox, setLightbox] = useState(null);
+  const storedRefs = useMemo(() => {
+    const out = [];
+    const push = (raw) => {
+      for (const value of normalizeMediaUrls(raw)) {
+        if (!out.includes(value)) out.push(value);
+      }
+    };
+    for (const item of items || []) push(item?.media_urls);
+    push(emptyFallbackUrls);
+    return out;
+  }, [items, emptyFallbackUrls]);
+  const signedList = useSignedMediaSrcList(storedRefs, INCIDENT_PHOTOS_BUCKET);
+  const signedByStored = useMemo(() => {
+    const map = new Map();
+    storedRefs.forEach((value, index) => map.set(value, signedList[index]));
+    return map;
+  }, [storedRefs, signedList]);
+  const signedGroup = (values) =>
+    normalizeMediaUrls(values)
+      .map((value) => signedByStored.get(value))
+      .filter((value) => typeof value === 'string' && value);
   const sorted = useMemo(() => {
     const deduped = dedupeEvidenceRowsByLogicalEntry(items);
     const filtered =
@@ -249,18 +272,24 @@ export default function StructuredEvidenceList({
                 onClick={() =>
                   setLightbox({
                     id: Date.now(),
-                    urls: legacy,
+                    urls: signedGroup(legacy),
                     index: idx,
                     title: 'Evidence photo',
                   })
                 }
                 className="p-0 border-0 bg-transparent rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
               >
+                {signedByStored.get(url) ? (
                 <img
-                  src={url}
+                  src={signedByStored.get(url)}
                   alt={`Evidence ${idx + 1}`}
                   className="w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-700 hover:opacity-90 transition"
                 />
+                ) : (
+                <span className="flex h-20 w-20 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-1 text-center text-[10px] text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                  {signedByStored.get(url) === null ? 'Photo unavailable' : ''}
+                </span>
+                )}
               </button>
             ))}
           </div>
@@ -419,18 +448,24 @@ export default function StructuredEvidenceList({
                       onClick={() =>
                         setLightbox({
                           id: Date.now(),
-                          urls: mediaUrls,
+                          urls: signedGroup(mediaUrls),
                           index: idx,
                           title,
                         })
                       }
                       className="block w-full p-0 border-0 bg-transparent rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
                     >
+                      {signedByStored.get(url) ? (
                       <img
-                        src={url}
+                        src={signedByStored.get(url)}
                         alt={`${title} ${idx + 1}`}
                         className="rounded-lg object-cover h-24 w-full border border-gray-200 dark:border-gray-600 hover:opacity-90 transition"
                       />
+                      ) : (
+                      <span className="flex h-24 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-2 text-center text-xs text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                        {signedByStored.get(url) === null ? 'Photo unavailable' : ''}
+                      </span>
+                      )}
                     </button>
                   ))}
                 </div>

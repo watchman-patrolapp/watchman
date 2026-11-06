@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FaBoxOpen, FaChevronLeft, FaChevronRight, FaTimes } from "react-icons/fa";
-import { wishlistPhotoUrl } from "../../utils/equipmentWishlist";
+import { COMMUNITY_MEDIA_BUCKET } from "../../utils/communityMedia";
+import { useSignedMediaSrcList } from "../../utils/privateMedia";
 
 /** Full-screen viewer (item page). Esc / arrows / swipe via scroll-snap. */
 function PhotoLightbox({ urls, start, title, onClose }) {
@@ -78,7 +79,10 @@ function PhotoLightbox({ urls, start, title, onClose }) {
  * compact = shorter frame for grid cards, so the price and progress stay above the fold.
  */
 export default function NeedGallery({ paths, title, fullscreen = false, compact = false }) {
-  const urls = (paths || []).map(wishlistPhotoUrl).filter(Boolean);
+  const list = (paths || []).filter((path) => typeof path === "string" && path.trim());
+  const signed = useSignedMediaSrcList(list, COMMUNITY_MEDIA_BUCKET);
+  const urls = signed.filter((src) => typeof src === "string" && src);
+  const loading = signed.some((src) => src === "");
   const frame = compact ? "aspect-[16/10] max-h-52" : "aspect-[4/3]";
   const ref = useRef(null);
   const [idx, setIdx] = useState(0);
@@ -92,12 +96,20 @@ export default function NeedGallery({ paths, title, fullscreen = false, compact 
     el.scrollTo({ left: n * el.clientWidth, behavior: "smooth" });
   };
 
-  if (urls.length === 0) {
+  if (list.length === 0 || (!loading && urls.length === 0)) {
     return (
       <div className={`flex ${frame} w-full items-center justify-center border-b border-gray-200 bg-gray-50 text-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-600`}>
-        <FaBoxOpen className="h-12 w-12" aria-hidden />
+        {list.length > 0 ? (
+          <span className="px-3 text-center text-xs text-gray-500 dark:text-gray-400">Photo unavailable</span>
+        ) : (
+          <FaBoxOpen className="h-12 w-12" aria-hidden />
+        )}
       </div>
     );
+  }
+
+  if (loading && urls.length === 0) {
+    return <div className={`${frame} w-full border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900`} aria-hidden />;
   }
 
   return (

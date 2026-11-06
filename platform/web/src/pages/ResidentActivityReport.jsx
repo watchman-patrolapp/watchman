@@ -123,11 +123,10 @@ export default function ResidentActivityReport() {
             .upload(filePath, file);
           if (uploadErr) {
             console.error(uploadErr);
-            toast.error(`Could not upload ${file.name}.`);
+            toast.error("That photo could not be saved. Try again.");
             continue;
           }
-          const { data: publicUrlData } = supabase.storage.from("incident-photos").getPublicUrl(filePath);
-          if (publicUrlData?.publicUrl) uploadedUrls.push(publicUrlData.publicUrl);
+          uploadedUrls.push(filePath);
         }
       }
 
