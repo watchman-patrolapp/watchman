@@ -6,6 +6,7 @@ import { useLiveRefresh } from "../../../hooks/useLiveRefresh";
 import { NeedsEmpty } from "../../../components/needs/NeedCard";
 import EquipmentAdminNav from "../../../components/equipment/EquipmentAdminNav";
 import { DANGER_BTN, EquipmentSheet, FIELD, LABEL, PRIMARY_BTN, SECONDARY_BTN } from "../../../components/equipment/EquipmentLoanDialogs";
+import EquipmentIssueActions from "../../../components/equipment/EquipmentIssueActions";
 import {
   EQUIPMENT_CONDITION_LABELS,
   ISSUE_KIND_LABELS,
@@ -150,14 +151,14 @@ export default function EquipmentAdminRequests() {
                   </span>
                 </p>
                 <p className="mt-1 whitespace-pre-line break-words text-sm text-gray-700 dark:text-gray-200">{r.note}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setSheet({ type: "clear", row: r })} className={PRIMARY_BTN}>
-                    Resolve
-                  </button>
-                  <button type="button" onClick={() => navigate(`/equipment/units/${r.unit_id}`)} className={SECONDARY_BTN}>
-                    Timeline
-                  </button>
-                </div>
+                <EquipmentIssueActions
+                  row={r}
+                  onResolve={() => setSheet({ type: "clear", row: r })}
+                  onChanged={done}
+                />
+                <button type="button" onClick={() => navigate(`/equipment/units/${r.unit_id}`)} className={`${SECONDARY_BTN} mt-2`}>
+                  Timeline
+                </button>
               </article>
             ))
           : list.map((r) => {
@@ -313,6 +314,14 @@ function ActionSheet({ sheet, onClose, onDone }) {
     } else res = await clearEquipmentIssue(row.id, outcome, note);
     setBusy(false);
     if (res.error) return setError(equipmentErrorMessage(res.error));
+    if (type === "clear" && res.data === "pending") {
+      onDone("This write-off is R2,000 or more, so a second admin has to approve it. No charge was created.");
+      return;
+    }
+    if (type === "writeoff" && res.data === "pending") {
+      onDone("That write-off needs a second admin. No charge was created.");
+      return;
+    }
     onDone(
       {
         approve: "Approved. The borrower has been told to collect it.",
@@ -410,6 +419,11 @@ function ActionSheet({ sheet, onClose, onDone }) {
               <option value="under_repair">Under repair</option>
               <option value="retired">Retired</option>
             </select>
+            {outcome === "retired" ? (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                R2,000 or more needs a second admin. Nothing is charged in the app.
+              </p>
+            ) : null}
           </div>
         ) : null}
         {type !== "collect" && type !== "extend" ? (

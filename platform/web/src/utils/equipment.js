@@ -6,6 +6,7 @@ import { canAccessPlatformConsole } from "../auth/platformRoles";
 import { PATROL_MEMBER_ROLES } from "../auth/roleMatrix";
 import { equipmentErrorMessage as baseErrorMessage } from "./equipmentMeta";
 import { equipmentLoanErrorText } from "./equipmentLoanMeta";
+import { equipmentCustodyErrorText } from "./equipmentCustodyMeta";
 
 export * from "./equipmentMeta";
 export * from "./equipmentLoanMeta";
@@ -35,10 +36,17 @@ export function equipmentPhotoUrl(path) {
   return data?.publicUrl ?? null;
 }
 
-export function equipmentErrorMessage(error, fallback) {
-  if (!isRpcNotFoundError(error)) {
+export function equipmentErrorMessage(error, fallback = "Something went wrong. Try again.") {
+  if (isRpcNotFoundError(error)) {
+    const msg = String(error?.message || "");
+    if (/handover|maintenance|write_off|liability|case_number|housekeeping/i.test(msg)) {
+      return "This equipment step is not switched on yet. Ask an admin to apply the latest equipment SQL.";
+    }
+  } else {
     const loanText = equipmentLoanErrorText(error);
     if (loanText) return loanText;
+    const custodyText = equipmentCustodyErrorText(error);
+    if (custodyText) return custodyText;
   }
   return baseErrorMessage(error, isRpcNotFoundError(error), fallback);
 }
@@ -205,12 +213,25 @@ export const extendEquipmentLoan = (loanId, dueAt) => rpc("extend_equipment_loan
 export const setEquipmentUnitStatusAdmin = (unitId, status, note = "") =>
   rpc("set_equipment_unit_status_admin", { p_unit_id: unitId, p_status: status, p_note: note || null });
 
-export const requestEquipmentTransfer = (unitId, note = "") => rpc("request_equipment_transfer", { p_unit_id: unitId, p_note: note || null });
+export const requestEquipmentTransfer = (unitId, note = "", requestedFor = null) =>
+  rpc("request_equipment_transfer", {
+    p_unit_id: unitId,
+    p_note: note || null,
+    ...(requestedFor ? { p_requested_for: new Date(requestedFor).toISOString() } : {}),
+  });
 export const respondEquipmentTransfer = (transferId, accept, note = "") =>
   rpc("respond_equipment_transfer", { p_transfer_id: transferId, p_accept: Boolean(accept), p_note: note || null });
 export const cancelEquipmentTransfer = (transferId) => rpc("cancel_equipment_transfer", { p_transfer_id: transferId });
 
-export const reportEquipmentIssue = (unitId, kind, note) => rpc("report_equipment_issue", { p_unit_id: unitId, p_kind: kind, p_note: note });
+export const reportEquipmentIssue = (unitId, kind, note, extra = {}) =>
+  rpc("report_equipment_issue", {
+    p_unit_id: unitId,
+    p_kind: kind,
+    p_note: note,
+    ...(extra.caseNumber ? { p_saps_case: extra.caseNumber } : {}),
+    ...(extra.station ? { p_saps_station: extra.station } : {}),
+    ...(extra.location ? { p_location: extra.location } : {}),
+  });
 export const clearEquipmentIssue = (issueId, outcome = "available", note = "") =>
   rpc("clear_equipment_issue", { p_issue_id: issueId, p_outcome: outcome, p_note: note || null });
 
@@ -230,6 +251,37 @@ export const listEquipmentIssuesAdmin = () => rpc("list_equipment_issues_admin",
 export const listEquipmentUnitCustody = (unitId) => rpc("list_equipment_unit_custody", { p_unit_id: unitId }, []);
 
 /** Badge counts; null data (no error) on databases without P3b, so badges just stay hidden. */
+export {
+  addEquipmentIssueCaseNumber,
+  approveEquipmentWriteOff,
+  confirmHandoverGiver,
+  confirmHandoverReceiver,
+  decideEquipmentLiability,
+  forceCompleteHandover,
+  getEquipmentHandover,
+  handoverResultError,
+  listEquipmentMaintenance,
+  listEquipmentMaintenanceRecent,
+  logEquipmentMaintenance,
+  clearHandoverCode,
+  readHandoverCode,
+  regenerateHandoverCode,
+  rememberHandoverCode,
+} from "./equipmentCustody";
+
+export {
+  casNumberError,
+  equipmentCustodyErrorText,
+  formatRandsFromCents,
+  handoverCodePayload,
+  LIABILITY_OPTIONS,
+  MAINTENANCE_KIND_LABELS,
+  normalizeCasNumber,
+  parseHandoverCode,
+  randsInputToCents,
+  writeOffNeedsSecondAdmin,
+} from "./equipmentCustodyMeta";
+
 export async function getEquipmentPendingCounts() {
   const { data, error } = await supabase.rpc("equipment_pending_counts");
   if (error) return { data: null, error: isRpcNotFoundError(error) ? null : error };

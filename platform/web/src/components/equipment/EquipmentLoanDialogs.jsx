@@ -5,6 +5,8 @@ import {
   equipmentErrorMessage,
   formatLoanLimit,
   latestReturnDate,
+  casNumberError,
+  normalizeCasNumber,
   reportEquipmentIssue,
   requestEquipmentLoan,
   requestEquipmentTransfer,
@@ -114,28 +116,32 @@ export function BorrowDialog({ item, onClose, onDone }) {
 /** Ask the current holder to hand a unit over. */
 export function TransferDialog({ unit, onClose, onDone }) {
   const [note, setNote] = useState("");
+  const [when, setWhen] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
-    const { error: err } = await requestEquipmentTransfer(unit.id, note);
+    const { error: err } = await requestEquipmentTransfer(unit.id, note, when || null);
     setBusy(false);
     if (err) return setError(equipmentErrorMessage(err));
-    onDone("Transfer requested. The current holder needs to accept it.");
+    onDone("Transfer requested. The holder has 12 hours to accept, then you both confirm a code.");
   };
   return (
     <EquipmentSheet
       title={`Request ${unit.asset_tag}`}
-      subtitle={`${unit.holder_name || "The holder"} gets a notification and must accept before it is yours. The return date stays the same.`}
+      subtitle={`${unit.holder_name || "The holder"} must accept within 12 hours. You both then confirm a code within 6 hours.`}
       onClose={onClose}
     >
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <label htmlFor="eq-tnote" className={LABEL}>
-            Note (optional)
-          </label>
-          <textarea id="eq-tnote" rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Where to meet for the handover..." className={FIELD} />
+          <label htmlFor="eq-twhen" className={LABEL}>Meet (optional)</label>
+          <input id="eq-twhen" type="datetime-local" value={when} min={toDateTimeLocalValue(new Date())} onChange={(e) => setWhen(e.target.value)} className={FIELD} />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">The 6-hour hand-over window starts at this time, or as soon as they accept.</p>
+        </div>
+        <div>
+          <label htmlFor="eq-tnote" className={LABEL}>Note (optional)</label>
+          <textarea id="eq-tnote" rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Where to meet..." className={FIELD} />
         </div>
         <ErrorText>{error}</ErrorText>
         <SheetButtons busy={busy} onClose={onClose} submitLabel="Request transfer" />
@@ -148,17 +154,26 @@ export function TransferDialog({ unit, onClose, onDone }) {
 export function IssueDialog({ unit, onClose, onDone }) {
   const [kind, setKind] = useState("damage");
   const [note, setNote] = useState("");
+  const [caseNo, setCaseNo] = useState("");
+  const [location, setLocation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const tooShort = note.trim().length < 3;
+  const casError = kind === "theft" ? casNumberError(caseNo) : null;
   const submit = async (e) => {
     e.preventDefault();
-    if (tooShort) return;
+    if (tooShort || casError) return;
     setBusy(true);
-    const { error: err } = await reportEquipmentIssue(unit.id, kind, note.trim());
+    const normalized = kind === "theft" ? normalizeCasNumber(caseNo) : "";
+    const { error: err } = await reportEquipmentIssue(unit.id, kind, note.trim(), {
+      caseNumber: normalized || null,
+      location: location.trim() || null,
+    });
     setBusy(false);
     if (err) return setError(equipmentErrorMessage(err));
-    onDone("Issue reported. Your NW admin has been told and the unit is out of use for now.");
+    onDone(kind === "theft" && !normalized
+      ? "Theft reported. Add the SAPS case number within 48 hours. We will remind you until it is there."
+      : "Issue reported. Your NW admin has been told and the unit is out of use for now.");
   };
   return (
     <EquipmentSheet title={`Report a problem with ${unit.asset_tag}`} subtitle="The unit is taken out of use until an admin checks it." onClose={onClose}>
@@ -187,10 +202,23 @@ export function IssueDialog({ unit, onClose, onDone }) {
           <label htmlFor="eq-inote" className={LABEL}>
             Details
           </label>
-          <textarea id="eq-inote" rows={4} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What happened, when and where..." className={FIELD} />
+          <textarea id="eq-inote" rows={4} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What happened..." className={FIELD} />
         </div>
+        <div>
+          <label htmlFor="eq-iloc" className={LABEL}>Where (optional)</label>
+          <input id="eq-iloc" maxLength={120} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Suburb or street only" className={FIELD} />
+        </div>
+        {kind === "theft" ? (
+          <div>
+            <label htmlFor="eq-icas" className={LABEL}>SAPS case number (optional)</label>
+            <input id="eq-icas" value={caseNo} onChange={(e) => setCaseNo(e.target.value)} placeholder="CAS 123/10/2026" className={FIELD} />
+            {casError ? <p className="mt-1 text-xs text-rose-700 dark:text-rose-300">{casError}</p> : (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave this blank and we remind you every 48 hours until it is added. Nothing is charged.</p>
+            )}
+          </div>
+        ) : null}
         <ErrorText>{error}</ErrorText>
-        <SheetButtons busy={busy} onClose={onClose} submitLabel="Report issue" disabled={tooShort} />
+        <SheetButtons busy={busy} onClose={onClose} submitLabel="Report issue" disabled={tooShort || Boolean(casError)} />
       </form>
     </EquipmentSheet>
   );

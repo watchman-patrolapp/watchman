@@ -14,6 +14,7 @@ import {
   listMyEquipmentLoans,
   listMyEquipmentTransfers,
   loanStatusMeta,
+  rememberHandoverCode,
   respondEquipmentTransfer,
   runEquipmentSweep,
   splitMyLoans,
@@ -74,6 +75,17 @@ export default function EquipmentMine() {
   const { open, past } = useMemo(() => splitMyLoans(loans), [loans]);
   const incoming = transfers.filter((t) => t.direction === "incoming" && t.status === "requested");
   const outgoing = transfers.filter((t) => t.direction === "outgoing" && t.status === "requested");
+  const handovers = transfers.filter((t) => t.status === "accepted");
+
+  const acceptTransfer = async (t) => {
+    setBusyId(t.id);
+    const { data, error } = await respondEquipmentTransfer(t.id, true);
+    setBusyId(null);
+    if (error) return setFlash(equipmentErrorMessage(error));
+    if (data?.ok === false) return setFlash(data.error || "Could not accept the hand-over.");
+    if (data?.code) rememberHandoverCode(t.id, data.code);
+    navigate(`/equipment/handover/${t.id}`);
+  };
   const holding = open.filter((l) => l.status === "active").length;
 
   return (
@@ -90,6 +102,21 @@ export default function EquipmentMine() {
         </p>
       ) : null}
 
+      {handovers.length ? (
+        <InfoSection title={`Hand-over in progress (${handovers.length})`}>
+          <ul className="space-y-2">
+            {handovers.map((t) => (
+              <li key={t.id}>
+                <button type="button" onClick={() => navigate(`/equipment/handover/${t.id}`)} className="w-full rounded-xl border border-violet-200 bg-violet-50 p-3 text-left text-sm font-semibold text-violet-900 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-100">
+                  {t.asset_tag} · {t.item_name}
+                  <span className="mt-1 block text-xs font-normal">{t.handover_by ? `Finish by ${formatWhen(t.handover_by)}` : "Open the code screen"}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </InfoSection>
+      ) : null}
+
       {incoming.length ? (
         <InfoSection title={`Asked to hand over (${incoming.length})`}>
           <ul className="space-y-3">
@@ -102,10 +129,10 @@ export default function EquipmentMine() {
                   </span>
                 </p>
                 {t.note ? <p className="mt-1 text-sm text-violet-800 dark:text-violet-200">"{t.note}"</p> : null}
-                <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">Accept once you've handed it over. They take on your return date.</p>
+                <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">Accept to start a 6-hour hand-over. You both confirm a code before it changes hands.</p>
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                  <button type="button" disabled={busyId === t.id} onClick={() => act(t.id, () => respondEquipmentTransfer(t.id, true), "Handed over. It's now theirs.")} className={PRIMARY_BTN}>
-                    Accept
+                  <button type="button" disabled={busyId === t.id} onClick={() => acceptTransfer(t)} className={PRIMARY_BTN}>
+                    Accept and get a code
                   </button>
                   <button type="button" disabled={busyId === t.id} onClick={() => act(t.id, () => respondEquipmentTransfer(t.id, false), "Transfer declined.")} className={SECONDARY_BTN}>
                     Decline
