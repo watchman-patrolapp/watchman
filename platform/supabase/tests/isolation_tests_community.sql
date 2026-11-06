@@ -62,8 +62,12 @@ CREATE TEMP TABLE g7_results (
 -- -----------------------------------------------------------------------------
 -- Helpers (pg_temp = this session only)
 -- -----------------------------------------------------------------------------
+-- SECURITY DEFINER so a SET ROLE authenticated later can still read the fixture map.
 CREATE OR REPLACE FUNCTION pg_temp.id(p_k text) RETURNS uuid
-LANGUAGE sql STABLE AS $$ SELECT v FROM g7_ids WHERE k = p_k $$;
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_temp, public
+AS $$ SELECT v FROM g7_ids WHERE k = p_k $$;
+GRANT SELECT, INSERT, UPDATE, DELETE ON g7_ids, g7_results TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE g7_results_n_seq TO authenticated;
 
 -- Impersonate: set JWT claims and switch role for the rest of the transaction
 -- (or the enclosing sub-block). Call RESET ROLE afterwards.
@@ -1497,7 +1501,9 @@ INSERT INTO g7_eq VALUES
   ('radio', (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit' AND organization_id = pg_temp.id('org_a'))),
   ('r1', (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1' AND organization_id = pg_temp.id('org_a')));
 CREATE OR REPLACE FUNCTION pg_temp.eq(p_k text) RETURNS uuid
-LANGUAGE sql STABLE AS $$ SELECT v FROM g7_eq WHERE k = p_k $$;
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_temp, public
+AS $$ SELECT v FROM g7_eq WHERE k = p_k $$;
+GRANT SELECT, INSERT, UPDATE, DELETE ON g7_eq TO authenticated;
 
 SELECT pg_temp.check('P3b', 'control: A nw_admin creates cert-gated item G7 drone',
   pg_temp.id('a_admin'), 'ok', 'SELECT public.upsert_equipment_item(NULL, ''G7 drone'', NULL, NULL, NULL, true)');
@@ -1593,12 +1599,16 @@ SELECT pg_temp.expect_error('P3b', 'A nw_admin (not holder) approves transfer ->
 SELECT pg_temp.expect_error('P3b', 'B patroller approves transfer -> not found',
   pg_temp.id('eq_bp'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'not found');
 CREATE TEMP TABLE g7_txt (k text PRIMARY KEY, v text) ON COMMIT DROP;
+GRANT SELECT, INSERT, UPDATE, DELETE ON g7_txt TO authenticated;
 DO $acc$
 DECLARE
   resp jsonb;
+  v_tr uuid := pg_temp.eq('tr1');
 BEGIN
+  -- Resolve the fixture id before SET ROLE. pg_temp.eq touches g7_eq, which
+  -- authenticated cannot see unless the lookup runs as the table owner.
   PERFORM pg_temp.as_user(pg_temp.id('eq_p1'));
-  resp := public.respond_equipment_transfer(pg_temp.eq('tr1'), true);
+  resp := public.respond_equipment_transfer(v_tr, true);
   PERFORM pg_temp.as_postgres();
   INSERT INTO g7_txt VALUES ('code', resp->>'code');
   INSERT INTO g7_results (matrix_row, test, ok, detail)
@@ -1618,7 +1628,8 @@ SELECT pg_temp.assert('P3c', 'accept puts the unit in transfer and keeps p1 as h
    FROM public.equipment_units u, public.equipment_loans l, public.equipment_transfers t
    WHERE u.id = pg_temp.eq('r1') AND l.id = pg_temp.eq('loan1') AND t.id = pg_temp.eq('tr1')),
   'checked as postgres');
-SELECT pg_temp.expect_error('P3b', 'second accept -> no longer open',
+-- Accept only opens the 6-hour code hand-over. It does not move the loan.
+SELECT pg_temp.expect_error('P3c', 'second accept while hand-over is open -> no longer open',
   pg_temp.id('eq_p1'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'no longer open');
 SELECT pg_temp.check('P3c', 'wrong code does not move the unit',
   pg_temp.id('eq_p2'), 'true', format(
@@ -1653,9 +1664,10 @@ UPDATE g7_eq SET v = (SELECT id FROM public.equipment_transfers WHERE to_user_id
 DO $acc2$
 DECLARE
   resp jsonb;
+  v_tr uuid := pg_temp.eq('tr1');
 BEGIN
   PERFORM pg_temp.as_user(pg_temp.id('eq_p1'));
-  resp := public.respond_equipment_transfer(pg_temp.eq('tr1'), true);
+  resp := public.respond_equipment_transfer(v_tr, true);
   PERFORM pg_temp.as_postgres();
   INSERT INTO g7_txt VALUES ('code2', resp->>'code')
   ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v;
@@ -1688,7 +1700,7 @@ SELECT pg_temp.expect_rows('P3b', 'custody history shows 2 holders (A committee 
 SELECT pg_temp.expect_error('P3b', 'B nw_admin reads Org A custody -> not found',
   pg_temp.id('b_admin'), format('SELECT * FROM public.list_equipment_unit_custody(%L)', pg_temp.eq('r1')), 'not found');
 
--- Issues: only the latest holder
+-- Issues: only the latest holder. The hand-over above is finished, so that is p2.
 SELECT pg_temp.expect_error('P3b', 'previous holder p1 reports issue -> only latest holder',
   pg_temp.id('eq_p1'), format('SELECT public.report_equipment_issue(%L, %L, %L)', pg_temp.eq('r1'), 'damage', 'Cracked screen'), 'latest holder');
 SELECT pg_temp.expect_error('P3b', 'B patroller reports issue on Org A unit -> not found',
@@ -1786,16 +1798,42 @@ SELECT pg_temp.expect_error('P3b', 'p2 without sign-off asks for drone transfer 
 DO $na2$
 DECLARE
   sfx text := left(replace(gen_random_uuid()::text, '-', ''), 10);
+  v_id uuid;
+  v_email text;
+  v_updated int;
 BEGIN
   INSERT INTO g7_ids VALUES ('eq_na2', gen_random_uuid());
+  v_id := pg_temp.id('eq_na2');
+  v_email := 'g7-eq-na2-' || sfx || '@example.invalid';
   INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
-  VALUES (pg_temp.id('eq_na2'), '00000000-0000-0000-0000-000000000000', 'authenticated',
-          'authenticated', 'g7-eq-na2-' || sfx || '@example.invalid', now(), now());
-  INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
-  VALUES (pg_temp.id('eq_na2'), 'g7-eq-na2-' || sfx || '@example.invalid', 'G7 Second Admin',
-          'nw_admin', pg_temp.id('org_a'), true, 'active');
+  VALUES (v_id, '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', v_email, now(), now());
+  -- A signup hook may already own this email, sometimes under a different id.
+  -- ON CONFLICT (id) does not absorb users_email_key in that case, so move the
+  -- other profile off the email before writing this auth id.
+  UPDATE public.users
+     SET email = id::text || '@fixture.invalid'
+   WHERE lower(trim(email)) = lower(trim(v_email))
+     AND id IS DISTINCT FROM v_id;
+  EXECUTE format(
+    'UPDATE public.users
+        SET email = %L, full_name = %L, role = %L, organization_id = %L,
+            verified = true, status = %L
+      WHERE id = %L',
+    v_email, 'G7 Second Admin', 'nw_admin', pg_temp.id('org_a'), 'active', v_id);
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  IF v_updated = 0 THEN
+    EXECUTE format(
+      'INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
+       VALUES (%L, %L, %L, %L, %L, true, %L)
+       ON CONFLICT (id) DO UPDATE
+         SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, role = EXCLUDED.role,
+             organization_id = EXCLUDED.organization_id, verified = true, status = EXCLUDED.status',
+      v_id, v_email, 'G7 Second Admin', 'nw_admin', pg_temp.id('org_a'), 'active');
+  END IF;
   INSERT INTO public.organization_members (organization_id, user_id, member_role, status)
-  VALUES (pg_temp.id('org_a'), pg_temp.id('eq_na2'), 'nw_admin', 'active');
+  VALUES (pg_temp.id('org_a'), v_id, 'nw_admin', 'active')
+  ON CONFLICT (organization_id, user_id) DO NOTHING;
 END
 $na2$;
 SELECT pg_temp.check('P3c', 'control: A nw_admin grants equipment_custodian to p2',
@@ -1849,9 +1887,20 @@ SELECT pg_temp.check('P3c', 'Org A nw_admin records a contribution without creat
 SELECT pg_temp.assert('P3c', 'liability is stored and the function does not insert a payment',
   (SELECT liability_decision = 'contribution_requested' AND liability_amount_cents = 50000
    FROM public.equipment_issue_reports WHERE id = pg_temp.eq('iss1'))
-  AND position('INSERT INTO public.payments' IN pg_get_functiondef('public.decide_equipment_liability(uuid,text,bigint,text)'::regprocedure)) = 0
-  AND position('INSERT INTO public.charges' IN pg_get_functiondef('public.decide_equipment_liability(uuid,text,bigint,text)'::regprocedure)) = 0
-  AND position('INSERT INTO public.invoices' IN pg_get_functiondef('public.equipment_apply_write_off(uuid,uuid,text)'::regprocedure)) = 0,
+  AND EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'decide_equipment_liability')
+  AND EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'equipment_apply_write_off')
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname IN ('decide_equipment_liability', 'equipment_apply_write_off')
+      AND pg_get_functiondef(p.oid) ~* 'INSERT INTO public\.(payments|charges|invoices)'),
   'checked as postgres');
 UPDATE public.equipment_units SET purchase_price_cents = 250000 WHERE id = pg_temp.eq('r1');
 SELECT pg_temp.check('P3c', 'write-off of R2,500 waits for a second admin',
