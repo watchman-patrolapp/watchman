@@ -27,11 +27,11 @@ test("fetchInChunks concatenates pages and throws the query error", async () => 
 });
 
 test("incident keyset filter quotes timestamps", () => {
-  const cursor = { created_at: "2026-11-04T10:00:00+02:00", id: "abc" };
-  assert.equal(quotePostgrestValue(cursor.created_at), `"2026-11-04T10:00:00+02:00"`);
+  const cursor = { submitted_at: "2026-11-04T10:00:00+02:00", id: "abc" };
+  assert.equal(quotePostgrestValue(cursor.submitted_at), `"2026-11-04T10:00:00+02:00"`);
   assert.equal(
     incidentKeysetOr(cursor),
-    `created_at.lt."2026-11-04T10:00:00+02:00",and(created_at.eq."2026-11-04T10:00:00+02:00",id.lt."abc")`
+    `submitted_at.lt."2026-11-04T10:00:00+02:00",and(submitted_at.eq."2026-11-04T10:00:00+02:00",id.lt."abc")`
   );
   assert.equal(incidentKeysetOr({ id: "abc" }), null);
 });

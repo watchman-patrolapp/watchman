@@ -2106,6 +2106,8 @@ SELECT pg_temp.expect_error('P3d', 'patroller cannot read equipment_client_event
 -- Private media (incident-photos, community-media, city-hub copies)
 -- Other-org members cannot read private objects. Any signed-in user can read
 -- a published City Hub copy. anon cannot read either. Metadata rows only.
+-- a_res was moved to Org B earlier in this script, so the reader who is still
+-- in Org A is ws_res (resident). a_res must not see Org A's private files.
 -- -----------------------------------------------------------------------------
 DO $media_fx$
 BEGIN
@@ -2136,18 +2138,26 @@ BEGIN
 END
 $media_fx$;
 
-SELECT pg_temp.expect_rows('media', 'Org A resident can read the Org A incident photo',
-  pg_temp.id('a_res'),
+SELECT pg_temp.expect_rows('media', 'Org A resident still in the org can read the Org A incident photo',
+  pg_temp.id('ws_res'),
   format('SELECT 1 FROM storage.objects WHERE bucket_id = ''incident-photos'' AND name = %L',
     pg_temp.id('media_inc') || '/scene.jpg'), 1);
+SELECT pg_temp.expect_rows('media', 'resident who left Org A cannot read the Org A incident photo',
+  pg_temp.id('a_res'),
+  format('SELECT 1 FROM storage.objects WHERE bucket_id = ''incident-photos'' AND name = %L',
+    pg_temp.id('media_inc') || '/scene.jpg'), 0);
 SELECT pg_temp.expect_rows('media', 'Org B admin cannot read the Org A incident photo',
   pg_temp.id('b_admin'),
   format('SELECT 1 FROM storage.objects WHERE bucket_id = ''incident-photos'' AND name = %L',
     pg_temp.id('media_inc') || '/scene.jpg'), 0);
-SELECT pg_temp.expect_rows('media', 'Org A resident can read Org A community-media',
-  pg_temp.id('a_res'),
+SELECT pg_temp.expect_rows('media', 'Org A resident still in the org can read Org A community-media',
+  pg_temp.id('ws_res'),
   format('SELECT 1 FROM storage.objects WHERE bucket_id = ''community-media'' AND name = %L',
     pg_temp.id('org_a') || '/needs/g7/a.jpg'), 1);
+SELECT pg_temp.expect_rows('media', 'resident who left Org A cannot read Org A community-media',
+  pg_temp.id('a_res'),
+  format('SELECT 1 FROM storage.objects WHERE bucket_id = ''community-media'' AND name = %L',
+    pg_temp.id('org_a') || '/needs/g7/a.jpg'), 0);
 SELECT pg_temp.expect_rows('media', 'Org B admin cannot read Org A community-media',
   pg_temp.id('b_admin'),
   format('SELECT 1 FROM storage.objects WHERE bucket_id = ''community-media'' AND name = %L',
