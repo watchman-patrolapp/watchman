@@ -8,6 +8,8 @@ import {
   writeStoredActiveOrganizationId,
 } from "./activeOrganizationStorage";
 import { setWorkingOrganization } from "../utils/organizationScope";
+import { ACCOUNT_SCOPE, OFFLINE_SCREENS } from "../offline/policy";
+import { readScreenSnapshot, writeScreenSnapshot } from "../offline/snapshots";
 
 export function ActiveOrganizationProvider({ children }) {
   const { user, sessionReady } = useAuth();
@@ -42,6 +44,10 @@ export function ActiveOrganizationProvider({ children }) {
       if (error) throw error;
       const orgs = data || [];
       setOrganizations(orgs);
+      void writeScreenSnapshot(
+        { userId: user.id, organizationId: ACCOUNT_SCOPE, screen: OFFLINE_SCREENS.organizations },
+        { organizations: orgs }
+      );
 
       if (isGlobalOperator) {
         const fromProfile = user.activeOrganizationId;
@@ -60,8 +66,31 @@ export function ActiveOrganizationProvider({ children }) {
       }
     } catch (err) {
       console.error(err);
+      let orgs = [];
+      try {
+        const cached = await readScreenSnapshot({
+          userId: user.id,
+          organizationId: ACCOUNT_SCOPE,
+          screen: OFFLINE_SCREENS.organizations,
+        });
+        if (Array.isArray(cached?.data?.organizations)) {
+          orgs = cached.data.organizations;
+          setOrganizations(orgs);
+        }
+      } catch {
+        /* keep the empty list */
+      }
       if (!isGlobalOperator) {
         setActiveOrganizationIdState(user.organizationId || "");
+      } else {
+        const fromProfile = user.activeOrganizationId;
+        const stored = readStoredActiveOrganizationId(user.id);
+        const candidate = orgs.some((org) => org.id === fromProfile)
+          ? fromProfile
+          : orgs.some((org) => org.id === stored)
+            ? stored
+            : stored || fromProfile || "";
+        setActiveOrganizationIdState(candidate);
       }
     } finally {
       setLoading(false);
@@ -85,6 +114,7 @@ export function ActiveOrganizationProvider({ children }) {
       setActiveOrganizationIdState(next);
       if (isGlobalOperator && user?.id) {
         writeStoredActiveOrganizationId(user.id, next);
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
         const { error } = await supabase.rpc("set_active_organization", {
           p_organization_id: next || null,
         });

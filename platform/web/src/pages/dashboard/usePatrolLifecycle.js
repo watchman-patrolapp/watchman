@@ -23,6 +23,8 @@ import {
   playThrottled,
   unlockAudio,
 } from './patrolTiming';
+import { OFFLINE_SCREENS, userFacingReadError, userFacingWriteError } from '../../offline/policy';
+import { patchScreenSnapshot, readScreenSnapshot } from '../../offline/snapshots';
 
 export function usePatrolLifecycle({
   user,
@@ -41,6 +43,10 @@ export function usePatrolLifecycle({
   const [allActivePatrols, setAllActivePatrols] = useState([]);
   const [fetchError, setFetchError] = useState(null);
   const [fetchAllError, setFetchAllError] = useState(null);
+  const [mineFromCache, setMineFromCache] = useState(false);
+  const [mineSavedAt, setMineSavedAt] = useState(null);
+  const [allFromCache, setAllFromCache] = useState(false);
+  const [allSavedAt, setAllSavedAt] = useState(null);
   const [fetchAllLoading, setFetchAllLoading] = useState(false);
 
   const [showWarning, setShowWarning] = useState(false);
@@ -79,13 +85,44 @@ export function usePatrolLifecycle({
       setAllActivePatrols(incoming);
       prevPatrolsRef.current = incoming;
       setFetchAllError(null);
+      setAllFromCache(false);
+      if (user?.id) {
+        const saved = await patchScreenSnapshot(
+          { userId: user.id, organizationId: activeOrganizationId, screen: OFFLINE_SCREENS.patrolStatus },
+          (current) => ({
+            ...(current || {}),
+            all: incoming,
+            allKnown: true,
+            allSavedAt: new Date().toISOString(),
+          })
+        );
+        if (runId !== fetchAllGenRef.current) return;
+        setAllSavedAt(saved?.data?.allSavedAt || saved?.savedAt || null);
+      }
     } catch (err) {
       if (runId !== fetchAllGenRef.current) return;
-      setFetchAllError(err.message);
+      const cached = user?.id
+        ? await readScreenSnapshot({
+          userId: user.id,
+          organizationId: activeOrganizationId,
+          screen: OFFLINE_SCREENS.patrolStatus,
+        })
+        : null;
+      if (runId !== fetchAllGenRef.current) return;
+      if (cached?.data?.allKnown && Array.isArray(cached.data.all)) {
+        setAllActivePatrols(cached.data.all);
+        prevPatrolsRef.current = cached.data.all;
+        setFetchAllError(null);
+        setAllFromCache(true);
+        setAllSavedAt(cached.data.allSavedAt || cached.savedAt);
+      } else {
+        setAllFromCache(false);
+        setFetchAllError(userFacingReadError(err, "Could not load active patrols."));
+      }
     } finally {
       if (runId === fetchAllGenRef.current) setFetchAllLoading(false);
     }
-  }, [scope]);
+  }, [scope, user?.id, activeOrganizationId]);
 
   const refreshData = useCallback(() => {
     fetchAll();
@@ -278,7 +315,7 @@ export function usePatrolLifecycle({
       }
     } catch (err) {
       console.error("Check-in failed:", err);
-      toast.error("Check-in failed: " + err.message);
+      toast.error(userFacingWriteError(err, "Check-in didn’t go through. Try again."));
     } finally {
       isStartingRef.current = false;
     }
@@ -327,7 +364,7 @@ export function usePatrolLifecycle({
       }
     } catch (err) {
       console.error("Check-in failed:", err);
-      toast.error("Check-in failed: " + err.message);
+      toast.error(userFacingWriteError(err, "Check-in didn’t go through. Try again."));
     } finally {
       isStartingRef.current = false;
     }
@@ -397,7 +434,7 @@ export function usePatrolLifecycle({
       }
     } catch (err) {
       console.error("Check-out failed:", err);
-      toast.error("Check-out failed: " + err.message);
+      toast.error(userFacingWriteError(err, "Check-out didn’t go through. Try again."));
     } finally {
       isEndingRef.current = false;
     }
@@ -433,6 +470,21 @@ export function usePatrolLifecycle({
     return () => clearInterval(interval);
   }, [startTime, showWarning, autoCloseAt, handleCheckOut]);
 
+  const patrolOrgRef = useRef(activeOrganizationId);
+  useEffect(() => {
+    if (patrolOrgRef.current === activeOrganizationId) return;
+    patrolOrgRef.current = activeOrganizationId;
+    setAllActivePatrols([]);
+    setActivePatrol(null);
+    setMineFromCache(false);
+    setAllFromCache(false);
+    setMineSavedAt(null);
+    setAllSavedAt(null);
+    setFetchError(null);
+    setFetchAllError(null);
+    prevPatrolsRef.current = null;
+  }, [activeOrganizationId]);
+
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -449,9 +501,40 @@ export function usePatrolLifecycle({
         }
         else setActivePatrol(null);
         setFetchError(null);
+        setMineFromCache(false);
+        if (user?.id) {
+          const saved = await patchScreenSnapshot(
+            { userId: user.id, organizationId: activeOrganizationId, screen: OFFLINE_SCREENS.patrolStatus },
+            (current) => ({
+              ...(current || {}),
+              mine: data || null,
+              mineKnown: true,
+              mineSavedAt: new Date().toISOString(),
+            })
+          );
+          if (cancelled) return;
+          setMineSavedAt(saved?.data?.mineSavedAt || saved?.savedAt || null);
+        }
       } catch (err) {
         if (cancelled) return;
-        setFetchError(err.message);
+        const cached = user?.id
+          ? await readScreenSnapshot({
+            userId: user.id,
+            organizationId: activeOrganizationId,
+            screen: OFFLINE_SCREENS.patrolStatus,
+          })
+          : null;
+        if (cancelled) return;
+        if (cached?.data?.mineKnown) {
+          setActivePatrol(cached.data.mine || null);
+          setStartTime(cached.data.mine ? parsePatrolTime(cached.data.mine.start_time) : null);
+          setFetchError(null);
+          setMineFromCache(true);
+          setMineSavedAt(cached.data.mineSavedAt || cached.savedAt);
+        } else {
+          setMineFromCache(false);
+          setFetchError(userFacingReadError(err, "Could not load your patrol."));
+        }
       } finally {
         if (!cancelled) setLoadingPatrol(false);
       }
@@ -459,7 +542,7 @@ export function usePatrolLifecycle({
     fetchInitial();
     fetchAll();
     return () => { cancelled = true; };
-  }, [user, fetchAll, scope]);
+  }, [user, fetchAll, scope, activeOrganizationId]);
 
   useEffect(() => {
     const clickHandler = () => unlockAudio();
@@ -479,6 +562,10 @@ export function usePatrolLifecycle({
     allActivePatrols,
     fetchError,
     fetchAllError,
+    mineFromCache,
+    mineSavedAt,
+    allFromCache,
+    allSavedAt,
     fetchAllLoading,
     showWarning,
     setShowWarning,

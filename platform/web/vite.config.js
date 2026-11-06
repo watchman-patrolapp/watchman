@@ -49,15 +49,13 @@ function destroyStaleServiceWorkersInDev() {
 
 export default defineConfig(({ mode }) => {
   const isCapacitor = mode === 'capacitor';
-  const isVercel = process.env.VERCEL === '1';
 
   return {
     base: isCapacitor ? './' : '/',
     plugins: [
       destroyStaleServiceWorkersInDev(),
       react(),
-      !isVercel &&
-        !isCapacitor &&
+      !isCapacitor &&
         VitePWA({
           registerType: 'autoUpdate',
           includeAssets: [
@@ -74,29 +72,19 @@ export default defineConfig(({ mode }) => {
           ],
           manifest: webManifest,
           workbox: {
-            // Do not bind navigations to a precached index.html. That handler is
-            // cache-first and would keep a stale shell after a deploy. NetworkFirst
-            // below fetches the document, and it does not match /assets/* requests.
-            navigateFallback: null,
-            // OSM tiles: do not route through Workbox CacheFirst — cross-origin tile
-            // caching often triggers "unexpected error" / opaque response issues; the
-            // browser’s HTTP cache still applies. Trade-off: no dedicated offline tile pack.
-            // index.html is not precached. Navigations are network-first so an old shell
-            // does not survive a deploy.
-            globIgnores: ['**/index.html'],
-            runtimeCaching: [
-              {
-                urlPattern: ({ request, url }) =>
-                  request.mode === 'navigate' || url.pathname === '/index.html',
-                handler: 'NetworkFirst',
-                options: {
-                  cacheName: 'html-network-first',
-                  networkTimeoutSeconds: 3,
-                  cacheableResponse: { statuses: [200] },
-                },
-              },
-            ],
+            // Precache the shell and hashed assets. Navigations to client routes
+            // fall back to that shell, so the app opens with no signal.
+            // A new deploy ships a new /sw.js (Cache-Control: no-cache). autoUpdate
+            // activates it and reloads. While offline the installed shell stays.
+            // Do not add runtime routes for Supabase. Auth responses and signed
+            // media URLs must never enter the Cache API (see offline/policy.js).
+            navigateFallback: 'index.html',
+            navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
+            // OSM tiles stay on the browser HTTP cache. Opaque cross-origin tile
+            // responses break CacheFirst.
             globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webp}'],
+            maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+            cleanupOutdatedCaches: true,
             skipWaiting: true,
             clientsClaim: true,
           },

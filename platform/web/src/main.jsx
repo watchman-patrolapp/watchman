@@ -14,6 +14,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { supabase } from './supabase/client';
 import { initSentry } from './utils/initSentry';
 import { installChunkLoadRecovery } from './utils/chunkLoadRecovery';
+import { FCM_PUSH_SCOPE, fcmRegistrationPlan } from './offline/policy';
+import { purgeStaleOfflineCache } from './offline/snapshots';
 
 const ReactQueryDevtools =
   import.meta.env.DEV &&
@@ -25,43 +27,48 @@ const ReactQueryDevtools =
 
 installChunkLoadRecovery();
 
-function vitePwaRegisterScriptPresent() {
-  if (typeof document === 'undefined') return false;
-  return !!document.querySelector('[id="vite-plugin-pwa:register-sw"]');
-}
-
 function serviceWorkerScriptUrl(registration) {
   if (!registration) return '';
   const worker = registration.active || registration.waiting || registration.installing;
   return worker?.scriptURL || '';
 }
 
-/** Vercel builds omit vite-plugin-pwa; register dedicated FCM worker after legacy /sw.js migration. */
+function scopePath(registration) {
+  try {
+    return new URL(registration.scope).pathname || '/';
+  } catch {
+    return '/';
+  }
+}
+
+/**
+ * The app shell worker owns scope "/". Push stays on its own scope so it
+ * cannot replace the shell. A legacy root registration of either worker is
+ * moved aside; /sw.js itself is left so a deploy can update it in place.
+ */
 async function registerFcmServiceWorkerWhenNeeded() {
   if (import.meta.env.DEV) return;
   if (typeof navigator === 'undefined' || !navigator.serviceWorker) return;
   if (Capacitor.isNativePlatform()) return;
-  if (vitePwaRegisterScriptPresent()) return;
 
   try {
-    let existing = await navigator.serviceWorker.getRegistration('/');
-    const scriptUrl = serviceWorkerScriptUrl(existing);
-    const isLegacyRootSw =
-      scriptUrl.endsWith('/sw.js') && !scriptUrl.includes('firebase-messaging-sw');
-
-    if (isLegacyRootSw) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const reg of regs) {
+      const plan = fcmRegistrationPlan({
+        scriptUrl: serviceWorkerScriptUrl(reg),
+        scopePath: scopePath(reg),
+      });
+      if (plan !== 'move-to-push-scope') continue;
       try {
-        await existing.unregister();
+        await reg.unregister();
       } catch {
-        return;
+        /* keep going; push is optional */
       }
-      existing = undefined;
-    } else if (scriptUrl.includes('firebase-messaging-sw')) {
-      return;
     }
-
-    if (!existing) {
-      await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const scoped = await navigator.serviceWorker.getRegistration(FCM_PUSH_SCOPE);
+    const scopedUrl = serviceWorkerScriptUrl(scoped);
+    if (!scopedUrl.includes('firebase-messaging-sw')) {
+      await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: FCM_PUSH_SCOPE });
     }
   } catch {
     /* FCM registration is best-effort; chat still works without push */
@@ -79,6 +86,7 @@ function setupFcmNotificationBridge() {
 }
 
 void registerFcmServiceWorkerWhenNeeded();
+void purgeStaleOfflineCache();
 setupFcmNotificationBridge();
 
 initSentry();

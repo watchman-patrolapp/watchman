@@ -130,6 +130,16 @@ export async function runEquipmentAction(action, args) {
   return { data: null, error: { message: outcome.message } };
 }
 
+/** Sign-out drops saved gear reads and unsent actions so they cannot run as the next person. */
+export async function clearEquipmentOfflineState() {
+  try {
+    await Preferences.remove({ key: QUEUE_KEY });
+    await Preferences.remove({ key: CACHE_KEY });
+  } catch {
+    /* Preferences can be missing in a plain browser test */
+  }
+}
+
 export async function dismissEquipmentAction(clientEventId) {
   const queue = dismissQueuedAction(await loadEquipmentQueue(), clientEventId);
   return saveEquipmentQueue(queue);

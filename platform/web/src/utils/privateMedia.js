@@ -34,6 +34,10 @@ function readCache(ref) {
   return hit.url;
 }
 
+export function clearSignedMediaCache() {
+  signedUrlCache.clear();
+}
+
 function writeCache(ref, url) {
   signedUrlCache.set(cacheKey(ref), {
     url,

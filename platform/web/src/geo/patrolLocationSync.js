@@ -110,6 +110,11 @@ export function flushPatrolLocations() {
   return queue.flush();
 }
 
+export function clearPatrolLocationsForUser(userId) {
+  if (!userId) return Promise.resolve();
+  return queue.clearUser(userId);
+}
+
 export function installPatrolLocationFlushListeners() {
   if (typeof window === 'undefined') return () => {};
   const onOnline = () => {

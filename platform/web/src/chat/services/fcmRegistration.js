@@ -1,5 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
+import { FCM_PUSH_SCOPE } from '../../offline/policy';
 
 function getFirebaseConfig() {
   const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
@@ -26,12 +27,13 @@ async function getMessagingInstance() {
   return getMessaging(app);
 }
 
-/** Ensures the FCM service worker controls the page (or registers it). */
+/** Push worker only. The app-shell worker at /sw.js controls the page. */
 async function getFcmServiceWorkerRegistration() {
-  const existing = await navigator.serviceWorker.getRegistration();
-  const url = existing?.active?.scriptURL || '';
+  const existing = await navigator.serviceWorker.getRegistration(FCM_PUSH_SCOPE);
+  const worker = existing?.active || existing?.waiting || existing?.installing;
+  const url = worker?.scriptURL || '';
   if (url.includes('firebase-messaging-sw')) return existing;
-  return navigator.serviceWorker.register('/firebase-messaging-sw.js');
+  return navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: FCM_PUSH_SCOPE });
 }
 
 /**

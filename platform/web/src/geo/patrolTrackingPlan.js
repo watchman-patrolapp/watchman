@@ -144,6 +144,13 @@ export function enqueuePoint(queue, point, limit = QUEUE_LIMIT) {
   return next.slice(next.length - limit);
 }
 
+/** Sign-out drops this person's unsent points so the next account cannot upload them. */
+export function dropQueuedPointsForUser(queue, userId) {
+  const list = Array.isArray(queue) ? queue : [];
+  if (!userId) return list;
+  return list.filter((item) => item?.user_id !== userId);
+}
+
 export function createPatrolLocationQueue({ load, save, insertRow }) {
   let chain = Promise.resolve();
 
@@ -180,6 +187,12 @@ export function createPatrolLocationQueue({ load, save, insertRow }) {
         }
         await save(kept);
         return { sent, kept: kept.length };
+      });
+    },
+    clearUser(userId) {
+      return run(async () => {
+        const items = await load();
+        await save(dropQueuedPointsForUser(items, userId));
       });
     },
   };
