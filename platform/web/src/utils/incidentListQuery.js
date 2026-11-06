@@ -40,15 +40,15 @@ export function approvedIncidentsQueryKey(organizationId, includeUnscoped) {
 export async function fetchApprovedIncidentPage({ scope, pageParam }) {
   let query = scope(supabase.from("incidents").select("*"))
     .eq("status", "approved")
-    .order("created_at", { ascending: false, nullsFirst: false })
+    .order("submitted_at", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false })
     .limit(INCIDENT_PAGE_SIZE);
 
-  if (pageParam?.created_at && pageParam?.id) {
+  if (pageParam?.submitted_at && pageParam?.id) {
     const orFilter = incidentKeysetOr(pageParam);
     if (orFilter) query = query.or(orFilter);
-  } else if (pageParam?.id && !pageParam?.created_at) {
-    query = query.is("created_at", null).lt("id", pageParam.id);
+  } else if (pageParam?.id && !pageParam?.submitted_at) {
+    query = query.is("submitted_at", null).lt("id", pageParam.id);
   }
 
   const { data, error } = await query;
@@ -81,7 +81,7 @@ export async function fetchApprovedIncidentPage({ scope, pageParam }) {
   const last = raw[raw.length - 1];
   const nextCursor =
     raw.length === INCIDENT_PAGE_SIZE && last
-      ? { created_at: last.created_at || null, id: last.id }
+      ? { submitted_at: last.submitted_at || null, id: last.id }
       : null;
 
   return { rows, evidenceFailed, updatesFailed, nextCursor };
