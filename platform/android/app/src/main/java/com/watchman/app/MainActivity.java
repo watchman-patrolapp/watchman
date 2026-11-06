@@ -44,20 +44,35 @@ public class MainActivity extends BridgeActivity {
                 WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.displayCutout()
         );
         Insets navigation = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars());
-        float density = getResources().getDisplayMetrics().density;
-        if (density <= 0f) density = 1f;
-        int top = Math.round(status.top / density);
-        int bottom = Math.round(navigation.bottom / density);
-        int left = Math.round(Math.max(status.left, navigation.left) / density);
-        int right = Math.round(Math.max(status.right, navigation.right) / density);
-        String script = "(function(){var r=document.documentElement;if(!r)return;"
-                + "r.style.setProperty('--android-inset-top','" + top + "px');"
-                + "r.style.setProperty('--android-inset-bottom','" + bottom + "px');"
-                + "r.style.setProperty('--android-inset-left','" + left + "px');"
-                + "r.style.setProperty('--android-inset-right','" + right + "px');"
-                + "})();";
         if (getBridge() == null || getBridge().getWebView() == null) return;
         WebView webView = getBridge().getWebView();
-        webView.post(() -> webView.evaluateJavascript(script, null));
+        final int statusTop = status.top;
+        final int navBottom = navigation.bottom;
+        final int barLeft = Math.max(status.left, navigation.left);
+        final int barRight = Math.max(status.right, navigation.right);
+        webView.post(() -> {
+            View parent = webView.getParent() instanceof View ? (View) webView.getParent() : webView;
+            // Capacitor already pads the WebView for the status bar on older system
+            // WebViews. Publishing that inset again pushes the header down twice.
+            int cssTopPx = Math.max(0, statusTop - parent.getPaddingTop());
+            int cssBottomPx = Math.max(0, navBottom - parent.getPaddingBottom());
+            int cssLeftPx = Math.max(0, barLeft - parent.getPaddingLeft());
+            int cssRightPx = Math.max(0, barRight - parent.getPaddingRight());
+            int hasStatusBar = statusTop > 0 ? 1 : 0;
+            String script = "(function(){var r=document.documentElement;if(!r)return;"
+                    + "r.style.setProperty('--android-inset-top','" + px(cssTopPx) + "');"
+                    + "r.style.setProperty('--android-inset-bottom','" + px(cssBottomPx) + "');"
+                    + "r.style.setProperty('--android-inset-left','" + px(cssLeftPx) + "');"
+                    + "r.style.setProperty('--android-inset-right','" + px(cssRightPx) + "');"
+                    + "r.style.setProperty('--android-has-status-bar','" + hasStatusBar + "');"
+                    + "})();";
+            webView.evaluateJavascript(script, null);
+        });
+    }
+
+    private String px(int pixels) {
+        float density = getResources().getDisplayMetrics().density;
+        if (density <= 0f) density = 1f;
+        return Math.round(pixels / density) + "px";
     }
 }

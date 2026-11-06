@@ -26,11 +26,12 @@
    DESIGN SYSTEM - CSS Custom Properties
    ========================================== */
 :root {
-  /* env() is 0 in the Android WebView. MainActivity sets --android-inset-* from WindowInsets. */
-  --safe-area-top: max(env(safe-area-inset-top, 0px), var(--android-inset-top, 0px));
-  --safe-area-bottom: max(env(safe-area-inset-bottom, 0px), var(--android-inset-bottom, 0px));
-  --safe-area-left: max(env(safe-area-inset-left, 0px), var(--android-inset-left, 0px));
-  --safe-area-right: max(env(safe-area-inset-right, 0px), var(--android-inset-right, 0px));
+  /* env() is 0 in many Android WebViews. Capacitor sets --safe-area-inset-*.
+     --android-inset-* is only the part not already applied as WebView padding. */
+  --safe-area-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--android-inset-top, 0px));
+  --safe-area-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--android-inset-bottom, 0px));
+  --safe-area-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px), var(--android-inset-left, 0px));
+  --safe-area-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px), var(--android-inset-right, 0px));
 
   /* Primary — safety teal (single brand anchor) */
   --color-primary-50: #f0fdfa;
@@ -227,6 +228,27 @@
 /* Page headers stick below the status bar. In-sheet sticky bars are not headers. */
 header.sticky.top-0 {
   top: var(--safe-area-top);
+}
+
+/* On Android, keep ~8px under the status bar. With no inset (web/PWA) this is the
+   page's own top padding, so desktop and browser spacing stay the same. */
+.snug-below-status {
+  --snug-pad: 1.5rem;
+  padding-top: var(--snug-pad);
+  padding-top: calc(
+    var(--snug-pad) * (1 - var(--android-has-status-bar, 0))
+    + 0.5rem * var(--android-has-status-bar, 0)
+  );
+}
+
+.snug-pad-header {
+  --snug-pad: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .snug-pad-lg {
+    --snug-pad: 2rem;
+  }
 }
 
 @media print {

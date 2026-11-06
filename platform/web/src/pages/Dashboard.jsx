@@ -327,7 +327,7 @@ export default function Dashboard() {
         />
       ) : null}
 
-      <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="snug-below-status snug-pad-lg max-w-6xl mx-auto px-4 pb-6 sm:px-6 lg:px-8 lg:pb-8">
         <DashboardHeader
           user={user}
           firstName={firstName}
