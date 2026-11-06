@@ -85,7 +85,7 @@ cd ../android
 ./gradlew assembleDebug
 ```
 
-`npm ci` runs `scripts/patch-background-geolocation.mjs`, which sets the service’s `startForeground` type to location (required on targetSdk 34+) and `exported=false`. `android:sync` builds the web app and runs the same patch before `cap sync`.
+`npm ci` runs `scripts/patch-background-geolocation.mjs`, which sets the service’s `startForeground` type to location (required on targetSdk 34+), sets `exported=false`, and rewrites `proguard-android.txt` to `proguard-android-optimize.txt` so AGP 9 can configure the module. The same script keeps Windows CRLF. `android:sync` builds the web app and runs the patch before `cap sync`.
 
 Install `platform/android/app/build/outputs/apk/debug/app-debug.apk`. Sign on, confirm the notification, lock the phone for several minutes, sign off, and confirm the notification is gone. Repeat with background location denied and confirm the route still records while the app is open. Repeat with notifications denied and confirm the app does not stick on a system error.
 
