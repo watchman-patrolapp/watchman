@@ -7,12 +7,12 @@ import {
   latestReturnDate,
   casNumberError,
   normalizeCasNumber,
-  reportEquipmentIssue,
   requestEquipmentLoan,
   requestEquipmentTransfer,
   toDateTimeLocalValue,
   validateReturnDate,
 } from "../../utils/equipment";
+import { runEquipmentAction } from "../../utils/equipmentOfflineStore";
 
 export const PRIMARY_BTN =
   "inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:from-teal-700 hover:to-emerald-700 disabled:cursor-not-allowed disabled:opacity-60";
@@ -165,12 +165,16 @@ export function IssueDialog({ unit, onClose, onDone }) {
     if (tooShort || casError) return;
     setBusy(true);
     const normalized = kind === "theft" ? normalizeCasNumber(caseNo) : "";
-    const { error: err } = await reportEquipmentIssue(unit.id, kind, note.trim(), {
+    const { data, error: err } = await runEquipmentAction("report_issue", {
+      unitId: unit.id,
+      kind,
+      note: note.trim(),
       caseNumber: normalized || null,
       location: location.trim() || null,
     });
     setBusy(false);
     if (err) return setError(equipmentErrorMessage(err));
+    if (data?.queued) return onDone("Saved on this phone. It will send when you are back online.");
     onDone(kind === "theft" && !normalized
       ? "Theft reported. Add the SAPS case number within 48 hours. We will remind you until it is there."
       : "Issue reported. Your NW admin has been told and the unit is out of use for now.");

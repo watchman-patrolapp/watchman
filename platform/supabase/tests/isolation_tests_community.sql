@@ -1943,6 +1943,165 @@ SELECT pg_temp.check('P3b', 'A nw_admin: Org A hash chain still verifies after P
 SELECT pg_temp.check('P3b', 'client UPDATE of unit status still blocked by guard',
   pg_temp.id('a_admin'), 'error', format('UPDATE public.equipment_units SET status = ''lost'' WHERE id = %L', pg_temp.eq('r1')), 'permission denied|equipment_set_unit_status');
 
+-- -----------------------------------------------------------------------------
+-- P3d - dashboard, stocktake, ledger export, offline idempotency.
+-- Fixture ids are read and written here as the session owner. pg_temp.check
+-- switches role only around the statement it runs.
+-- -----------------------------------------------------------------------------
+SELECT pg_temp.check('P3d', 'control: A nw_admin adds G7-S1 and G7-S2',
+  pg_temp.id('a_admin'), 'ok', format(
+    'SELECT public.add_equipment_unit(%L, %L), public.add_equipment_unit(%L, %L)',
+    pg_temp.eq('radio'), 'G7-S1', pg_temp.eq('radio'), 'G7-S2'));
+INSERT INTO g7_eq VALUES
+  ('s1', (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-S1' AND organization_id = pg_temp.id('org_a'))),
+  ('s2', (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-S2' AND organization_id = pg_temp.id('org_a')));
+SELECT pg_temp.expect_error('P3d', 'a committee member cannot open the admin overview',
+  pg_temp.id('a_comm'), 'SELECT public.equipment_dashboard()', 'forbidden');
+SELECT pg_temp.check('P3d', 'Org A overview sees the new units',
+  pg_temp.id('a_admin'), 'true', 'SELECT (public.equipment_dashboard()->>''unit_total'')::int >= 4');
+SELECT pg_temp.check('P3d', 'Org B overview counts only Org B units',
+  pg_temp.id('b_admin'), 'true', format(
+    'SELECT (public.equipment_dashboard()->>''unit_total'')::int = (SELECT count(*)::int FROM public.equipment_units WHERE organization_id = %L)',
+    pg_temp.id('org_b')));
+SELECT pg_temp.expect_error('P3d', 'a committee member cannot export the ledger',
+  pg_temp.id('a_comm'), 'SELECT * FROM public.export_equipment_ledger()', 'forbidden');
+SELECT pg_temp.expect_rows('P3d', 'Org B export has no Org A asset tags',
+  pg_temp.id('b_admin'), 'SELECT 1 FROM public.export_equipment_ledger(''2000-01-01''::timestamptz, now() + interval ''1 day'') WHERE asset_tag LIKE ''G7-%''', 0);
+SELECT pg_temp.check('P3d', 'patroller overview has counts and no prices',
+  pg_temp.id('eq_p1'), 'true', 'SELECT public.equipment_patroller_overview() ? ''on_loan'' AND public.equipment_patroller_overview()::text NOT LIKE ''%value_cents%'' AND public.equipment_patroller_overview()::text NOT LIKE ''%purchase_price%''');
+SELECT pg_temp.expect_error('P3d', 'a patroller cannot start a stocktake',
+  pg_temp.id('eq_p1'), 'SELECT public.start_equipment_stocktake(''G7 sneak'')', 'forbidden');
+SELECT pg_temp.check('P3d', 'control: A nw_admin starts a stocktake',
+  pg_temp.id('a_admin'), 'ok', 'SELECT public.start_equipment_stocktake(''G7 AGM'')');
+INSERT INTO g7_eq VALUES ('stk', (
+  SELECT id FROM public.equipment_stocktakes
+  WHERE organization_id = pg_temp.id('org_a') AND finalised_at IS NULL));
+SELECT pg_temp.expect_rows('P3d', 'an Org A member can see the stocktake',
+  pg_temp.id('a_comm'), 'SELECT 1 FROM public.equipment_stocktakes WHERE label = ''G7 AGM''', 1);
+SELECT pg_temp.expect_rows('P3d', 'Org B cannot read the Org A stocktake',
+  pg_temp.id('b_admin'), 'SELECT 1 FROM public.equipment_stocktakes WHERE label = ''G7 AGM''', 0);
+SELECT pg_temp.expect_error('P3d', 'patroller cannot insert a stocktake row',
+  pg_temp.id('eq_p1'), format('INSERT INTO public.equipment_stocktakes (organization_id, label) VALUES (%L, %L)', pg_temp.id('org_a'), 'Nope'), 'permission denied');
+SELECT pg_temp.expect_error('P3d', 'a patroller who does not hold the unit cannot confirm it',
+  pg_temp.id('eq_p1'), format('SELECT public.confirm_equipment_still_held(%L)', pg_temp.eq('s1')), 'current holder');
+SELECT pg_temp.check('P3d', 'counting the same offline id twice stays one row',
+  pg_temp.id('a_admin'), 'true', format(
+    'SELECT public.count_equipment_unit(%L, %L, NULL, NULL, %L, %L, NULL, %L) = public.count_equipment_unit(%L, %L, NULL, NULL, %L, %L, NULL, %L)',
+    pg_temp.eq('stk'), pg_temp.eq('s1'), 'present', 'good', '11111111-1111-4111-8111-111111111111',
+    pg_temp.eq('stk'), pg_temp.eq('s1'), 'present', 'good', '11111111-1111-4111-8111-111111111111'));
+SELECT pg_temp.assert('P3d', 'one ledger row for that count id',
+  (SELECT count(*) = 1 FROM public.equipment_ledger WHERE client_event_id = '11111111-1111-4111-8111-111111111111'),
+  'checked as postgres');
+SELECT pg_temp.check('P3d', 'a count timestamp from years ago is clamped',
+  pg_temp.id('a_admin'), 'ok', format(
+    'SELECT public.count_equipment_unit(%L, %L, NULL, NULL, %L, NULL, NULL, %L, %L::timestamptz)',
+    pg_temp.eq('stk'), pg_temp.eq('s1'), 'present', '22222222-2222-4222-8222-222222222222', '2000-01-01'));
+SELECT pg_temp.assert('P3d', 'clamped client time is inside 73 hours',
+  (SELECT client_occurred_at > now() - interval '73 hours'
+   FROM public.equipment_ledger WHERE client_event_id = '22222222-2222-4222-8222-222222222222'),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P3d', 'Org B cannot count an Org A unit',
+  pg_temp.id('b_admin'), format('SELECT public.count_equipment_unit(%L, %L, NULL, NULL, %L)', pg_temp.eq('stk'), pg_temp.eq('s2'), 'missing'), 'not found');
+SELECT pg_temp.check('P3d', 'closing the stocktake marks the unseen unit lost',
+  pg_temp.id('a_admin'), 'true', format(
+    'SELECT (public.finalise_equipment_stocktake(%L, true)->>''missing'')::int >= 1', pg_temp.eq('stk')));
+SELECT pg_temp.assert('P3d', 'G7-S2 is lost, G7-S1 is still available, the count is closed',
+  (SELECT status = 'lost' FROM public.equipment_units WHERE id = pg_temp.eq('s2'))
+  AND (SELECT status = 'available' FROM public.equipment_units WHERE id = pg_temp.eq('s1'))
+  AND (SELECT finalised_at IS NOT NULL FROM public.equipment_stocktakes WHERE id = pg_temp.eq('stk'))
+  AND EXISTS (SELECT 1 FROM public.equipment_stocktake_counts WHERE stocktake_id = pg_temp.eq('stk') AND unit_id = pg_temp.eq('s2') AND result = 'missing'),
+  'checked as postgres');
+SELECT pg_temp.check('P3d', 'control: p1 requests the radio again',
+  pg_temp.id('eq_p1'), 'ok', format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('radio')));
+INSERT INTO g7_eq VALUES ('loan4', (
+  SELECT id FROM public.equipment_loans
+  WHERE requester_id = pg_temp.id('eq_p1') AND item_id = pg_temp.eq('radio') AND status = 'requested'));
+SELECT pg_temp.check('P3d', 'control: approve and collect G7-S1',
+  pg_temp.id('a_admin'), 'ok', format(
+    'SELECT public.approve_equipment_loan(%L, %L), public.confirm_equipment_collection(%L)',
+    pg_temp.eq('loan4'), pg_temp.eq('s1'), pg_temp.eq('loan4')));
+SELECT pg_temp.check('P3d', 'starting a return twice with one offline id does not error',
+  pg_temp.id('eq_p1'), 'ok', format(
+    'SELECT public.request_equipment_return(%L, %L), public.request_equipment_return(%L, %L)',
+    pg_temp.eq('loan4'), '33333333-3333-4333-8333-333333333333',
+    pg_temp.eq('loan4'), '33333333-3333-4333-8333-333333333333'));
+SELECT pg_temp.assert('P3d', 'one return_requested ledger row',
+  (SELECT count(*) = 1 FROM public.equipment_ledger WHERE client_event_id = '33333333-3333-4333-8333-333333333333' AND event = 'return_requested'),
+  'checked as postgres');
+SELECT pg_temp.check('P3d', 'p2 files a paper claim for G7-S1',
+  pg_temp.id('eq_p2'), 'ok', format('SELECT public.submit_equipment_paper_claim(%L, %L)', pg_temp.eq('s1'), 'Phones were dead'));
+INSERT INTO g7_eq VALUES ('claim1', (
+  SELECT id FROM public.equipment_paper_handovers WHERE unit_id = pg_temp.eq('s1') AND status = 'pending'));
+SELECT pg_temp.expect_error('P3d', 'Org B cannot record an Org A paper hand-over',
+  pg_temp.id('b_admin'), format('SELECT public.record_paper_handover(%L)', pg_temp.eq('claim1')), 'not found');
+SELECT pg_temp.check('P3d', 'Org A admin records the paper hand-over',
+  pg_temp.id('a_admin'), 'true', format('SELECT (public.record_paper_handover(%L)->>''ok'')::boolean', pg_temp.eq('claim1')));
+SELECT pg_temp.assert('P3d', 'G7-S1 is now with p2 and the ledger says recorded later',
+  (SELECT current_holder_id = pg_temp.id('eq_p2') AND status = 'checked_out' FROM public.equipment_units WHERE id = pg_temp.eq('s1'))
+  AND EXISTS (SELECT 1 FROM public.equipment_ledger WHERE unit_id = pg_temp.eq('s1') AND event = 'paper_handover_recorded'),
+  'checked as postgres');
+-- report_equipment_issue allows the loan with the newest collected_at, not current_holder_id.
+-- Collection uses clock_timestamp(); the paper loan uses now(), which is earlier in this
+-- single transaction, so the latest holder is still p1. Read that id as the session owner.
+DO $p3d_issue$
+DECLARE
+  v_unit uuid := pg_temp.eq('s1');
+  v_holder uuid;
+  v_client uuid := '44444444-4444-4444-8444-444444444444';
+  v_a uuid;
+  v_b uuid;
+BEGIN
+  SELECT l.requester_id INTO v_holder
+  FROM public.equipment_loans l
+  WHERE l.unit_id = v_unit AND l.collected_at IS NOT NULL
+  ORDER BY l.collected_at DESC, l.created_at DESC
+  LIMIT 1;
+  PERFORM pg_temp.as_user(v_holder);
+  v_a := public.report_equipment_issue(v_unit, 'damage', 'Case cracked', NULL, NULL, NULL, v_client);
+  v_b := public.report_equipment_issue(v_unit, 'damage', 'Case cracked', NULL, NULL, NULL, v_client);
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3d', 'the same offline issue id is stored once',
+          v_a IS NOT NULL AND v_a = v_b, format('holder %s -> %s', v_holder, v_a));
+EXCEPTION WHEN others THEN
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3d', 'the same offline issue id is stored once', false, SQLERRM);
+END
+$p3d_issue$;
+SELECT pg_temp.assert('P3d', 'one open issue for G7-S1',
+  (SELECT count(*) = 1 FROM public.equipment_issue_reports WHERE unit_id = pg_temp.eq('s1') AND cleared_at IS NULL),
+  'checked as postgres');
+-- Authenticated has no grant on equipment_ledger. Count the RPC as the admin,
+-- then count the table as the session owner.
+DO $p3d_export$
+DECLARE
+  v_org uuid := pg_temp.id('org_a');
+  v_admin uuid := pg_temp.id('a_admin');
+  v_rpc bigint;
+  v_tbl bigint;
+BEGIN
+  PERFORM pg_temp.as_user(v_admin);
+  SELECT count(*) INTO v_rpc
+  FROM public.export_equipment_ledger('2000-01-01'::timestamptz, now() + interval '1 day');
+  PERFORM pg_temp.as_postgres();
+  SELECT count(*) INTO v_tbl
+  FROM public.equipment_ledger
+  WHERE organization_id = v_org AND occurred_at >= '2000-01-01'::timestamptz;
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3d', 'export row count matches the Org A ledger for the period',
+          v_rpc = v_tbl AND v_rpc > 0, format('rpc %s ledger %s', v_rpc, v_tbl));
+EXCEPTION WHEN others THEN
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3d', 'export row count matches the Org A ledger for the period', false, SQLERRM);
+END
+$p3d_export$;
+SELECT pg_temp.check('P3d', 'Org A hash chain still verifies',
+  pg_temp.id('a_admin'), 'true', format('SELECT public.verify_equipment_ledger(%L) IS NULL', pg_temp.id('org_a')));
+SELECT pg_temp.expect_error('P3d', 'patroller cannot read equipment_client_events',
+  pg_temp.id('eq_p1'), 'SELECT 1 FROM public.equipment_client_events', 'permission denied');
+
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2

@@ -1,4 +1,5 @@
 import { FaToolbox } from "react-icons/fa";
+import EquipmentOfflineAttention from "../../components/equipment/EquipmentOfflineAttention";
 import PageHeader from "../../components/layout/PageHeader";
 import ThemeToggle from "../../components/ThemeToggle";
 
@@ -24,6 +25,7 @@ export default function EquipmentShell({ title, subtitle, backTo, backLabel = "B
             </div>
           }
         />
+        <EquipmentOfflineAttention />
         {children}
       </div>
     </div>

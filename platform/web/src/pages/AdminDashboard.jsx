@@ -627,7 +627,7 @@ export default function AdminDashboard() {
             {canManageEquipment ? (
               <button
                 type="button"
-                onClick={() => navigate(equipmentPendingCount ? "/equipment/admin/requests" : "/equipment/admin/items")}
+                onClick={() => navigate(equipmentPendingCount ? "/equipment/admin/requests" : "/equipment/admin")}
                 className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-2.5 py-2 text-xs font-medium text-white shadow-sm transition hover:from-teal-700 hover:to-emerald-700 sm:px-3 sm:text-sm"
               >
                 <FaToolbox className="h-4 w-4" aria-hidden="true" />

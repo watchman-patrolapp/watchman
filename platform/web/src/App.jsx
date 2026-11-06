@@ -109,6 +109,8 @@ const EquipmentCatalogue = lazy(() => import("./pages/equipment/EquipmentCatalog
 const EquipmentItemPage = lazy(() => import("./pages/equipment/EquipmentItemPage"));
 const EquipmentUnitPage = lazy(() => import("./pages/equipment/EquipmentUnitPage"));
 const EquipmentQrResolve = lazy(() => import("./pages/equipment/EquipmentQrResolve"));
+const EquipmentAdminDashboard = lazy(() => import("./pages/equipment/admin/EquipmentAdminDashboard"));
+const EquipmentAdminStocktake = lazy(() => import("./pages/equipment/admin/EquipmentAdminStocktake"));
 const EquipmentAdminItems = lazy(() => import("./pages/equipment/admin/EquipmentAdminItems"));
 const EquipmentAdminLabels = lazy(() => import("./pages/equipment/admin/EquipmentAdminLabels"));
 const EquipmentMine = lazy(() => import("./pages/equipment/EquipmentMine"));
@@ -388,6 +390,30 @@ function AppRoutes() {
                 <EquipmentQrResolve />
               </RequireRole>
             </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/equipment/admin"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <EquipmentAdminDashboard />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/equipment/admin/stocktake"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <EquipmentAdminStocktake />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
           }
         />
         <Route

@@ -128,7 +128,7 @@ export default function AdminToolsMenu({
       {
         id: "equipment",
         label: "Equipment",
-        to: equipmentPendingCount ? "/equipment/admin/requests" : "/equipment/admin/items",
+        to: equipmentPendingCount ? "/equipment/admin/requests" : "/equipment/admin",
         icon: FaToolbox,
         tone: "bg-teal-700",
         show: canManageEquipment,
