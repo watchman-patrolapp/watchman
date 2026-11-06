@@ -1,11 +1,18 @@
-// src/hooks/useGPSTracking.js - FIXED VERSION
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { supabase } from '../supabase/client';
 import { devLog, devWarn } from '../utils/devLog';
+import toast from '../utils/notify';
 import { distanceMeters, getGpsUploadThrottle } from '../utils/dataSaverProfile';
 import { getWorkingOrganizationId } from '../utils/organizationScope';
 import { sharedGeolocation } from '../geo/sharedGeolocationClient';
+import {
+  backgroundStartFailedMessage,
+  chooseAndroidTrackingMode,
+  startBackgroundWatcher,
+  stopBackgroundWatcher,
+} from '../geo/androidPatrolSession';
+import { flushPatrolLocations, installPatrolLocationFlushListeners, submitPatrolPoint } from '../geo/patrolLocationSync';
+import { friendlyTrackingMessage, recordedAtFromFix } from '../geo/patrolTrackingPlan';
 
 async function ensureNativeLocationPermission() {
   if (!Capacitor.isNativePlatform()) return true;
@@ -44,6 +51,9 @@ const globalGPS = {
   lastWatchOptions: null,
   _autoStopClear: null,
   _releaseShared: null,
+  _releaseBackground: null,
+  _trackingMode: null,
+  _announced: null,
   _session: 0,
   _starting: false,
 
@@ -86,12 +96,22 @@ const globalGPS = {
     );
   },
 
-  async trackLocation(position) {
-    // patrol_id must match active_patrols PK — in this project that is user_id (one row per patroller).
-    // Reads must filter by patrol start_time so old session points aren’t drawn as one polyline.
-    const effectivePatrolId = this.currentPatrolId;
+  announce(message, kind) {
+    if (!message || this._announced === message) return;
+    this._announced = message;
+    if (kind === 'denied') {
+      toast.error(message, { id: 'patrol-tracking-denied', duration: 6000 });
+      return;
+    }
+    toast(message, { id: 'patrol-tracking-info', duration: 6000 });
+  },
 
-    if (!effectivePatrolId || !this.userId) {
+  async trackLocation(position) {
+    // patrol_id is active_patrols.user_id. Route reads filter by the patrol start time.
+    const effectivePatrolId = this.currentPatrolId;
+    const userId = this.userId;
+
+    if (!effectivePatrolId || !userId) {
       devWarn('Cannot track location: missing patrol_id (active session key) or user_id', {
         currentPatrolId: this.currentPatrolId,
         userId: this.userId,
@@ -101,31 +121,20 @@ const globalGPS = {
 
     devLog('Tracking location', {
       patrol_id: effectivePatrolId,
-      user_id: this.userId,
+      user_id: userId,
       latitude: position.coords.latitude,
       longitude: position.coords.longitude
     });
 
-    // Omit `timestamp` — let Postgres DEFAULT NOW() apply. Client `new Date().toISOString()`
-    // follows the device clock; wrong timezone or manual clock skew would corrupt history.
-    const { error } = await supabase
-      .from('patrol_locations')
-      .insert({
-        patrol_id: effectivePatrolId,
-        user_id: this.userId,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        altitude: position.coords.altitude,
-        speed: position.coords.speed,
-        organization_id: getWorkingOrganizationId(),
-      });
-
-    if (error) {
-      console.error('❌ Location insert error:', error);
-    } else {
-      devLog('Location saved to database');
-    }
+    const result = await submitPatrolPoint({
+      patrolId: effectivePatrolId,
+      userId,
+      coords: position.coords,
+      organizationId: getWorkingOrganizationId(),
+      recordedAt: recordedAtFromFix(position.timestamp),
+    });
+    if (result === 'queued') devWarn('Location queued until the network returns');
+    else devLog('Location saved to database', result);
   },
 
   start(options = {}) {
@@ -164,13 +173,18 @@ const globalGPS = {
 
     devLog('GPS starting', { patrolId: this.currentPatrolId, userId: this.userId });
 
-    if (this._releaseShared || this._starting) {
+    if (!this.currentPatrolId) {
+      this.notify({ isActive: false, isLoading: false });
+      return;
+    }
+
+    if (this._releaseShared || this._releaseBackground || this._starting) {
       devLog('GPS already active', this.watchId);
       this.notify({ isActive: true, isLoading: false });
       return;
     }
 
-    if (!navigator.geolocation) {
+    if (!navigator.geolocation && Capacitor.getPlatform() !== 'android') {
       this.notify({
         error: 'Geolocation not supported',
         isLoading: false,
@@ -188,8 +202,32 @@ const globalGPS = {
     try {
     this.notify({ isLoading: true });
 
+    let plan = { mode: this._trackingMode || 'foreground' };
+    if (!this._trackingMode) {
+      plan = await chooseAndroidTrackingMode();
+      if (session !== this._session || !this.currentPatrolId) return;
+      this._trackingMode = plan.mode;
+      if (plan.message) this.announce(plan.message, plan.mode);
+    }
+    if (plan.mode === 'denied') {
+      this.hasPermission = false;
+      this.notify({
+        error: plan.message || friendlyTrackingMessage('denied'),
+        isActive: false,
+        isLoading: false,
+      });
+      return;
+    }
+    if (plan.mode === 'background') {
+      const started = await this._startBackgroundSource(session, historyLimit);
+      if (session !== this._session || !this.currentPatrolId) return;
+      if (started) return;
+      this._trackingMode = 'foreground';
+      this.announce(backgroundStartFailedMessage(), 'foreground');
+    }
+
     const allowed = await ensureNativeLocationPermission();
-    if (session !== this._session) return;
+    if (session !== this._session || !this.currentPatrolId) return;
     if (!allowed) {
       this.hasPermission = false;
       this.notify({
@@ -199,53 +237,6 @@ const globalGPS = {
       });
       return;
     }
-
-    const handleSuccess = async (position) => {
-      const { latitude, longitude, accuracy, heading, speed } = position.coords;
-
-      if (!this.validateCoords(position.coords)) {
-        devWarn('Invalid coordinates', position.coords);
-        return;
-      }
-
-      this.hasPermission = true;
-
-      const newLocation = {
-        lat: latitude,
-        lng: longitude,
-        accuracy: accuracy || 0,
-        heading: heading || 0,
-        speed: speed || 0,
-        timestamp: new Date().toISOString()
-      };
-
-      const newHistory = [...this.history.slice(-(historyLimit - 1)), newLocation];
-
-      this.notify({
-        location: newLocation,
-        history: newHistory,
-        error: null,
-        isActive: true,
-        isLoading: false
-      });
-
-      const throttle = getGpsUploadThrottle();
-      const now = Date.now();
-      let shouldUpload = true;
-      if (this.lastTrackUploadAt && this.lastTrackLat != null && this.lastTrackLng != null) {
-        const dt = now - this.lastTrackUploadAt;
-        const d = distanceMeters(this.lastTrackLat, this.lastTrackLng, latitude, longitude);
-        if (dt < throttle.minIntervalMs && d < throttle.minDistanceM) {
-          shouldUpload = false;
-        }
-      }
-      if (shouldUpload) {
-        this.lastTrackUploadAt = now;
-        this.lastTrackLat = latitude;
-        this.lastTrackLng = longitude;
-        await this.trackLocation(position);
-      }
-    };
 
     const handleError = (error) => {
       if (error.code === 1) {
@@ -258,7 +249,7 @@ const globalGPS = {
         case 1: errorMessage = 'Permission denied. Enable GPS.'; this.hasPermission = false; break;
         case 2: errorMessage = 'GPS signal lost.'; break;
         case 3: errorMessage = 'Request timed out.'; break;
-        default: errorMessage = error.message;
+        default: errorMessage = friendlyTrackingMessage('signal');
       }
       this.notify({ error: errorMessage, isActive: false, isLoading: false });
     };
@@ -267,7 +258,7 @@ const globalGPS = {
     this._releaseShared = sharedGeolocation.acquire({
       purpose: 'patrol',
       onPosition: (position) => {
-        void handleSuccess(position);
+        void this._acceptFix(position, historyLimit);
       },
       onError: handleError,
     });
@@ -276,7 +267,7 @@ const globalGPS = {
     devLog('GPS started via shared geolocation');
     } catch (err) {
       if (session !== this._session) return;
-      console.error('GPS start failed', err);
+      devWarn('GPS start failed', err);
       this.notify({
         error: 'Could not start location tracking',
         isActive: false,
@@ -287,6 +278,71 @@ const globalGPS = {
     }
   },
 
+  async _startBackgroundSource(session, historyLimit) {
+    const handleSuccess = (position) => this._acceptFix(position, historyLimit);
+    const started = await startBackgroundWatcher({
+      onLocation: (position) => {
+        void handleSuccess(position);
+      },
+      onError: () => {
+        if (session !== this._session) return;
+        devWarn('Background location update failed');
+      },
+    });
+    if (session !== this._session || !this.currentPatrolId) {
+      await stopBackgroundWatcher();
+      return false;
+    }
+    if (!started) return false;
+    this._releaseBackground = () => {
+      void stopBackgroundWatcher();
+    };
+    this.watchId = 1;
+    this.hasPermission = true;
+    this.isActive = true;
+    devLog('GPS started via Android background geolocation');
+    this.notify({ error: null, isActive: true, isLoading: false });
+    return true;
+  },
+
+  async _acceptFix(position, historyLimit) {
+    const { latitude, longitude, accuracy, heading, speed } = position.coords;
+    if (!this.validateCoords(position.coords)) {
+      devWarn('Invalid coordinates', position.coords);
+      return;
+    }
+    this.hasPermission = true;
+    const newLocation = {
+      lat: latitude,
+      lng: longitude,
+      accuracy: accuracy || 0,
+      heading: heading || 0,
+      speed: speed || 0,
+      timestamp: new Date().toISOString()
+    };
+    const newHistory = [...this.history.slice(-(historyLimit - 1)), newLocation];
+    this.notify({
+      location: newLocation,
+      history: newHistory,
+      error: null,
+      isActive: true,
+      isLoading: false
+    });
+    const throttle = getGpsUploadThrottle();
+    const now = Date.now();
+    let shouldUpload = true;
+    if (this.lastTrackUploadAt && this.lastTrackLat != null && this.lastTrackLng != null) {
+      const dt = now - this.lastTrackUploadAt;
+      const d = distanceMeters(this.lastTrackLat, this.lastTrackLng, latitude, longitude);
+      if (dt < throttle.minIntervalMs && d < throttle.minDistanceM) shouldUpload = false;
+    }
+    if (!shouldUpload) return;
+    this.lastTrackUploadAt = now;
+    this.lastTrackLat = latitude;
+    this.lastTrackLng = longitude;
+    await this.trackLocation(position);
+  },
+
   /** Stop watch only — keeps patrol/user ids for resume (e.g. web tab refresh path). */
   pauseWatch() {
     this._session += 1;
@@ -294,6 +350,10 @@ const globalGPS = {
     if (this._releaseShared) {
       this._releaseShared();
       this._releaseShared = null;
+    }
+    if (this._releaseBackground) {
+      this._releaseBackground();
+      this._releaseBackground = null;
     }
     if (this.watchId !== null || this.isActive) {
       devLog('GPS watch cleared');
@@ -303,12 +363,15 @@ const globalGPS = {
     }
   },
 
-  stop() {
+  async stop() {
     this.pauseWatch();
     if (this._autoStopClear) {
       this._autoStopClear();
       this._autoStopClear = null;
     }
+    await flushPatrolLocations();
+    this._trackingMode = null;
+    this._announced = null;
     this.currentPatrolId = null;
     this.userId = null;
     this.lastWatchOptions = null;
@@ -342,6 +405,7 @@ const globalGPS = {
 };
 
 if (typeof window !== 'undefined') {
+  installPatrolLocationFlushListeners();
   window.addEventListener('beforeunload', () => {
     if (Capacitor.isNativePlatform()) return;
     globalGPS.pauseWatch();

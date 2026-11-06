@@ -8,6 +8,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(WatchmanPatrolPlugin.class);
         // Remote WebView debugging follows the debuggable flag. Release builds
         // are not debuggable, so inspection stays off there.
         if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {

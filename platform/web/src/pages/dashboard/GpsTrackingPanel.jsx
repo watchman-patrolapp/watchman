@@ -1,6 +1,10 @@
+import { Capacitor } from '@capacitor/core';
 import { FaMapMarkerAlt, FaRoad, FaRoute } from 'react-icons/fa';
 
 export default function GpsTrackingPanel({ isTracking, totalDistance, routePoints }) {
+  const routeHint = Capacitor.getPlatform() === 'android'
+    ? 'Recorded only during this signed-on patrol, including with the screen off.'
+    : 'Recorded only while this patrol is signed on and the page is open.';
   return (
     <div className="lg:col-span-5 mb-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-card min-h-0 flex flex-col">
       <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-6 sm:py-5 bg-gradient-to-r from-slate-50 via-teal-50/60 to-teal-50/80 dark:from-gray-800 dark:via-teal-950/25 dark:to-teal-950/35 border-b border-gray-200/90 dark:border-gray-700/90">
@@ -13,7 +17,7 @@ export default function GpsTrackingPanel({ isTracking, totalDistance, routePoint
               GPS tracking
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 hidden sm:block">
-              Your route is saved while this patrol is active
+              {routeHint}
             </p>
           </div>
         </div>

@@ -3,7 +3,8 @@
   "appName": "Watchman",
   "webDir": "dist",
   "android": {
-    "path": "../android"
+    "path": "../android",
+    "useLegacyBridge": true
   },
   "cordova": {
     "accessOrigins": []

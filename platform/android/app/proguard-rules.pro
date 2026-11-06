@@ -36,6 +36,12 @@
 -keep class com.capacitorjs.plugins.pushnotifications.** { *; }
 -dontwarn com.google.firebase.**
 
+# Patrol background location (@capacitor-community/background-geolocation) and the
+# in-app permission helper. The service is also named in the manifest.
+-keep class com.equimaps.capacitor_background_geolocation.** { *; }
+-keep class com.watchman.app.WatchmanPatrolPlugin { *; }
+-dontwarn com.google.android.gms.**
+
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,Exceptions
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile

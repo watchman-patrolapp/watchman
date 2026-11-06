@@ -17,8 +17,9 @@
     "android:icons": "node scripts/prepare-capacitor-assets.mjs && npx @capacitor/assets generate --android --iconBackgroundColor \"#0f766e\" --iconBackgroundColorDark \"#083344\" --splashBackgroundColor \"#0f766e\" --splashBackgroundColorDark \"#083344\"",
     "web:icons": "node scripts/prepare-capacitor-assets.mjs && npx @capacitor/assets generate --pwa --iconBackgroundColor \"#0f766e\" --iconBackgroundColorDark \"#083344\" --splashBackgroundColor \"#0f766e\" --splashBackgroundColorDark \"#083344\" --pwaManifestPath public/manifest.webmanifest",
     "icons:all": "npm run web:icons && npm run android:icons",
-    "android:sync": "npm run build:mobile && npx cap sync android",
-    "android:sync:clean": "npm run android:clean-web-assets && npm run build:mobile && npx cap sync android",
+    "postinstall": "node scripts/patch-background-geolocation.mjs",
+    "android:sync": "node scripts/patch-background-geolocation.mjs && npm run build:mobile && npx cap sync android",
+    "android:sync:clean": "npm run android:clean-web-assets && node scripts/patch-background-geolocation.mjs && npm run build:mobile && npx cap sync android",
     "android:apk:debug": "npm run android:sync && cd ../android && gradlew.bat assembleDebug",
     "android:apk:debug:clean": "npm run android:sync:clean && cd ../android && gradlew.bat assembleDebug",
     "android:apk:debug:unix": "npm run android:sync && cd ../android && ./gradlew assembleDebug",
@@ -31,6 +32,7 @@
     "test:unit": "node --test src/utils/__tests__/*.test.js src/auth/__tests__/*.test.js src/chat/realtime/__tests__/*.test.js src/geo/__tests__/*.test.js src/pages/criminalProfile/__tests__/*.test.js src/pages/dashboard/__tests__/*.test.js src/chat/utils/__tests__/*.test.js"
   },
   "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.3.1",
     "@capacitor/android": "^8.3.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.3.0",
