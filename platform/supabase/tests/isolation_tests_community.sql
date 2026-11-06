@@ -62,8 +62,12 @@ CREATE TEMP TABLE g7_results (
 -- -----------------------------------------------------------------------------
 -- Helpers (pg_temp = this session only)
 -- -----------------------------------------------------------------------------
+-- SECURITY DEFINER so a SET ROLE authenticated later can still read the fixture map.
 CREATE OR REPLACE FUNCTION pg_temp.id(p_k text) RETURNS uuid
-LANGUAGE sql STABLE AS $$ SELECT v FROM g7_ids WHERE k = p_k $$;
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_temp, public
+AS $$ SELECT v FROM g7_ids WHERE k = p_k $$;
+GRANT SELECT, INSERT, UPDATE, DELETE ON g7_ids, g7_results TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE g7_results_n_seq TO authenticated;
 
 -- Impersonate: set JWT claims and switch role for the rest of the transaction
 -- (or the enclosing sub-block). Call RESET ROLE afterwards.
@@ -1497,7 +1501,9 @@ INSERT INTO g7_eq VALUES
   ('radio', (SELECT id FROM public.equipment_items WHERE name = 'G7 radio kit' AND organization_id = pg_temp.id('org_a'))),
   ('r1', (SELECT id FROM public.equipment_units WHERE asset_tag = 'G7-R1' AND organization_id = pg_temp.id('org_a')));
 CREATE OR REPLACE FUNCTION pg_temp.eq(p_k text) RETURNS uuid
-LANGUAGE sql STABLE AS $$ SELECT v FROM g7_eq WHERE k = p_k $$;
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_temp, public
+AS $$ SELECT v FROM g7_eq WHERE k = p_k $$;
+GRANT SELECT, INSERT, UPDATE, DELETE ON g7_eq TO authenticated;
 
 SELECT pg_temp.check('P3b', 'control: A nw_admin creates cert-gated item G7 drone',
   pg_temp.id('a_admin'), 'ok', 'SELECT public.upsert_equipment_item(NULL, ''G7 drone'', NULL, NULL, NULL, true)');
@@ -1593,12 +1599,16 @@ SELECT pg_temp.expect_error('P3b', 'A nw_admin (not holder) approves transfer ->
 SELECT pg_temp.expect_error('P3b', 'B patroller approves transfer -> not found',
   pg_temp.id('eq_bp'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'not found');
 CREATE TEMP TABLE g7_txt (k text PRIMARY KEY, v text) ON COMMIT DROP;
+GRANT SELECT, INSERT, UPDATE, DELETE ON g7_txt TO authenticated;
 DO $acc$
 DECLARE
   resp jsonb;
+  v_tr uuid := pg_temp.eq('tr1');
 BEGIN
+  -- Resolve the fixture id before SET ROLE. pg_temp.eq touches g7_eq, which
+  -- authenticated cannot see unless the lookup runs as the table owner.
   PERFORM pg_temp.as_user(pg_temp.id('eq_p1'));
-  resp := public.respond_equipment_transfer(pg_temp.eq('tr1'), true);
+  resp := public.respond_equipment_transfer(v_tr, true);
   PERFORM pg_temp.as_postgres();
   INSERT INTO g7_txt VALUES ('code', resp->>'code');
   INSERT INTO g7_results (matrix_row, test, ok, detail)
@@ -1618,7 +1628,8 @@ SELECT pg_temp.assert('P3c', 'accept puts the unit in transfer and keeps p1 as h
    FROM public.equipment_units u, public.equipment_loans l, public.equipment_transfers t
    WHERE u.id = pg_temp.eq('r1') AND l.id = pg_temp.eq('loan1') AND t.id = pg_temp.eq('tr1')),
   'checked as postgres');
-SELECT pg_temp.expect_error('P3b', 'second accept -> no longer open',
+-- Accept only opens the 6-hour code hand-over. It does not move the loan.
+SELECT pg_temp.expect_error('P3c', 'second accept while hand-over is open -> no longer open',
   pg_temp.id('eq_p1'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'no longer open');
 SELECT pg_temp.check('P3c', 'wrong code does not move the unit',
   pg_temp.id('eq_p2'), 'true', format(
@@ -1653,9 +1664,10 @@ UPDATE g7_eq SET v = (SELECT id FROM public.equipment_transfers WHERE to_user_id
 DO $acc2$
 DECLARE
   resp jsonb;
+  v_tr uuid := pg_temp.eq('tr1');
 BEGIN
   PERFORM pg_temp.as_user(pg_temp.id('eq_p1'));
-  resp := public.respond_equipment_transfer(pg_temp.eq('tr1'), true);
+  resp := public.respond_equipment_transfer(v_tr, true);
   PERFORM pg_temp.as_postgres();
   INSERT INTO g7_txt VALUES ('code2', resp->>'code')
   ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v;
@@ -1688,7 +1700,7 @@ SELECT pg_temp.expect_rows('P3b', 'custody history shows 2 holders (A committee 
 SELECT pg_temp.expect_error('P3b', 'B nw_admin reads Org A custody -> not found',
   pg_temp.id('b_admin'), format('SELECT * FROM public.list_equipment_unit_custody(%L)', pg_temp.eq('r1')), 'not found');
 
--- Issues: only the latest holder
+-- Issues: only the latest holder. The hand-over above is finished, so that is p2.
 SELECT pg_temp.expect_error('P3b', 'previous holder p1 reports issue -> only latest holder',
   pg_temp.id('eq_p1'), format('SELECT public.report_equipment_issue(%L, %L, %L)', pg_temp.eq('r1'), 'damage', 'Cracked screen'), 'latest holder');
 SELECT pg_temp.expect_error('P3b', 'B patroller reports issue on Org A unit -> not found',
