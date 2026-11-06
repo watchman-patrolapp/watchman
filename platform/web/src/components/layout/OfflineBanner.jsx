@@ -25,7 +25,7 @@ export default function OfflineBanner() {
       role="status"
       aria-live="polite"
       className="fixed inset-x-0 top-0 z-[80] bg-warning px-4 py-3 text-center text-sm font-medium text-white"
-      style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+      style={{ paddingTop: "calc(0.75rem + var(--safe-area-top))" }}
     >
       {OFFLINE_BANNER_COPY}
     </div>

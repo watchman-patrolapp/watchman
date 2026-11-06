@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FaSun, FaMoon } from 'react-icons/fa';
-import { getStoredTheme, setStoredTheme, getInitialDark } from '../utils/theme';
+import { applyDocumentTheme, getStoredTheme, setStoredTheme, getInitialDark } from '../utils/theme';
 
 const VARIANT_CLASS = {
   /** Teal / gradient headers (e.g. dashboard welcome strip) */
@@ -24,12 +24,8 @@ export default function ThemeToggle({ variant = 'brand', className = '', labelle
   const [dark, setDark] = useState(() => getInitialDark());
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
+    applyDocumentTheme(dark);
     setStoredTheme(dark ? 'dark' : 'light');
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) {
-      meta.setAttribute('content', dark ? '#0f1f1c' : '#0d9488');
-    }
   }, [dark]);
 
   useEffect(() => {

@@ -1,6 +1,10 @@
 # Android background location during a patrol
 
-Status: **not implemented**. This is the design stop for audit prompt 12. No tracking code, manifest permissions, or plugins were changed for this problem.
+Status: **implemented** (November 2026) on `feat/android-background-gps`.
+
+What shipped follows the product requirements, which are wider than option A below: `@capacitor-community/background-geolocation` 1.3.1 (Capacitor 8), a location foreground service, `ACCESS_BACKGROUND_LOCATION` (“Allow all the time”), and a battery-optimisation exemption prompt after an in-app explainer. Web/PWA stays on the foreground watch. Points still go to `patrol_locations` (client `id` for idempotent retries; no new SQL). Play Console copy is in [`PLAY_BACKGROUND_LOCATION.md`](PLAY_BACKGROUND_LOCATION.md).
+
+Option A (foreground service, no background permission, no direct battery exemption) is still the lower Play-review risk if a later release has to drop those two prompts. The notes below are the original design stop and are kept so that tradeoff stays visible.
 
 ## Why it stopped here
 
@@ -10,7 +14,7 @@ Patrol tracking today is a `navigator.geolocation.watchPosition` running inside 
 
 Shipping a fix means a native location source, a persistent notification, a flush path that does not depend on the paused page, Play Console declarations, and a physical-device pass (screen off, app switch, OEM battery saver). That is larger than release hardening, and it cannot be checked on a device in this change. The low-risk bar is not met.
 
-## What the app does today
+## What the app did before this change
 
 | Piece | Behaviour |
 | --- | --- |

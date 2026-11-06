@@ -52,9 +52,9 @@ Release builds are minified (`minifyEnabled`, `shrinkResources`) and must be sig
 
 Cleartext HTTP is off (`usesCleartextTraffic` and `network_security_config`). `allowBackup` is false, so Auto Backup does not export shared preferences or WebView storage. WebView remote debugging is on only when the build is debuggable. `cap sync` writes `res/xml/config.xml` with no Cordova `<access origin="*">` (`cordova.accessOrigins` is `[]` in `web/capacitor.config.json`). Nothing in this app reads that whitelist; Capacitor does not use it for the WebView.
 
-Background tracking while the screen is off is a separate change. See [`docs/ANDROID_BACKGROUND_TRACKING.md`](docs/ANDROID_BACKGROUND_TRACKING.md).
+Background tracking during a signed-on patrol is implemented for Android. See [`docs/ANDROID_BACKGROUND_TRACKING.md`](docs/ANDROID_BACKGROUND_TRACKING.md) and the Play Console text in [`docs/PLAY_BACKGROUND_LOCATION.md`](docs/PLAY_BACKGROUND_LOCATION.md). Web stays foreground-only.
 
-**Release smoke test** (no device in CI): `./gradlew assembleRelease` with the upload key set. Then confirm `app/build/outputs/apk/release/app-release.apk` is signed, `application-debuggable` is absent, `versionCode` is 6 and `versionName` is `1.0.5` unless you overrode them, and `android.permission.ACCESS_BACKGROUND_LOCATION` is absent:
+**Release smoke test** (no device in CI): `./gradlew assembleRelease` with the upload key set. Then confirm `app/build/outputs/apk/release/app-release.apk` is signed, `application-debuggable` is absent, `versionCode` is 6 and `versionName` is `1.0.5` unless you overrode them, and `android.permission.ACCESS_BACKGROUND_LOCATION` is present (used only during a signed-on patrol):
 
 ```bash
 apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk

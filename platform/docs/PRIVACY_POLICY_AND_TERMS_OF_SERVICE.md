@@ -35,7 +35,7 @@ The Platform is offered **primarily to users in South Africa**. We do not curren
 Depending on your role and use of the Platform, we may process:
 
 - **Account and profile:** name, email, phone number, address, authentication data (passwords are stored in hashed form by our authentication provider), vehicle or patrol-related details you provide, and consent/version timestamps.
-- **Patrol and location data:** scheduling, routes, and location information associated with patrol activity.
+- **Patrol and location data:** scheduling, routes, and location information associated with patrol activity. Location is collected only during a signed-on patrol. On the Android app that includes background location while the patrol notification is showing (screen off or another app in front). Tracking stops at sign-off or when the patrol ends on its own. The browser app collects location only while the page is open during that patrol. Location is not collected while a person is signed off.
 - **Chat (volunteers):** message content and related metadata. **Volunteer chat messages are retained for 24 hours** (then deleted per our technical configuration).
 - **Chat (admin view):** where an administrative view or logs exist, we may retain related data for **6 months**.
 - **Incidents:** descriptions, locations, times, people involved as you enter them, witness references, linked records, and **photos or files** you upload.

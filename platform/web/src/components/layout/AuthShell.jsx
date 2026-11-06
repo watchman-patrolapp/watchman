@@ -9,8 +9,8 @@ export default function AuthShell({ children, wide = false }) {
   const width = wide ? "max-w-2xl" : "max-w-lg";
   return (
     <div className="flex min-h-dvh flex-col bg-surface-page text-text-primary">
-      <header className="shrink-0 border-b border-subtle bg-surface-card backdrop-blur-md pt-[env(safe-area-inset-top,0px)]">
-        <div className={`${width} mx-auto flex items-center justify-between gap-3 px-4 py-3`}>
+      <header className="shrink-0 border-b border-subtle bg-surface-card backdrop-blur-md">
+        <div className={`${width} snug-below-status snug-pad-header mx-auto flex items-center justify-between gap-3 px-4 pb-3`}>
           <div className="flex min-w-0 items-center gap-3">
             <img
               src={appMark}

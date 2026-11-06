@@ -34,12 +34,18 @@ import ScrollToTop from "./components/layout/ScrollToTop";
 import SkipLink from "./components/layout/SkipLink";
 import OfflineBanner from "./components/layout/OfflineBanner";
 import PermissionsPrimerModal from "./components/PermissionsPrimerModal";
+import PatrolTrackingPrompts from "./components/patrol/PatrolTrackingPrompts";
 
 /** One-time permission intro (location + notifications) after sign-in; not tied to a single page. */
 function PermissionFlowHost() {
   const { user, sessionReady } = useAuth();
   if (!sessionReady || !user?.id) return null;
-  return <PermissionsPrimerModal userId={user.id} />;
+  return (
+    <>
+      <PermissionsPrimerModal userId={user.id} />
+      <PatrolTrackingPrompts />
+    </>
+  );
 }
 
 // Lazy load page components

@@ -3,9 +3,17 @@
   "appName": "Watchman",
   "webDir": "dist",
   "android": {
-    "path": "../android"
+    "path": "../android",
+    "useLegacyBridge": true
   },
   "cordova": {
     "accessOrigins": []
+  },
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "LIGHT",
+      "backgroundColor": "#f5f3ef"
+    }
   }
 }

@@ -264,7 +264,7 @@ export default function PatrolShareSheet({ kind, patrol: rawPatrol, organization
           </div>
         </div>
 
-        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-600 flex gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-600 flex gap-2 pb-[max(0.75rem,var(--safe-area-bottom))]">
           <button
             type="button"
             onClick={onClose}

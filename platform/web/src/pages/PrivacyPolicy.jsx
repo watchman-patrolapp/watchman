@@ -14,6 +14,9 @@ export default function PrivacyPolicy() {
           Watchman processes account, patrol, incident, and chat information so a neighbourhood watch can coordinate safety under South Africa’s Protection of Personal Information Act (POPIA). Passwords are stored by the authentication provider. The full draft policy lives with the product documents and still needs an appointed information officer before it is final.
         </p>
         <p className="text-sm leading-relaxed text-text-secondary">
+          Location is tracked only while you are signed on to a patrol. On the Android app that includes background location, so the route keeps recording when the screen is off or you switch apps, for as long as the patrol notification is showing. Signing off, or the patrol ending on its own, stops tracking. The browser app records location only while the page is open during a signed-on patrol. Watchman does not track location when you are signed off.
+        </p>
+        <p className="text-sm leading-relaxed text-text-secondary">
           After you sign in, Profile is where you ask for access, correction, or deletion of your account.
         </p>
         {email ? (

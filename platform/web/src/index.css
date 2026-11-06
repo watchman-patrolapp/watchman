@@ -26,6 +26,13 @@
    DESIGN SYSTEM - CSS Custom Properties
    ========================================== */
 :root {
+  /* env() is 0 in many Android WebViews. Capacitor sets --safe-area-inset-*.
+     --android-inset-* is only the part not already applied as WebView padding. */
+  --safe-area-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px), var(--android-inset-top, 0px));
+  --safe-area-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px), var(--android-inset-bottom, 0px));
+  --safe-area-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px), var(--android-inset-left, 0px));
+  --safe-area-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px), var(--android-inset-right, 0px));
+
   /* Primary — safety teal (single brand anchor) */
   --color-primary-50: #f0fdfa;
   --color-primary-100: #ccfbf1;
@@ -192,6 +199,66 @@
     min-height: 100%;
     min-height: 100dvh;
     background-color: var(--color-bg-page);
+    padding-top: var(--safe-area-top);
+  }
+}
+
+/* Solid system-bar scrims. Scrolled cards (the teal welcome edge) stay behind them. */
+#status-bar-backdrop,
+#navigation-bar-backdrop {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  pointer-events: none;
+  background: var(--color-bg-page);
+}
+
+#status-bar-backdrop {
+  top: 0;
+  height: var(--safe-area-top);
+}
+
+#navigation-bar-backdrop {
+  bottom: 0;
+  z-index: 30;
+  height: var(--safe-area-bottom);
+}
+
+/* Page headers stick below the status bar. In-sheet sticky bars are not headers. */
+header.sticky.top-0 {
+  top: var(--safe-area-top);
+}
+
+/* On Android, keep ~8px under the status bar. With no inset (web/PWA) this is the
+   page's own top padding, so desktop and browser spacing stay the same. */
+.snug-below-status {
+  --snug-pad: 1.5rem;
+  padding-top: var(--snug-pad);
+  padding-top: calc(
+    var(--snug-pad) * (1 - var(--android-has-status-bar, 0))
+    + 0.5rem * var(--android-has-status-bar, 0)
+  );
+}
+
+.snug-pad-header {
+  --snug-pad: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .snug-pad-lg {
+    --snug-pad: 2rem;
+  }
+}
+
+@media print {
+  #status-bar-backdrop,
+  #navigation-bar-backdrop {
+    display: none;
+  }
+
+  #root {
+    padding-top: 0;
   }
 }
 
@@ -442,12 +509,14 @@
   outline: none;
 }
 
+/* Hidden above the viewport, including the status-bar inset. translateY(-200%)
+   alone leaves the rounded bottom on screen once top is the Android inset. */
 .skip-link {
-  position: absolute;
+  position: fixed;
   left: 1rem;
-  top: max(0.75rem, env(safe-area-inset-top, 0px));
+  top: 0;
   z-index: 200;
-  transform: translateY(-200%);
+  transform: translateY(calc(-100% - var(--safe-area-top) - 0.75rem));
   border-radius: 0.75rem;
   background: var(--color-primary-700);
   color: var(--color-on-primary);
@@ -455,7 +524,9 @@
   padding: 0.75rem 1rem;
 }
 
-.skip-link:focus {
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: max(0.75rem, var(--safe-area-top));
   transform: none;
 }
 
@@ -491,14 +562,14 @@
 /* Space for fixed mobile bottom nav (see MobilePatrolDockHost) */
 @media (max-width: 767px) {
   body.mobile-patrol-dock-pad {
-    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(4rem + var(--safe-area-bottom));
   }
 }
 
 /* iOS / notched devices: requires viewport-fit=cover on <meta name="viewport"> */
 @layer utilities {
   .safe-area-bottom {
-    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(0.5rem, var(--safe-area-bottom));
   }
 
   /* Warm stone: neutral text + borders in light mode (does not affect dark:) */
@@ -529,8 +600,8 @@
  */
 @media (min-width: 768px) {
   .h-chat-shell {
-    height: calc(100vh - 3rem - env(safe-area-inset-top, 0px));
-    height: calc(100dvh - 3rem - env(safe-area-inset-top, 0px));
+    height: calc(100vh - 3rem - var(--safe-area-top));
+    height: calc(100dvh - 3rem - var(--safe-area-top));
   }
 }
 
