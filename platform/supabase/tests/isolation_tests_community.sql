@@ -1786,22 +1786,41 @@ SELECT pg_temp.expect_error('P3b', 'p2 without sign-off asks for drone transfer 
 DO $na2$
 DECLARE
   sfx text := left(replace(gen_random_uuid()::text, '-', ''), 10);
+  v_id uuid;
+  v_email text;
+  v_updated int;
 BEGIN
   INSERT INTO g7_ids VALUES ('eq_na2', gen_random_uuid());
+  v_id := pg_temp.id('eq_na2');
+  v_email := 'g7-eq-na2-' || sfx || '@example.invalid';
   INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
-  VALUES (pg_temp.id('eq_na2'), '00000000-0000-0000-0000-000000000000', 'authenticated',
-          'authenticated', 'g7-eq-na2-' || sfx || '@example.invalid', now(), now());
-  -- Signup hook may already have inserted this id (same email), which raises users_email_key.
+  VALUES (v_id, '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', v_email, now(), now());
+  -- A signup hook may already own this email, sometimes under a different id.
+  -- ON CONFLICT (id) does not absorb users_email_key in that case, so move the
+  -- other profile off the email before writing this auth id.
+  UPDATE public.users
+     SET email = id::text || '@fixture.invalid'
+   WHERE lower(trim(email)) = lower(trim(v_email))
+     AND id IS DISTINCT FROM v_id;
   EXECUTE format(
-    'INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
-     VALUES (%L, %L, %L, %L, %L, true, %L)
-     ON CONFLICT (id) DO UPDATE
-       SET role = EXCLUDED.role, organization_id = EXCLUDED.organization_id,
-           full_name = EXCLUDED.full_name, verified = true, status = EXCLUDED.status',
-    pg_temp.id('eq_na2'), 'g7-eq-na2-' || sfx || '@example.invalid',
-    'G7 Second Admin', 'nw_admin', pg_temp.id('org_a'), 'active');
+    'UPDATE public.users
+        SET email = %L, full_name = %L, role = %L, organization_id = %L,
+            verified = true, status = %L
+      WHERE id = %L',
+    v_email, 'G7 Second Admin', 'nw_admin', pg_temp.id('org_a'), 'active', v_id);
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  IF v_updated = 0 THEN
+    EXECUTE format(
+      'INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
+       VALUES (%L, %L, %L, %L, %L, true, %L)
+       ON CONFLICT (id) DO UPDATE
+         SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, role = EXCLUDED.role,
+             organization_id = EXCLUDED.organization_id, verified = true, status = EXCLUDED.status',
+      v_id, v_email, 'G7 Second Admin', 'nw_admin', pg_temp.id('org_a'), 'active');
+  END IF;
   INSERT INTO public.organization_members (organization_id, user_id, member_role, status)
-  VALUES (pg_temp.id('org_a'), pg_temp.id('eq_na2'), 'nw_admin', 'active')
+  VALUES (pg_temp.id('org_a'), v_id, 'nw_admin', 'active')
   ON CONFLICT (organization_id, user_id) DO NOTHING;
 END
 $na2$;
