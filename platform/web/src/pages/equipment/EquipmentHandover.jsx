@@ -9,7 +9,6 @@ import {
   EQUIPMENT_CONDITION_LABELS,
   cancelEquipmentTransfer,
   clearHandoverCode,
-  confirmHandoverGiver,
   confirmHandoverReceiver,
   equipmentErrorMessage,
   forceCompleteHandover,
@@ -22,6 +21,7 @@ import {
   rememberHandoverCode,
   runEquipmentSweep,
 } from "../../utils/equipment";
+import { runEquipmentAction } from "../../utils/equipmentOfflineStore";
 import EquipmentShell, { EquipmentNotice, InfoSection } from "./EquipmentShell";
 
 function when(iso) {
@@ -154,7 +154,7 @@ export default function EquipmentHandover() {
                 <p className="text-sm text-text-secondary">The code is only shown once. Generate a new one if you closed the page.</p>
               )}
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Button type="button" loading={busy} onClick={() => run(() => confirmHandoverGiver(transferId), (d) => (d?.completed ? "Hand-over complete." : "Recorded. Waiting for them to enter the code."))}>
+                <Button type="button" loading={busy} onClick={() => run(() => runEquipmentAction("handover_giver", { transferId }), (d) => (d?.queued ? "Saved on this phone. It will send when you are back online." : d?.completed ? "Hand-over complete." : "Recorded. Waiting for them to enter the code."))}>
                   I have handed it over
                 </Button>
                 <Button type="button" variant="secondary" loading={busy} onClick={() => run(() => regenerateHandoverCode(transferId), () => "New code ready. The old one no longer works.")}>
@@ -195,6 +195,19 @@ export default function EquipmentHandover() {
                 </label>
                 <Button type="submit" loading={busy} disabled={parseHandoverCode(entry).length !== 6 || !ack}>
                   Confirm I have it
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={busy}
+                  onClick={() => run(
+                    () => runEquipmentAction("paper_claim", { unitId: row.unit_id, note: "Phones were offline" }),
+                    (d) => (d?.queued
+                      ? "Saved on this phone. An admin records it when you are back online."
+                      : "Sent to an admin. The ledger will say it was recorded later."),
+                  )}
+                >
+                  Phones are offline — ask an admin to record this
                 </Button>
               </form>
             </InfoSection>

@@ -5,8 +5,10 @@ import { useScopedOrganization } from "../../utils/organizationScope";
 import { equipmentAdminBadgeCount } from "../../utils/equipment";
 
 const LINKS = [
+  { to: "/equipment/admin", label: "Overview", end: true },
   { to: "/equipment/admin/items", label: "Catalogue" },
   { to: "/equipment/admin/requests", label: "Loan desk", badge: true },
+  { to: "/equipment/admin/stocktake", label: "Stocktake" },
   { to: "/equipment/admin/maintenance", label: "Service log" },
   { to: "/equipment/admin/certifications", label: "Training sign-offs" },
   { to: "/equipment/admin/labels", label: "QR labels" },
@@ -25,6 +27,7 @@ export default function EquipmentAdminNav({ refreshKey = 0 }) {
           <NavLink
             key={l.to}
             to={l.to}
+            end={l.end}
             className={({ isActive }) =>
               `inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 font-medium ${
                 isActive

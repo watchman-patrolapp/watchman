@@ -42,6 +42,10 @@ export const EQUIPMENT_LEDGER_EVENT_LABELS = Object.freeze({
   write_off_approved: "Written off",
   liability_decided: "Liability recorded",
   overdue_escalated: "Overdue reminder escalated",
+  stocktake_counted: "Counted in a stocktake",
+  stocktake_missing: "Missing at stocktake",
+  paper_handover_recorded: "Paper hand-over recorded later",
+  return_requested: "Return started",
 });
 
 const CATEGORY_EMOJI = Object.freeze({

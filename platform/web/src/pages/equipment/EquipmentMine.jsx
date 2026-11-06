@@ -19,6 +19,8 @@ import {
   runEquipmentSweep,
   splitMyLoans,
 } from "../../utils/equipment";
+import EquipmentPatrollerSummary from "../../components/equipment/EquipmentPatrollerSummary";
+import { runEquipmentAction } from "../../utils/equipmentOfflineStore";
 import EquipmentShell, { EquipmentBanner, EquipmentNotice, FilterPills, InfoSection, StatusChip } from "./EquipmentShell";
 
 function formatWhen(iso) {
@@ -95,6 +97,7 @@ export default function EquipmentMine() {
           Browse gear
         </button>
       </EquipmentBanner>
+      <EquipmentPatrollerSummary />
       {hint ? <EquipmentNotice>{hint}</EquipmentNotice> : null}
       {flash ? (
         <p role="status" className="rounded-xl border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900 dark:border-teal-800 dark:bg-teal-900/30 dark:text-teal-100">
@@ -165,6 +168,25 @@ export default function EquipmentMine() {
                 {l.status === "requested" || l.status === "approved" ? (
                   <button type="button" disabled={busyId === l.id} onClick={() => act(l.id, () => cancelEquipmentLoanRequest(l.id), "Request cancelled.")} className={`${SECONDARY_BTN} px-3 py-1.5 text-xs`}>
                     Cancel request
+                  </button>
+                ) : null}
+                {l.status === "active" ? (
+                  <button
+                    type="button"
+                    disabled={busyId === l.id || Boolean(l.return_requested_at)}
+                    onClick={async () => {
+                      setBusyId(l.id);
+                      const res = await runEquipmentAction("return_request", { loanId: l.id });
+                      setBusyId(null);
+                      if (res.error) return setFlash(equipmentErrorMessage(res.error));
+                      setFlash(res.data?.queued
+                        ? "Saved on this phone. It will send when you are back online."
+                        : "Your NW admin has been told you are bringing it back.");
+                      if (!res.data?.queued) void load();
+                    }}
+                    className={`${SECONDARY_BTN} px-3 py-1.5 text-xs`}
+                  >
+                    {l.return_requested_at ? "Return started" : "I'm bringing this back"}
                   </button>
                 ) : null}
               </LoanCard>

@@ -7,6 +7,7 @@ import { PATROL_MEMBER_ROLES } from "../auth/roleMatrix";
 import { equipmentErrorMessage as baseErrorMessage } from "./equipmentMeta";
 import { equipmentLoanErrorText } from "./equipmentLoanMeta";
 import { equipmentCustodyErrorText } from "./equipmentCustodyMeta";
+import { equipmentReportingErrorText } from "./equipmentReportingMeta";
 
 export * from "./equipmentMeta";
 export * from "./equipmentLoanMeta";
@@ -39,7 +40,7 @@ export function equipmentPhotoUrl(path) {
 export function equipmentErrorMessage(error, fallback = "Something went wrong. Try again.") {
   if (isRpcNotFoundError(error)) {
     const msg = String(error?.message || "");
-    if (/handover|maintenance|write_off|liability|case_number|housekeeping/i.test(msg)) {
+    if (/handover|maintenance|write_off|liability|case_number|housekeeping|stocktake|dashboard|export_equipment|paper_handover|return_request/i.test(msg)) {
       return "This equipment step is not switched on yet. Ask an admin to apply the latest equipment SQL.";
     }
   } else {
@@ -47,6 +48,8 @@ export function equipmentErrorMessage(error, fallback = "Something went wrong. T
     if (loanText) return loanText;
     const custodyText = equipmentCustodyErrorText(error);
     if (custodyText) return custodyText;
+    const reportingText = equipmentReportingErrorText(error);
+    if (reportingText) return reportingText;
   }
   return baseErrorMessage(error, isRpcNotFoundError(error), fallback);
 }
