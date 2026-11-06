@@ -25,8 +25,8 @@ export default function AppToaster() {
       position={mobile ? "bottom-center" : "top-right"}
       containerStyle={
         mobile
-          ? { bottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))" }
-          : { top: "max(1rem, env(safe-area-inset-top, 0px))" }
+          ? { bottom: "calc(4.25rem + var(--safe-area-bottom))" }
+          : { top: "max(1rem, var(--safe-area-top))" }
       }
       toastOptions={{
         success: { duration: 2000 },

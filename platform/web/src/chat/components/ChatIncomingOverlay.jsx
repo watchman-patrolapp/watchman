@@ -146,7 +146,7 @@ export function ChatIncomingOverlay({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[1250] flex items-end justify-center p-3 pb-[max(0.75rem,calc(0.75rem+env(safe-area-inset-bottom,0px)))] transition-opacity duration-200 sm:items-center sm:p-6 ${
+      className={`fixed inset-0 z-[1250] flex items-end justify-center p-3 pb-[max(0.75rem,calc(0.75rem+var(--safe-area-bottom)))] transition-opacity duration-200 sm:items-center sm:p-6 ${
         visible ? 'opacity-100' : 'opacity-0'
       }`}
       role="dialog"

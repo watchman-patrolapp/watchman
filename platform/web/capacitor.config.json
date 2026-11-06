@@ -8,5 +8,12 @@
   },
   "cordova": {
     "accessOrigins": []
+  },
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "LIGHT",
+      "backgroundColor": "#f5f3ef"
+    }
   }
 }

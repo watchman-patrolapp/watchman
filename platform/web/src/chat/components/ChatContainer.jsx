@@ -173,7 +173,7 @@ export default function ChatContainer() {
 
   return (
     <div
-      className="min-h-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))] max-md:flex max-md:min-h-0 max-md:flex-col max-md:overflow-hidden max-md:h-[calc(100dvh-4rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] max-[639px]:overflow-x-hidden sm:px-4 sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] md:h-auto md:min-h-screen md:min-h-[100dvh] md:overflow-visible md:pb-6 md:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] lg:px-8"
+      className="min-h-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 px-2 pb-2 pt-2 max-md:flex max-md:min-h-0 max-md:flex-col max-md:overflow-hidden max-md:h-[calc(100dvh-4rem-var(--safe-area-top)-var(--safe-area-bottom))] max-[639px]:overflow-x-hidden sm:px-4 sm:pt-6 md:h-auto md:min-h-screen md:min-h-[100dvh] md:overflow-visible md:pb-6 md:pt-6 lg:px-8"
     >
       <div className="max-w-4xl mx-auto flex min-h-0 w-full flex-1 flex-col h-chat-shell">
         <ChatHeader

@@ -558,7 +558,7 @@ export const MessageInput = React.memo(function MessageInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className="relative z-10 border-t border-gray-200 bg-gray-50 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] dark:border-gray-700 dark:bg-gray-800/50 sm:px-4 sm:pt-4 sm:pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+      className="relative z-10 border-t border-gray-200 bg-gray-50 px-2 pt-2 pb-[calc(0.5rem+var(--safe-area-bottom))] dark:border-gray-700 dark:bg-gray-800/50 sm:px-4 sm:pt-4 sm:pb-[calc(1rem+var(--safe-area-bottom))]"
     >
       
       {/* Quick Templates Panel */}
@@ -837,7 +837,7 @@ export const MessageInput = React.memo(function MessageInput({
       {manualLocOpen &&
         createPortal(
           <div
-            className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/50 p-4 pb-[max(1rem,calc(4rem+env(safe-area-inset-bottom,0px)))] sm:items-center sm:pb-4"
+            className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/50 p-4 pb-[max(1rem,calc(4rem+var(--safe-area-bottom)))] sm:items-center sm:pb-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="manual-loc-title"
@@ -875,7 +875,7 @@ export const MessageInput = React.memo(function MessageInput({
                   autoComplete="off"
                 />
               </label>
-              <div className="mt-4 flex justify-end gap-2 pb-[env(safe-area-inset-bottom,0px)]">
+              <div className="mt-4 flex justify-end gap-2 pb-[var(--safe-area-bottom)]">
                 <button
                   type="button"
                   onClick={() => setManualLocOpen(false)}
