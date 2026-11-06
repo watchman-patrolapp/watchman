@@ -12,7 +12,7 @@
  * }} CriminalProfileSightingEntry
  */
 
-import { parsePatrolTime } from './watchTime';
+import { parsePatrolTime } from './watchTime.js';
 
 export function newSightingId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
