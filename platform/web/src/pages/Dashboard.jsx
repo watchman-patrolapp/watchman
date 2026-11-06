@@ -6,7 +6,7 @@ import { supabase } from "../supabase/client";
 import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRoute, FaRoad, FaCalendarAlt, FaClipboardList, FaCar, FaToolbox, FaBook, FaInfoCircle, FaShieldAlt, FaPhone, FaClock, FaStopwatch, FaFire, FaHome } from "react-icons/fa";
 import ActiveThreatsBanner from "../components/patrol/ActiveThreatsBanner";
 import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import SoundToggle from "../components/SoundToggle";
 import ThemeToggle from "../components/ThemeToggle";
 import AppNotificationBell from "../components/layout/AppNotificationBell";
@@ -43,7 +43,10 @@ import { DEFAULT_PATROL_ZONE, formatPatrolPlaceLabel } from '../config/neighborh
 import { adaptivePollIntervalMs, subscribeDataBudgetHints } from '../utils/dataSaverProfile';
 import startPatrolIcon from '../assets/start-patrol-icon.png';
 import appMark from '../assets/app-mark.png';
-import BrandedLoader from '../components/layout/BrandedLoader';
+import Button from '../components/ui/Button';
+import ErrorState from '../components/ui/ErrorState';
+import IconButton from '../components/ui/IconButton';
+import Skeleton from '../components/ui/Skeleton';
 import PageSkeleton from '../components/layout/PageSkeleton';
 import AreaWeatherChip from '../components/layout/AreaWeatherChip';
 import { canAccessAdminPanel, canReviewFeedback, isStaffForModerationAlerts } from '../auth/staffRoles';
@@ -805,11 +808,12 @@ export default function Dashboard() {
 
   if (fetchError && !activePatrol && loadingPatrol === false) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">Error loading patrol  {fetchError}</p>
-          <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-4 py-2 rounded">Retry</button>
-        </div>
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <ErrorState
+          title="Error loading patrol"
+          message={fetchError}
+          onRetry={() => window.location.reload()}
+        />
       </div>
     );
   }
@@ -864,9 +868,9 @@ export default function Dashboard() {
           <div className="px-5 py-6 sm:px-8 sm:py-7">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex items-start space-x-4 min-w-0">
-                <button type="button" onClick={() => navigate('/profile')} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-full shrink-0">
+                <button type="button" onClick={() => navigate('/profile')} aria-label={`Open profile for ${firstName}`} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-full shrink-0">
                   {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="Avatar" className="h-16 w-16 rounded-full object-cover ring-2 ring-white dark:ring-gray-300 shadow-md" />
+                    <img src={user.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover ring-2 ring-white dark:ring-gray-300 shadow-md" />
                   ) : (
                     <div className="h-16 w-16 rounded-full bg-white dark:bg-gray-200 text-teal-600 dark:text-teal-800 flex items-center justify-center text-2xl font-bold shadow-md">
                       {initials}
@@ -896,9 +900,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="flex space-x-3 shrink-0">
-                <button type="button" onClick={refreshData} className="p-2 rounded-full bg-white/20 hover:bg-white/30 motion-safe:transition" title="Refresh data">
-                  <FaSync className="w-4 h-4 text-white" />
-                </button>
+                <IconButton label="Refresh data" onClick={refreshData} className="bg-white/20 text-white hover:bg-white/30 motion-safe:transition">
+                  <FaSync className="w-4 h-4" aria-hidden />
+                </IconButton>
                 <SoundToggle />
                 <AppNotificationBell variant="brand" />
                 <ThemeToggle />
@@ -909,13 +913,16 @@ export default function Dashboard() {
 
         {/* Currently on Patrol (others) */}
         {fetchAllError ? (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-center mb-6">
-            <p className="text-red-700 dark:text-red-300 mb-2">Error loading active patrols: {fetchAllError}</p>
-            <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm">Retry</button>
+          <div className="mb-6">
+            <ErrorState
+              title="Error loading active patrols"
+              message={fetchAllError}
+              onRetry={refreshData}
+            />
           </div>
         ) : fetchAllLoading ? (
-          <div className="mb-6 flex justify-center rounded-2xl border border-amber-200/80 bg-amber-50/90 py-8 dark:border-amber-800/60 dark:bg-amber-950/20">
-            <BrandedLoader message="Loading active patrols…" size="md" />
+          <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-6 py-8 dark:border-amber-800/60 dark:bg-amber-950/20">
+            <Skeleton lines={4} />
           </div>
         ) : allActivePatrols.length > 0 && (
           <div className="mb-8 rounded-2xl border border-green-200 dark:border-green-800 bg-green-50/90 dark:bg-green-950/25 shadow-soft overflow-hidden">
@@ -1052,23 +1059,14 @@ export default function Dashboard() {
               
               <div className="flex items-center gap-3">
                 {activePatrol && canDoPatrolOps && (
-                  <button
-                    type="button"
-                    onClick={() => handleCheckOut(false)}
-                    className="btn bg-red-500 text-white hover:bg-red-600 focus:ring-red-500 shadow-lg shadow-red-500/30"
-                  >
-                    <FaStop className="mr-2" /> End Patrol
-                  </button>
+                  <Button type="button" variant="danger" onClick={() => handleCheckOut(false)}>
+                    <FaStop className="mr-2" aria-hidden /> End Patrol
+                  </Button>
                 )}
                 {!activePatrol && canDoPatrolOps && (
-                  <button
-                    type="button"
-                    onClick={handleCheckIn}
-                    disabled={loadingPatrol}
-                    className="btn bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500 shadow-lg shadow-emerald-500/30"
-                  >
-                    <FaPlay className="mr-2" /> Start Patrol
-                  </button>
+                  <Button type="button" variant="success" onClick={handleCheckIn} disabled={loadingPatrol}>
+                    <FaPlay className="mr-2" aria-hidden /> Start Patrol
+                  </Button>
                 )}
               </div>
             </div>

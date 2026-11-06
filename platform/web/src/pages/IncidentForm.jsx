@@ -4,7 +4,7 @@ import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
 import { fetchInChunks } from "../utils/fetchInChunks";
 import { FaArrowLeft, FaCamera, FaExclamationTriangle, FaCheckCircle, FaTimes, FaCar, FaTools, FaFileAlt, FaEye, FaUserSecret, FaSearch, FaLink } from "react-icons/fa";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import EvidenceSection from "../components/evidence/EvidenceSection";
 import {
   analyzeEvidenceForMatches,
@@ -16,7 +16,10 @@ import ProfileLinkingSection from "../components/intelligence/ProfileLinkingSect
 import WitnessMemberPicker from "../components/intelligence/WitnessMemberPicker";
 import { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceList";
 import ThemeToggle from "../components/ThemeToggle";
-import BrandedLoader from "../components/layout/BrandedLoader";
+import Button from "../components/ui/Button";
+import ErrorState from "../components/ui/ErrorState";
+import FormField from "../components/ui/FormField";
+import Skeleton from "../components/ui/Skeleton";
 import { canStaffManageIncidents } from "../auth/staffRoles";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import { watchDayStamp, parsePatrolTime } from "../utils/watchTime";
@@ -195,72 +198,69 @@ const INITIAL_FORM = {
 function SectionCard({ title, children }) {
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{title}</h2>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
       {children}
     </div>
   );
 }
 
-function FormInput({ label, name, type = "text", required, ...props }) {
+function FormInput({ label, name, type = "text", required, hint, ...props }) {
+  const id = props.id || `incident-${name}`;
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
+    <FormField id={id} label={label} required={required} hint={hint}>
       <input
+        id={id}
         type={type}
         name={name}
         required={required}
-        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+        className="input border w-full"
         {...props}
       />
-    </div>
+    </FormField>
   );
 }
 
-function FormTextarea({ label, name, required, rows = 4, ...props }) {
+function FormTextarea({ label, name, required, rows = 4, hint, ...props }) {
+  const id = props.id || `incident-${name}`;
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
+    <FormField id={id} label={label} required={required} hint={hint}>
       <textarea
+        id={id}
         name={name}
         required={required}
         rows={rows}
-        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition resize-y"
+        className="input border w-full resize-y"
         {...props}
       />
-    </div>
+    </FormField>
   );
 }
 
-function FormSelect({ label, name, required, options, ...props }) {
+function FormSelect({ label, name, required, options, hint, ...props }) {
+  const id = props.id || `incident-${name}`;
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
+    <FormField id={id} label={label} required={required} hint={hint}>
       <select
+        id={id}
         name={name}
         required={required}
-        className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+        className="input border w-full"
         {...props}
       >
-        <option value="" className="dark:bg-gray-700">Select {label.toLowerCase()}</option>
+        <option value="">Select {String(label || "an option").toLowerCase()}</option>
         {options.map(opt => (
-          <option key={opt} value={opt} className="dark:bg-gray-700">{opt}</option>
+          <option key={opt} value={opt}>{opt}</option>
         ))}
       </select>
-    </div>
+    </FormField>
   );
 }
 
 function AlertBox({ message }) {
   return (
-    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6 flex items-start gap-3">
-      <FaExclamationTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-      <p className="text-sm text-red-700 dark:text-red-300">{message}</p>
+    <div className="bg-danger-light border border-danger rounded-xl p-4 mb-6 flex items-start gap-3" role="alert">
+      <FaExclamationTriangle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" aria-hidden />
+      <p className="text-sm text-danger-foreground">{message}</p>
     </div>
   );
 }
@@ -303,6 +303,7 @@ export default function IncidentForm() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [editLoading, setEditLoading] = useState(isEditMode);
   const [editLoadError, setEditLoadError] = useState(null);
+  const [editAttempt, setEditAttempt] = useState(0);
   const lastCreatedProfileToastId = useRef(null);
   const submitLockRef = useRef(false);
 
@@ -414,7 +415,9 @@ export default function IncidentForm() {
         if (!cancelled) {
           console.error("Edit load failed:", err);
           setEditLoadError(err.message || "Failed to load incident");
-          toast.error("Could not load incident for editing.");
+          toast.error("Could not load incident for editing.", {
+            retry: () => setEditAttempt((attempt) => attempt + 1),
+          });
         }
       } finally {
         if (!cancelled) setEditLoading(false);
@@ -423,7 +426,7 @@ export default function IncidentForm() {
     return () => {
       cancelled = true;
     };
-  }, [isEditMode, editIncidentId, user?.id, user?.role, navigate]);
+  }, [isEditMode, editIncidentId, user?.id, user?.role, navigate, editAttempt]);
 
   useEffect(() => {
     const st = location.state;
@@ -893,20 +896,24 @@ export default function IncidentForm() {
 
   if (isEditMode && editLoading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-        <BrandedLoader message="Loading incident…" size="lg" />
+      <div className="flex min-h-screen flex-col justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-6 dark:from-gray-900 dark:to-gray-800">
+        <Skeleton lines={8} className="mx-auto w-full max-w-xl" />
       </div>
     );
   }
 
   if (isEditMode && editLoadError) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 px-4 gap-4">
-        <p className="text-red-600 dark:text-red-400 text-center">{editLoadError}</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-br from-gray-50 to-gray-100 px-4 dark:from-gray-900 dark:to-gray-800">
+        <ErrorState
+          title="Could not load this incident"
+          message={editLoadError}
+          onRetry={() => setEditAttempt((attempt) => attempt + 1)}
+        />
         <button
           type="button"
           onClick={() => navigate("/incidents")}
-          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-xl text-sm font-medium"
+          className="min-h-11 rounded-xl bg-gray-200 px-4 py-2 text-sm font-medium dark:bg-gray-700"
         >
           Back to incidents
         </button>
@@ -924,7 +931,7 @@ export default function IncidentForm() {
             <button
               type="button"
               onClick={() => navigate(isEditMode ? `/incidents/${editIncidentId}` : "/dashboard")}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm font-medium"
+              className="inline-flex min-h-11 items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm font-medium"
             >
               <FaArrowLeft className="w-3 h-3" />
               {isEditMode ? "Back" : "Dashboard"}
@@ -959,6 +966,7 @@ export default function IncidentForm() {
               label="Location"
               name="location"
               required
+              autoComplete="street-address"
               placeholder="e.g., Lot 158 Kragga Kamma Road"
               value={form.location}
               onChange={handleChange}
@@ -985,21 +993,24 @@ export default function IncidentForm() {
             <SectionCard title="Suspect Information (optional)">
               <div className="space-y-3">
                 <FormInput
+                  label="Suspect name"
                   name="suspectName"
-                  placeholder="Suspect name"
+                  placeholder="Name, if known"
                   value={form.suspectName}
                   onChange={handleChange}
                 />
                 <FormTextarea
+                  label="Suspect description"
                   name="suspectDescription"
-                  placeholder="Suspect description (clothing, height, etc.)"
+                  placeholder="Clothing, height, and other details"
                   rows={2}
                   value={form.suspectDescription}
                   onChange={handleChange}
                 />
                 <FormInput
+                  label="Vehicle"
                   name="vehicleInfo"
-                  placeholder="Vehicle description / registration"
+                  placeholder="Description or registration"
                   value={form.vehicleInfo}
                   onChange={handleChange}
                 />
@@ -1008,8 +1019,9 @@ export default function IncidentForm() {
 
             <SectionCard title="SAPS Information (optional)">
               <FormInput
+                label="SAPS case number"
                 name="sapsCaseNumber"
-                placeholder="SAPS case number"
+                placeholder="Case number"
                 value={form.sapsCaseNumber}
                 onChange={handleChange}
               />
@@ -1090,22 +1102,16 @@ export default function IncidentForm() {
             </SectionCard>
 
             <div className="pt-4">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition shadow-sm flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    {isEditMode ? "Saving…" : "Submitting…"}
-                  </>
-                ) : isEditMode ? (
-                  "Save changes"
-                ) : (
-                  "Submit Incident Report"
-                )}
-              </button>
+              <p className="sr-only" aria-live="polite">
+                {isSubmitting ? (isEditMode ? "Saving incident" : "Submitting incident report") : ""}
+              </p>
+              <Button type="submit" loading={isSubmitting} className="w-full">
+                {isSubmitting
+                  ? (isEditMode ? "Saving…" : "Submitting…")
+                  : isEditMode
+                    ? "Save changes"
+                    : "Submit Incident Report"}
+              </Button>
             </div>
           </form>
         </div>

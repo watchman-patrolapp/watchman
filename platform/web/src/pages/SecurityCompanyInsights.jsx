@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { supabase } from "../supabase/client";
 import PageHeader from "../components/layout/PageHeader";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";

@@ -47,6 +47,31 @@ export default {
         wide: '0.025em',
       },
       colors: {
+        // Brand and semantic tokens follow index.css variables so .dark swaps them.
+        primary: {
+          50: 'var(--color-primary-50)',
+          100: 'var(--color-primary-100)',
+          500: 'var(--color-primary-500)',
+          600: 'var(--color-primary-600)',
+          700: 'var(--color-primary-700)',
+          800: 'var(--color-primary-800)',
+          900: 'var(--color-primary-900)',
+          DEFAULT: 'var(--color-primary-700)',
+        },
+        surface: {
+          page: 'var(--color-bg-page)',
+          secondary: 'var(--color-bg-secondary)',
+          card: 'var(--color-bg-card)',
+          hover: 'var(--color-bg-card-hover)',
+          inset: 'var(--color-bg-inset)',
+          input: 'var(--color-bg-input)',
+        },
+        text: {
+          primary: 'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          tertiary: 'var(--color-text-tertiary)',
+          link: 'var(--color-text-link)',
+        },
         // Warm stone neutrals (light mode) — dark UI still uses 400–950
         gray: {
           50: '#F5F3EF',
@@ -68,6 +93,9 @@ export default {
           500: '#22c55e',
           600: '#16a34a',
           700: '#15803d',
+          DEFAULT: 'var(--color-success)',
+          light: 'var(--color-success-light)',
+          foreground: 'var(--color-success-text)',
         },
         warning: {
           50: '#fffbeb',
@@ -75,7 +103,25 @@ export default {
           500: '#f59e0b',
           600: '#d97706',
           700: '#b45309',
+          DEFAULT: 'var(--color-warning)',
+          light: 'var(--color-warning-light)',
+          foreground: 'var(--color-warning-text)',
         },
+        danger: {
+          DEFAULT: 'var(--color-danger)',
+          light: 'var(--color-danger-light)',
+          foreground: 'var(--color-danger-text)',
+        },
+        info: {
+          DEFAULT: 'var(--color-info)',
+          light: 'var(--color-info-light)',
+          foreground: 'var(--color-info-text)',
+        },
+      },
+      borderColor: {
+        subtle: 'var(--color-border-subtle)',
+        DEFAULT: 'var(--color-border-default)',
+        strong: 'var(--color-border-strong)',
       },
       boxShadow: {
         'soft': '0 2px 15px -3px rgba(60, 50, 35, 0.07), 0 10px 20px -2px rgba(60, 50, 35, 0.04)',

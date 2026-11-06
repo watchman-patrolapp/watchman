@@ -8,7 +8,7 @@ import { canAccessPlatformConsole } from "../auth/platformRoles";
 import { canPreviewResidentHome, canManageEmergencyDirectory, canPostAreaBroadcast, canUseHouseholdMode, isGlobalAppRole, isHouseholdModeRole, canReviewPatrollerRequests, normalizeAppRole } from "../auth/roleMatrix";
 import { supabase } from "../supabase/client";
 import { useSupabaseQuery } from "../hooks/useSupabaseQuery";
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import { FaCar, FaTrash, FaArrowLeft, FaFileExcel, FaPrint, FaFilePdf, FaUsers, FaClock, FaShieldAlt, FaTrophy, FaWalking, FaBicycle, FaMapMarkerAlt, FaPhone, FaStopwatch, FaToolbox } from "react-icons/fa";
 import VehicleIcon, { COLOR_HEX, normalizeVehicleType, PatrolInfoIcon } from '../components/VehicleIcon';
 import LivePatrolMap from '../components/LivePatrolMap';

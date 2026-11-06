@@ -5,7 +5,10 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useAuth } from "../auth/useAuth";
 import { deleteIncidentFully } from "../utils/deleteIncident";
 import ThemeToggle from "../components/ThemeToggle";
-import BrandedLoader from "../components/layout/BrandedLoader";
+import Button from "../components/ui/Button";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
+import Skeleton from "../components/ui/Skeleton";
 import { 
   FaArrowLeft, 
   FaPrint,
@@ -21,7 +24,7 @@ import {
   FaEdit,
   FaHistory,
 } from "react-icons/fa";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import StructuredEvidenceList, { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceList";
 import IncidentUpdateCard from "../components/incident/IncidentUpdateCard";
 import { INCIDENT_SECTION_LABELS } from "../constants/incidentSectionUpdates";
@@ -154,15 +157,6 @@ function Badge({ children, variant = 'default' }) {
   );
 }
 
-function EmptyState({ message }) {
-  return (
-    <div className="text-center py-12">
-      <FaExclamationTriangle className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-      <p className="text-gray-500 dark:text-gray-400">{message}</p>
-    </div>
-  );
-}
-
 function InfoRow({ label, value, icon: Icon }) {
   if (!value) return null;
   return (
@@ -214,7 +208,7 @@ function IncidentCard({ incident, showAdminDelete, onAdminDelete, deleteBusyId, 
           <button
             type="button"
             onClick={() => onOpenDetail(incident.id)}
-            className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+            className="inline-flex min-h-11 items-center gap-1 px-3 py-1 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
           >
             Details
             <FaChevronRight className="w-3 h-3" />
@@ -223,7 +217,7 @@ function IncidentCard({ incident, showAdminDelete, onAdminDelete, deleteBusyId, 
             <button
               type="button"
               onClick={() => onAdminEdit(incident.id)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-3 py-1 text-xs font-medium text-white shadow-[inset_0_0_0_2px_var(--color-primary-edge)] transition hover:bg-primary-800"
             >
               <FaEdit className="w-3 h-3" />
               Edit
@@ -234,7 +228,7 @@ function IncidentCard({ incident, showAdminDelete, onAdminDelete, deleteBusyId, 
               type="button"
               disabled={deleting}
               onClick={() => onAdminDelete(incident.id)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg bg-danger text-white hover:bg-danger disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               <FaTrash className="w-3 h-3" />
               {deleting ? "Deleting…" : "Delete (admin)"}
@@ -432,14 +426,6 @@ export default function IncidentList() {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, sortedIncidents.length]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-        <BrandedLoader message="Loading incidents…" size="lg" />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
@@ -447,10 +433,11 @@ export default function IncidentList() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <button
+            type="button"
             onClick={() => navigate("/dashboard")}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm font-medium"
+            className="inline-flex min-h-11 items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 transition text-sm font-medium"
           >
-            <FaArrowLeft className="w-3 h-3" />
+            <FaArrowLeft className="w-3 h-3" aria-hidden />
             Dashboard
           </button>
           
@@ -463,7 +450,7 @@ export default function IncidentList() {
             <button
               type="button"
               onClick={() => navigate("/incidents/print")}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
+              className="inline-flex min-h-11 items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
             >
               <FaPrint className="w-4 h-4" />
               Print
@@ -471,41 +458,35 @@ export default function IncidentList() {
             <button
               type="button"
               onClick={() => navigate("/incidents/print?intent=pdf")}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl transition text-sm font-medium shadow-sm"
+              className="inline-flex min-h-11 items-center gap-2 px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl transition text-sm font-medium shadow-sm"
             >
               <FaFilePdf className="w-4 h-4" />
               Save as PDF
             </button>
-            <button
-              type="button"
-              onClick={() => navigate("/incident/new")}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition text-sm font-medium shadow-sm"
-            >
-              <FaPlus className="w-4 h-4" />
+            <Button type="button" onClick={() => navigate("/incident/new")}>
+              <FaPlus className="mr-2 h-4 w-4" aria-hidden />
               Report
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6 mb-6 text-center">
-            <FaExclamationTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <p className="text-red-700 dark:text-red-300 mb-3">Failed to load incidents</p>
-            <button
-              onClick={retryIncidents}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition"
-            >
-              <FaSync className="w-4 h-4" />
-              Retry
-            </button>
+          <div className="mb-6">
+            <ErrorState title="Failed to load incidents" message={error} onRetry={retryIncidents} />
           </div>
         )}
 
         {/* Content */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-          {incidents.length === 0 ? (
-            <EmptyState message="No incidents reported yet." />
+          {loading ? (
+            <Skeleton lines={6} />
+          ) : incidents.length === 0 ? (
+            <EmptyState
+              title="No incidents reported yet."
+              message="Approved reports from your neighbourhood will show up here."
+              icon={FaExclamationTriangle}
+            />
           ) : (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-gray-100 dark:border-gray-700">
@@ -513,11 +494,12 @@ export default function IncidentList() {
                   {incidents.length} approved report{incidents.length === 1 ? "" : "s"}
                   {incidentsQuery.hasNextPage ? " loaded" : ""}
                 </p>
-                <label className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+                <label htmlFor="incident-sort" className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
                   <span className="text-gray-600 dark:text-gray-400 whitespace-nowrap font-medium">
                     Sort by
                   </span>
                   <select
+                    id="incident-sort"
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
                     className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent min-w-[min(100%,20rem)]"
@@ -580,7 +562,7 @@ export default function IncidentList() {
                     type="button"
                     onClick={() => void incidentsQuery.fetchNextPage()}
                     disabled={incidentsQuery.isFetchingNextPage}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl text-sm font-medium disabled:opacity-60"
+                    className="inline-flex min-h-11 items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl text-sm font-medium disabled:opacity-60"
                   >
                     <FaSync className={`w-3.5 h-3.5 ${incidentsQuery.isFetchingNextPage ? "animate-spin" : ""}`} />
                     {incidentsQuery.isFetchingNextPage ? "Loading more…" : "Load more"}

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { supabase } from "../../supabase/client";
 import { useAuth } from "../../auth/useAuth";
 import { getWorkingOrganizationId } from "../../utils/organizationScope";

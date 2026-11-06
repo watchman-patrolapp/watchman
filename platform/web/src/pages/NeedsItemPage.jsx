@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import PageHeader from "../components/layout/PageHeader";
 import ThemeToggle from "../components/ThemeToggle";
 import NeedCard, { Chip } from "../components/needs/NeedCard";

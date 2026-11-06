@@ -29,7 +29,7 @@ import {
   GEO_ERR_TAB_BACKGROUND,
 } from '../utils/getChatGeolocation';
 import { QuickTemplates } from './QuickTemplates'; // ✅ Import external component
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import { devLog } from '../../utils/devLog';
 
 // ============================================================================

@@ -5,7 +5,7 @@ import { FaTimes, FaUserSecret, FaExternalLinkAlt, FaUpload } from 'react-icons/
 import { supabase } from '../../supabase/client';
 import { useAuth } from '../../auth/useAuth';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import CriminalPhotoImg from './CriminalPhotoImg';
 
 const RISK_OPTIONS = [

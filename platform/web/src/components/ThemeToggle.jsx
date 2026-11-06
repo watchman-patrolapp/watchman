@@ -20,7 +20,7 @@ const VARIANT_CLASS = {
  * @param {'brand' | 'surface' | 'toolbar' | 'overlay'} variant
  * @param {string} [className] — appended (e.g. extra layout)
  */
-export default function ThemeToggle({ variant = 'brand', className = '' }) {
+export default function ThemeToggle({ variant = 'brand', className = '', labelled = false }) {
   const [dark, setDark] = useState(() => getInitialDark());
 
   useEffect(() => {
@@ -43,19 +43,26 @@ export default function ThemeToggle({ variant = 'brand', className = '' }) {
   }, []);
 
   const base = VARIANT_CLASS[variant] || VARIANT_CLASS.brand;
-  const iconClass =
-    variant === 'toolbar' ? 'w-3.5 h-3.5' : variant === 'overlay' ? 'w-4 h-4' : 'w-5 h-5';
+  const iconClass = labelled
+    ? 'w-4 h-4'
+    : variant === 'toolbar'
+      ? 'w-3.5 h-3.5'
+      : variant === 'overlay'
+        ? 'w-4 h-4'
+        : 'w-5 h-5';
+  const actionLabel = dark ? 'Light mode' : 'Dark mode';
 
   return (
     <button
       type="button"
       onClick={() => setDark((prev) => !prev)}
-      className={`${base} ${className}`.trim()}
+      className={`${base} ${labelled ? 'inline-flex min-h-11 items-center gap-2 px-3' : 'inline-flex min-h-11 min-w-11 items-center justify-center'} ${className}`.trim()}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       aria-pressed={dark}
       title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {dark ? <FaSun className={iconClass} /> : <FaMoon className={iconClass} />}
+      {dark ? <FaSun className={iconClass} aria-hidden /> : <FaMoon className={iconClass} aria-hidden />}
+      {labelled ? <span className="whitespace-nowrap text-sm font-medium">{actionLabel}</span> : null}
     </button>
   );
 }

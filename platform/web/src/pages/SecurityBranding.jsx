@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { FaCog, FaImage, FaUpload } from "react-icons/fa";
 import PageHeader from "../components/layout/PageHeader";
 import ThemeToggle from "../components/ThemeToggle";

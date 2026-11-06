@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FaPlay, FaPause, FaSpinner, FaRedo, FaExclamationTriangle, FaUpload } from 'react-icons/fa';
-import toast from 'react-hot-toast';
+import toast from '../../../utils/notify';
 
 export const VoicePlayer = React.memo(function VoicePlayer({ 
   src, 

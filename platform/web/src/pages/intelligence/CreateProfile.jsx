@@ -18,7 +18,7 @@ import {
   CRIMINAL_JUSTICE_STATUS_OPTIONS,
   LEGAL_RECORD_INTELLIGENCE_NOTE,
 } from '../../data/intelligenceTaxonomy';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import { FaPlus, FaTimes, FaUpload, FaArrowLeft, FaExpand } from 'react-icons/fa';
 import ThemeToggle from '../../components/ThemeToggle';
 import PatrollerPhotoPreview from '../../components/patrol/PatrollerPhotoPreview';

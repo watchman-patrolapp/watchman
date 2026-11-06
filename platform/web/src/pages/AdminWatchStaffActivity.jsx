@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaFileExcel, FaHistory, FaSearch } from "react-icons/fa";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import { useAuth } from "../auth/useAuth";

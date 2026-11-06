@@ -26,6 +26,7 @@
     "android:bundle:release:unix": "cd ../android && ./gradlew bundleRelease",
     "sounds:placeholders": "node scripts/generate-placeholder-sounds.mjs",
     "lint": "eslint .",
+    "contrast": "node scripts/contrast-report.mjs",
     "preview": "vite preview",
     "test:unit": "node --test src/utils/__tests__/*.test.js src/auth/__tests__/*.test.js src/chat/realtime/__tests__/*.test.js src/geo/__tests__/*.test.js"
   },

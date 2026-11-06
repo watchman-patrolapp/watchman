@@ -1,5 +1,5 @@
 import { useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { CAPABILITIES } from "../../auth/capabilities";
 import { capabilityErrorMessage, grantCapability } from "../../utils/orgCapabilities";
 

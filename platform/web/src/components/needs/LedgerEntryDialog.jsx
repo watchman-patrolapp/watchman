@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { uploadCommunityImageWithProgress } from "../../utils/uploadWithProgress";
 import {
   formatEstPrice,

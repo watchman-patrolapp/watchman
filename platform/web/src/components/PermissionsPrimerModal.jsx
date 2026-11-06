@@ -8,7 +8,7 @@ import {
   FaCheck,
   FaArrowRight,
 } from 'react-icons/fa';
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import {
   permissionsPrimerWasDismissed,
   dismissPermissionsPrimer,

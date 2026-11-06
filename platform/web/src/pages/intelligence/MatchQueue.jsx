@@ -4,7 +4,7 @@ import { supabase } from '../../supabase/client';
 import { matchQueueConfidenceToScore } from '../../utils/intelligenceConfidence';
 import { FaUserSecret, FaExclamationTriangle, FaEye, FaHistory, FaCheck, FaTimes, FaArrowLeft } from 'react-icons/fa';
 import ThemeToggle from '../../components/ThemeToggle';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import BrandedLoader from '../../components/layout/BrandedLoader';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { belongsToActiveOrganization, shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';

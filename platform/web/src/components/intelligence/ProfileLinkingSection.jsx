@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../supabase/client';
 import QuickCreateProfileDrawer from './QuickCreateProfileDrawer';
 import { FaSearch, FaUserSecret, FaEye, FaTimes, FaExternalLinkAlt } from 'react-icons/fa';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import {
   INCIDENT_REPORT_CONNECTION_TYPE_OPTIONS,
   PROFILE_INCIDENT_CONFIDENCE_EXPLAINER,

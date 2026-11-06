@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import {
   FaAmbulance,
   FaBolt,

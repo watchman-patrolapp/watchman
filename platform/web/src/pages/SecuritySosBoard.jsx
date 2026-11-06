@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "../utils/notify";
 import PageHeader from "../components/layout/PageHeader";
 import ThemeToggle from "../components/ThemeToggle";
 import {

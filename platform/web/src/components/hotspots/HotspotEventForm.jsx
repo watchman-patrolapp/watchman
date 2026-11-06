@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 import HotspotPinPicker from './HotspotPinPicker';
 import { HOTSPOT_KINDS } from '../../utils/hotspotKinds';
 import { insertHotspotEvent, updateHotspotEvent } from '../../utils/hotspotService';

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { FaArrowLeft, FaEye, FaEyeSlash } from "react-icons/fa";
 import { useAuth } from "../auth/useAuth";
 import {
@@ -10,6 +10,9 @@ import {
 } from "../auth/registerTracks";
 import { EMERGENCY_CONTACT_RELATIONSHIPS } from "../utils/emergencyContact";
 import AuthShell from "../components/layout/AuthShell";
+import Button from "../components/ui/Button";
+import FormField, { FieldErrorContext } from "../components/ui/FormField";
+import IconButton from "../components/ui/IconButton";
 import RegisterRolePicker from "../components/register/RegisterRolePicker";
 import RegisterVehicleFields from "../components/register/RegisterVehicleFields";
 import { setPreferSessionAuth } from "../supabase/authStorage";
@@ -21,19 +24,35 @@ import {
   getLightMobilityDefaultModel,
 } from "../utils/vehicleTypeConstants";
 
-function Field({ id, label, required, hint, children }) {
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-        {label}
-        {required ? <span className="text-red-500" aria-hidden> *</span> : (
-          <span className="text-gray-400 font-normal"> (optional)</span>
-        )}
-      </label>
-      {children}
-      {hint ? <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{hint}</p> : null}
-    </div>
-  );
+function Field(props) {
+  return <FormField {...props} />;
+}
+
+function fieldIdForValidationMessage(message) {
+  const rules = [
+    ["Name is required.", "reg-first-name"],
+    ["Surname is required.", "reg-last-name"],
+    ["Phone number is required.", "reg-phone"],
+    ["Enter a valid phone number", "reg-phone"],
+    ["Email address is required.", "reg-email"],
+    ["Enter a valid email address.", "reg-email"],
+    ["Password should be at least 6 characters", "reg-password"],
+    ["Passwords do not match.", "reg-confirm-password"],
+    ["Home address is required.", "reg-address"],
+    ["Please choose a suburb", "reg-neighborhood"],
+    ["Emergency contact name is required.", "reg-emergency-first-name"],
+    ["Emergency contact surname is required.", "reg-emergency-last-name"],
+    ["Emergency contact phone is required.", "reg-emergency-phone"],
+    ["Enter a valid emergency contact number", "reg-emergency-phone"],
+    ["Please choose a security company", "reg-security-company"],
+    ["Company name is required.", "reg-company-name"],
+    ["PSIRA or company registration", "reg-company-reg"],
+    ["Company address is required.", "reg-company-address"],
+    ["Neighborhood watch name is required.", "reg-watch-name"],
+    ["Watch area or suburb is required.", "reg-watch-area"],
+  ];
+  const hit = rules.find(([prefix]) => message.startsWith(prefix));
+  return hit ? hit[1] : "";
 }
 
 function validateVehicleDetails(form) {
@@ -164,6 +183,7 @@ function Register() {
 
   const [form, setForm] = useState(emptyRegisterForm);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -261,6 +281,7 @@ function Register() {
       }));
       return;
     }
+    setFieldErrors({});
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
@@ -273,11 +294,14 @@ function Register() {
     e.preventDefault();
     if (loading) return;
     setError("");
+    setFieldErrors({});
     if (!track) return;
 
     const baseError = validateRegisterForm(track, form);
     if (baseError) {
       setError(baseError);
+      const fieldId = fieldIdForValidationMessage(baseError);
+      setFieldErrors(fieldId ? { [fieldId]: baseError } : {});
       return;
     }
     if (track.requiresVehicle) {
@@ -339,9 +363,11 @@ function Register() {
 
   return (
     <AuthShell title={`Register · ${track.label}`} wide>
+      <FieldErrorContext.Provider value={fieldErrors}>
       <form
         onSubmit={handleSubmit}
         className="card w-full max-w-xl p-6 sm:p-8 space-y-5"
+        noValidate
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -407,6 +433,7 @@ function Register() {
               id="reg-phone"
               name="phone"
               type="tel"
+              inputMode="tel"
               autoComplete="tel"
               placeholder="e.g. 082 123 4567"
               value={form.phone}
@@ -420,6 +447,7 @@ function Register() {
               id="reg-email"
               name="email"
               type="email"
+              inputMode="email"
               autoComplete="email"
               placeholder="you@example.com"
               value={form.email}
@@ -438,18 +466,20 @@ function Register() {
                 placeholder="At least 6 characters"
                 value={form.password}
                 onChange={handleChange}
-                className="input border w-full pr-10"
+                className="input border w-full pr-12"
                 required
                 minLength={6}
+                aria-invalid={fieldErrors["reg-password"] ? true : undefined}
+                aria-describedby={fieldErrors["reg-password"] ? "reg-password-error" : undefined}
               />
-              <button
-                type="button"
+              <IconButton
+                label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
                 onClick={() => setShowPassword((value) => !value)}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute inset-y-0 right-0 text-text-secondary hover:text-text-primary"
               >
                 {showPassword ? <FaEyeSlash className="w-4 h-4" aria-hidden /> : <FaEye className="w-4 h-4" aria-hidden />}
-              </button>
+              </IconButton>
             </div>
           </Field>
           <Field id="reg-confirm-password" label="Confirm password" required>
@@ -462,18 +492,20 @@ function Register() {
                 placeholder="Re-enter password"
                 value={form.confirmPassword}
                 onChange={handleChange}
-                className="input border w-full pr-10"
+                className="input border w-full pr-12"
                 required
                 minLength={6}
+                aria-invalid={fieldErrors["reg-confirm-password"] ? true : undefined}
+                aria-describedby={fieldErrors["reg-confirm-password"] ? "reg-confirm-password-error" : undefined}
               />
-              <button
-                type="button"
+              <IconButton
+                label={showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"}
+                aria-pressed={showConfirmPassword}
                 onClick={() => setShowConfirmPassword((value) => !value)}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"
-                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                className="absolute inset-y-0 right-0 text-text-secondary hover:text-text-primary"
               >
                 {showConfirmPassword ? <FaEyeSlash className="w-4 h-4" aria-hidden /> : <FaEye className="w-4 h-4" aria-hidden />}
-              </button>
+              </IconButton>
             </div>
           </Field>
         </section>
@@ -788,6 +820,8 @@ function Register() {
                 id="reg-emergency-phone"
                 name="emergencyContactPhone"
                 type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 placeholder="e.g. 082 123 4567"
                 value={form.emergencyContactPhone}
                 onChange={handleChange}
@@ -893,7 +927,10 @@ function Register() {
               className="mt-0.5 w-4 h-4"
               required
             />
-            <span>I consent to POPIA-compliant processing of my personal information for neighborhood watch operations.</span>
+            <span>
+              I consent to POPIA-compliant processing of my personal information for neighborhood watch operations.{" "}
+              <Link to="/privacy" className="font-medium text-text-link underline">Privacy policy</Link>
+            </span>
           </label>
           <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
             <input
@@ -903,7 +940,9 @@ function Register() {
               className="mt-0.5 w-4 h-4"
               required
             />
-            <span>I accept the platform terms and community conduct rules.</span>
+            <span>
+              I accept the <Link to="/terms" className="font-medium text-text-link underline">platform terms</Link> and community conduct rules.
+            </span>
           </label>
         </div>
 
@@ -911,16 +950,16 @@ function Register() {
           <p className="text-red-600 dark:text-red-400 text-sm text-center" role="alert">{error}</p>
         ) : null}
 
-        <button
+        <p className="sr-only" aria-live="polite">{loading ? "Creating your account" : ""}</p>
+
+        <Button
           type="submit"
-          disabled={
-            loading ||
-            (track.requiresNeighborhood && (signupOptionsLoading || areas.length === 0))
-          }
-          className="btn-primary w-full disabled:opacity-50"
+          loading={loading}
+          disabled={track.requiresNeighborhood && (signupOptionsLoading || areas.length === 0)}
+          className="w-full"
         >
           {loading ? "Registering…" : `Register as ${track.label}`}
-        </button>
+        </Button>
 
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Already registered?{" "}
@@ -933,6 +972,7 @@ function Register() {
           </button>
         </p>
       </form>
+      </FieldErrorContext.Provider>
     </AuthShell>
   );
 }

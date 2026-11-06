@@ -8,7 +8,7 @@ import {
   FaEdit,
   FaTimes,
 } from 'react-icons/fa';
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import ThemeToggle from '../components/ThemeToggle';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { useAuth } from '../auth/useAuth';

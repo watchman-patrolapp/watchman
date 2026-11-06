@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FaEye, FaMapMarkerAlt } from 'react-icons/fa';
 import { useAuth } from '../../auth/useAuth';
 import { supabase } from '../../supabase/client';
-import toast from 'react-hot-toast';
+import toast from '../../utils/notify';
 
 export default function QuickSightingButton({ profileId, profileName }) {
   const { user } = useAuth();

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import toast from "../../utils/notify";
 import { FaArrowLeft, FaArrowRight, FaCheckCircle, FaExclamationCircle, FaSpinner, FaStar, FaTimes } from "react-icons/fa";
 import { uploadCommunityImageWithProgress } from "../../utils/uploadWithProgress";
 import {

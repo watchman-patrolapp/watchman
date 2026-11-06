@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import toast from '../utils/notify';
 import { FaPrint, FaFilePdf } from 'react-icons/fa';
 import { supabase } from '../supabase/client';
 import { downloadDomAsPdf } from '../utils/downloadDomAsPdf';
