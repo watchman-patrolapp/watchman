@@ -1,7 +1,11 @@
 -- Store object paths instead of public storage URLs.
 -- Files are not downloaded or uploaded. This only rewrites text that already
--- points at an object. Apply after the signing app is deployed and after
--- 20261106210000. Apply 20261106220000 (the bucket flip) last.
+-- points at an object. Safe to re-run: functions are CREATE OR REPLACE, and
+-- each UPDATE only touches values that still look like URLs.
+--
+-- This file does not read anything created by 20261106210000. That earlier
+-- file is the read policies and the copy registry; apply it before the app
+-- relies on signing, and before the bucket flip. Apply 20261106220000 last.
 --
 -- wishlist_ledger_entries is append-only, so receipt_path is not rewritten.
 -- The app accepts either a legacy public URL or a path for that column.
@@ -77,10 +81,11 @@ BEGIN
     raw := regexp_replace(v, '^/+', '');
   END IF;
   raw := public.storage_percent_decode(raw);
+  -- Postgres text cannot contain a NUL, and chr(0) itself raises 54000.
+  -- A stored URL is already text, so no separate NUL check is possible or needed.
   IF raw IS NULL OR btrim(raw) = '' OR left(raw, 1) = '/'
      OR position('..' IN raw) > 0
-     OR position(chr(92) IN raw) > 0
-     OR position(chr(0) IN raw) > 0 THEN
+     OR position(chr(92) IN raw) > 0 THEN
     RETURN NULL;
   END IF;
   RETURN raw;
