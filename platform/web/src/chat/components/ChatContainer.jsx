@@ -1,123 +1,30 @@
 // src/chat/components/ChatContainer.jsx
-import React, { useState, useCallback, useEffect, useRef, useReducer, lazy, Suspense } from 'react';
+import { useCallback, useEffect, useReducer, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { supabase } from '../../supabase/client';
+import { messageService } from '../services/messageService';
 import { useAuth } from '../../auth/useAuth';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useMessageQueue } from '../hooks/useMessageQueue';
-import { useScrollToBottom } from '../hooks/useScrollToBottom';
-import { messageService } from '../services/messageService';
-import { storageService } from '../services/storageService';
-import { 
-  detectCriticalMessage, 
-  generateSecureId,
-  RateLimiter,
-} from '../utils/security';
-import { objectUrlManager } from '../utils/objectUrlManager';
-import { APP_CONFIG, MessageType, MessageStatus, EmergencyLevel } from '../utils/constants';
 import { ChatHeader } from './ChatHeader';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { OfflineBanner } from './OfflineBanner';
-import { playChatNotification, playMessageSent } from '../../utils/sound';
-import { devLog } from '../../utils/devLog';
 import toast from '../../utils/notify';
 import { markChatVisited } from '../utils/markChatVisited';
-import { getChatGeolocationPosition } from '../utils/getChatGeolocation';
-import { captureChatError } from '../utils/chatTelemetry';
-import { requestNotificationPermission } from '../services/fcmRegistration';
 import BrandedLoader from '../../components/layout/BrandedLoader';
 import { ChatIncomingOverlay } from './ChatIncomingOverlay';
-import { getIncomingPreviewText, reduceIncomingOverlayEnqueue } from '../utils/inAppUrgency';
-import { chatNotificationTag } from '../../utils/chatNotificationGuard';
-import { formatWatchDateTime, parsePatrolTime } from '../../utils/watchTime';
-import { getWorkingOrganizationId } from '../../utils/organizationScope';
-import { useActiveOrganization } from '../../auth/useActiveOrganization';
-import { parseChatForegroundPayload } from '../utils/fcmForegroundChat';
-import { closeServiceWorkerNotifications } from '../utils/clearForegroundNotifications';
-import { shouldShowInAppMessageOverlay } from '../../utils/inAppOverlayEligibility';
 import { useUnreadCount } from '../hooks/useUnreadCount';
+import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import {
   CHAT_CHANNEL_PATROL,
   CHAT_CHANNEL_RESIDENT,
   canAccessPatrolOpsChat,
-  defaultChatChannel,
-  messageMatchesChannel,
-  shouldAlertForChatMessage,
 } from '../utils/chatChannels';
-
-const IncidentPinPicker = lazy(() => import('./IncidentPinPicker'));
-
-const rateLimiter = new RateLimiter(30, 60000);
-const INCIDENT_TYPE_OPTIONS = [
-  'Suspicious Activity',
-  'Theft',
-  'Vandalism',
-  'Noise Complaint',
-  'Suspicious Vehicle',
-  'Assault',
-  'Other',
-];
-
-function localDateTimeParts() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const h = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return { date: `${y}-${mo}-${day}`, time: `${h}:${min}` };
-}
-
-/** Merge realtime INSERT with optimistic row (same user may wait on geocode + slow network). */
-function findExistingMessageIndexForRealtime(prev, newMessage) {
-  const byId = prev.findIndex((m) => m.id != null && newMessage.id != null && m.id === newMessage.id);
-  if (byId !== -1) return byId;
-
-  if (newMessage.client_message_id) {
-    const byClient = prev.findIndex(
-      (m) =>
-        m.localId &&
-        String(m.localId) === String(newMessage.client_message_id) &&
-        String(m.sender_id) === String(newMessage.sender_id)
-    );
-    if (byClient !== -1) return byClient;
-  }
-
-  return prev.findIndex((m) => {
-    if (!m.localId) return false;
-    if (m.id != null) return false;
-    if (String(m.sender_id) !== String(newMessage.sender_id)) return false;
-    if (m.type !== newMessage.type) return false;
-
-    if (
-      m.type === MessageType.LOCATION &&
-      newMessage.location_lat != null &&
-      newMessage.location_lng != null
-    ) {
-      const dLat = Math.abs(Number(m.location_lat) - Number(newMessage.location_lat));
-      const dLng = Math.abs(Number(m.location_lng) - Number(newMessage.location_lng));
-      if (Number.isFinite(dLat) && Number.isFinite(dLng) && dLat < 1e-5 && dLng < 1e-5) {
-        return true;
-      }
-      return false;
-    }
-
-    if (m.type === MessageType.TEXT) {
-      if (String(m.text || '') !== String(newMessage.text || '')) return false;
-    } else if (
-      (m.type === MessageType.IMAGE || m.type === MessageType.VOICE) &&
-      m.media_url &&
-      newMessage.media_url
-    ) {
-      if (String(m.media_url) !== String(newMessage.media_url)) return false;
-    }
-
-    const t1 = parsePatrolTime(m.localTimestamp)?.getTime() || Number(m.localTimestamp) || 0;
-    const t2 = parsePatrolTime(newMessage.created_at)?.getTime() || 0;
-    return Number.isFinite(t1) && Number.isFinite(t2) && Math.abs(t1 - t2) < 120_000;
-  });
-}
+import { summarizeMessageForReply } from '../utils/chatMessageMerge';
+import { chatInputRateLimiter, useChatComposer } from '../hooks/useChatComposer';
+import { useChatSession } from '../hooks/useChatSession';
+import { useChatIncidentReport } from '../hooks/useChatIncidentReport';
+import ChatIncidentReportModal from './ChatIncidentReportModal';
 
 export default function ChatContainer() {
   const { user } = useAuth();
@@ -127,41 +34,9 @@ export default function ChatContainer() {
   const { addToQueue, queueLength } = useMessageQueue(isOnline);
   const isOpsChat = canAccessPatrolOpsChat(user?.role);
   const [chatChannel, setChatChannel] = useState(CHAT_CHANNEL_PATROL);
-  
-  const [messages, setMessages] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
-  const [reactionState, setReactionState] = useState({});
   const [replyToMessage, setReplyToMessage] = useState(null);
   const [, rateLimitUiTick] = useReducer((n) => n + 1, 0);
-  const [reportDraft, setReportDraft] = useState(null);
-  const [incomingOverlay, setIncomingOverlay] = useState({ queue: [], index: 0 });
-
-  const inputRateLimited = rateLimiter.isRateLimited();
-
-  // Re-render periodically while throttled so the composer re-enables when the window slides.
-  useEffect(() => {
-    if (!inputRateLimited) return undefined;
-    const id = window.setInterval(() => rateLimitUiTick(), 1000);
-    return () => window.clearInterval(id);
-  }, [inputRateLimited]);
-
-  // Mounted ref to guard async callbacks
-  const isMountedRef = useRef(true);
-  const messagesRef = useRef([]);
-  const typingChanRef = useRef(null);
-  const typingIdleRef = useRef(null);
-  /** Main-thread `Notification` instances shown while chat was in background — closed when app is foregrounded again. */
-  const browserNotificationsRef = useRef([]);
-
-  const { containerRef, endRef, scrollToBottom } = useScrollToBottom([messages.length]);
-  const chatChannelRef = useRef(chatChannel);
-  chatChannelRef.current = chatChannel;
-  const isOpsChatRef = useRef(isOpsChat);
-  isOpsChatRef.current = isOpsChat;
 
   const { count: patrolUnread } = useUnreadCount(
     isOpsChat ? user?.id : null,
@@ -174,909 +49,47 @@ export default function ChatContainer() {
     { pauseIncrements: chatChannel === CHAT_CHANNEL_RESIDENT }
   );
 
-  useEffect(() => {
-    const room = searchParams.get('room');
-    if (isOpsChat && (room === CHAT_CHANNEL_PATROL || room === CHAT_CHANNEL_RESIDENT)) {
-      setChatChannel(room);
-      return;
-    }
-    setChatChannel(defaultChatChannel(user?.role));
-  }, [user?.id, user?.role, isOpsChat, searchParams]);
+  const session = useChatSession({
+    user,
+    chatChannel,
+    setChatChannel,
+    activeOrganizationId,
+    isOpsChat,
+    searchParams,
+  });
 
-  // Cleanup mounted ref on unmount
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+  const inputRateLimited = chatInputRateLimiter.isRateLimited();
 
   useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+    if (!inputRateLimited) return undefined;
+    const id = window.setInterval(() => rateLimitUiTick(), 1000);
+    return () => window.clearInterval(id);
+  }, [inputRateLimited]);
 
-  useEffect(() => {
-    if (!user?.id || !notificationsEnabled) return;
-    void requestNotificationPermission(supabase, user.id);
-  }, [user?.id, notificationsEnabled]);
+  const composer = useChatComposer({
+    user,
+    isOnline,
+    addToQueue,
+    scrollToBottom: session.scrollToBottom,
+    replyToMessage,
+    setReplyToMessage,
+    setMessages: session.setMessages,
+    setIsEmergencyMode,
+    isMountedRef: session.isMountedRef,
+    chatChannelRef: session.chatChannelRef,
+  });
 
-  useEffect(
-    () => () => {
-      if (typingIdleRef.current) clearTimeout(typingIdleRef.current);
-    },
-    []
-  );
-
-  useEffect(() => {
-    return () => {
-      const list = messagesRef.current;
-      const last = list?.[list.length - 1];
-      const serverId =
-        last?.id && typeof last.id === 'string' && !String(last.id).startsWith('msg-')
-          ? last.id
-          : null;
-      void markChatVisited(serverId, chatChannelRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!user?.id) return undefined;
-    const ch = supabase
-      .channel('emergency-chat-typing', { config: { broadcast: { self: false } } })
-      .on('broadcast', { event: 'typing' }, ({ payload }) => {
-        const uid = payload?.userId;
-        const uname = payload?.userName || 'Someone';
-        const active = !!payload?.active;
-        if (!uid || uid === user.id) return;
-        if (!active) {
-          setTypingUsers((prev) => prev.filter((u) => u.userId !== uid));
-          return;
-        }
-        setTypingUsers((prev) => {
-          const existing = prev.find((u) => u.userId === uid);
-          if (existing && existing.user_name === uname) return prev;
-          const rest = prev.filter((u) => u.userId !== uid);
-          return [...rest, { userId: uid, user_name: uname }];
-        });
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') typingChanRef.current = ch;
-      });
-    return () => {
-      typingChanRef.current = null;
-      supabase.removeChannel(ch);
-    };
-  }, [user?.id]);
-
-  const emitTyping = useCallback(
-    (active) => {
-      if (!user?.id) return;
-      typingChanRef.current?.send({
-        type: 'broadcast',
-        event: 'typing',
-        payload: {
-          userId: user.id,
-          userName: user.fullName || user.email || 'Member',
-          active,
-        },
-      });
-    },
-    [user]
-  );
-
-  const summarizeMessageForReply = useCallback((msg) => {
-    if (!msg) return '';
-    if (msg.text?.trim()) return msg.text.trim();
-    if (msg.type === MessageType.IMAGE) return '[Image]';
-    if (msg.type === MessageType.VOICE) return '[Voice note]';
-    if (msg.type === MessageType.LOCATION) return '[Location]';
-    return '[Message]';
-  }, []);
-
-  const lastTypingEmitRef = useRef(0);
-  const onComposerTyping = useCallback(() => {
-    const now = Date.now();
-    if (now - lastTypingEmitRef.current >= 400) {
-      lastTypingEmitRef.current = now;
-      emitTyping(true);
-    }
-    if (typingIdleRef.current) clearTimeout(typingIdleRef.current);
-    typingIdleRef.current = setTimeout(() => emitTyping(false), 2200);
-  }, [emitTyping]);
-
-  const handleCriticalMessageVisible = useCallback((messageId) => {
-    void messageService.markCriticalRead(messageId);
-  }, []);
-
-  // Auto‑request notification permission on mount
-  useEffect(() => {
-    const alreadyRequested = localStorage.getItem('notificationsRequested');
-    if (!alreadyRequested && 'Notification' in window) {
-      Notification.requestPermission().then(permission => {
-        if (isMountedRef.current) {
-          setNotificationsEnabled(permission === 'granted');
-          localStorage.setItem('notificationsRequested', 'true');
-        }
-      });
-    } else if ('Notification' in window && Notification.permission === 'granted') {
-      if (isMountedRef.current) setNotificationsEnabled(true);
-    }
-  }, []);
-
-  // Load messages for the active room (reload on channel or neighbourhood change)
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (isMountedRef.current) {
-        setIsLoading(true);
-        setMessages([]);
-      }
-      try {
-        const data = await messageService.fetchMessages(APP_CONFIG.MAX_MESSAGES, chatChannel);
-        if (!cancelled && isMountedRef.current) setMessages(data);
-        if (!cancelled) void markChatVisited(null, chatChannel);
-      } catch (err) {
-        console.error('Failed to load messages:', err);
-        if (!cancelled) toast.error('Failed to load messages');
-      } finally {
-        if (!cancelled && isMountedRef.current) setIsLoading(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [chatChannel, activeOrganizationId]);
-
-  useEffect(() => {
-    const serverIds = messages.map((m) => m.id).filter(Boolean);
-    if (!serverIds.length) {
-      setReactionState({});
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const rows = await messageService.fetchReactions(serverIds);
-        if (cancelled) return;
-        const next = {};
-        for (const row of rows) {
-          if (!next[row.message_id]) next[row.message_id] = {};
-          if (!next[row.message_id][row.reaction]) next[row.message_id][row.reaction] = [];
-          next[row.message_id][row.reaction].push(row.user_id);
-        }
-        setReactionState(next);
-      } catch {
-        // Non-blocking; chat works without reactions.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [messages]);
-
-  useEffect(() => {
-    if (!user?.id) return undefined;
-    const unsubscribe = messageService.subscribeReactions((payload) => {
-      const row = payload.new || payload.old;
-      if (!row?.message_id || !row?.reaction) return;
-      setReactionState((prev) => {
-        const next = { ...prev };
-        const messageBucket = { ...(next[row.message_id] || {}) };
-        const users = new Set(messageBucket[row.reaction] || []);
-        if (payload.eventType === 'DELETE') users.delete(row.user_id);
-        else users.add(row.user_id);
-        if (users.size === 0) delete messageBucket[row.reaction];
-        else messageBucket[row.reaction] = Array.from(users);
-        next[row.message_id] = messageBucket;
-        return next;
-      });
-    });
-    return unsubscribe;
-  }, [user?.id]);
-
-  // 🔥 UPDATED: Subscribe to realtime with SMART optimistic update merging
-  useEffect(() => {
-    if (!user) return;
-    
-    const unsubscribe = messageService.subscribe((newMessage) => {
-      const activeChannel = chatChannelRef.current;
-      const isOps = isOpsChatRef.current;
-      const matchesRoom = messageMatchesChannel(newMessage, activeChannel);
-      const shouldAlert =
-        newMessage.sender_id !== user.id &&
-        shouldAlertForChatMessage(newMessage, { activeChannel, isOps });
-
-      if (soundEnabled && shouldAlert) {
-        playChatNotification();
-      }
-
-      if (shouldAlert) {
-        if (shouldShowInAppMessageOverlay()) {
-          if (isMountedRef.current) {
-            const key =
-              newMessage.id != null
-                ? String(newMessage.id)
-                : `pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-            setIncomingOverlay((prev) =>
-              reduceIncomingOverlayEnqueue(prev, {
-                key,
-                message: newMessage,
-                receivedAt: Date.now(),
-              })
-            );
-          }
-        } else if (notificationsEnabled && 'Notification' in window) {
-          const preview = getIncomingPreviewText(newMessage);
-          const title =
-            newMessage.is_critical
-              ? 'SOS'
-              : newMessage.visibility === CHAT_CHANNEL_RESIDENT
-                ? 'Neighbour chat'
-                : 'Patrol ops';
-          try {
-            const n = new Notification(title, {
-              body: `${newMessage.sender_name}: ${preview.slice(0, 100)}`,
-              icon: '/favicon.ico',
-              tag: chatNotificationTag(newMessage),
-            });
-            browserNotificationsRef.current.push(n);
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-
-      if (!matchesRoom) return;
-      
-      if (isMountedRef.current) {
-        setMessages(prev => {
-          // 🔑 Match optimistic row (5s was too tight after geocode + slow insert → stuck "sending")
-          const existingIndex = findExistingMessageIndexForRealtime(prev, newMessage);
-          
-          if (existingIndex !== -1) {
-            // 🔑 Update existing message with server data (including media_url)
-            const updated = [...prev];
-            updated[existingIndex] = {
-              ...updated[existingIndex],
-              ...newMessage,
-              status: MessageStatus.SENT,
-              // 🔑 Ensure media_url from server is used
-              media_url: newMessage.media_url || updated[existingIndex].media_url
-            };
-            return updated;
-          }
-          
-          // Add new message from other user
-          return [...prev.slice(-APP_CONFIG.MAX_MESSAGES + 1), {
-            ...newMessage,
-            status: MessageStatus.SENT
-          }];
-        });
-      }
-    });
-    
-    return unsubscribe;
-  }, [user, soundEnabled, notificationsEnabled]);
-
-  // FCM foreground (web): same overlay as realtime when tab focused — dedupes on message id via reduceIncomingOverlayEnqueue.
-  useEffect(() => {
-    if (!user?.id) return undefined;
-    let cancelled = false;
-    let unsubscribe = () => {};
-
-    (async () => {
-      const { onForegroundMessage } = await import('../services/fcmRegistration');
-      const off = await onForegroundMessage((payload) => {
-        if (cancelled || !isMountedRef.current) return;
-        if (!shouldShowInAppMessageOverlay()) return;
-        const parsed = parseChatForegroundPayload(payload, user.id);
-        if (!parsed) return;
-        if (
-          !shouldAlertForChatMessage(parsed.message, {
-            activeChannel: chatChannelRef.current,
-            isOps: isOpsChatRef.current,
-          })
-        ) {
-          return;
-        }
-        setIncomingOverlay((prev) => {
-          const next = reduceIncomingOverlayEnqueue(prev, parsed);
-          if (next !== prev && soundEnabled) {
-            queueMicrotask(() => playChatNotification());
-          }
-          return next;
-        });
-      });
-      unsubscribe = off;
-      if (cancelled) off();
-    })();
-
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [user?.id, soundEnabled]);
-
-  // When the app/tab returns to the foreground, clear in-app overlay queue and OS notifications.
-  const clearPendingForegroundNotifications = useCallback(() => {
-    if (!isMountedRef.current) return;
-    setIncomingOverlay({ queue: [], index: 0 });
-    for (const n of browserNotificationsRef.current) {
-      try {
-        n.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    browserNotificationsRef.current = [];
-    void closeServiceWorkerNotifications();
-  }, []);
-
-  useEffect(() => {
-    if (!user?.id) return undefined;
-
-    const wasHiddenRef = { current: document.visibilityState === 'hidden' };
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        wasHiddenRef.current = true;
-        return;
-      }
-      if (document.visibilityState === 'visible' && wasHiddenRef.current) {
-        wasHiddenRef.current = false;
-        clearPendingForegroundNotifications();
-      }
-    };
-
-    document.addEventListener('visibilitychange', onVisibility);
-
-    let resumeHandle = null;
-    (async () => {
-      try {
-        const { App } = await import('@capacitor/app');
-        const { Capacitor } = await import('@capacitor/core');
-        if (!Capacitor.isNativePlatform()) return;
-        resumeHandle = await App.addListener('resume', () => {
-          clearPendingForegroundNotifications();
-        });
-      } catch {
-        /* not running in Capacitor */
-      }
-    })();
-
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      resumeHandle?.remove?.();
-    };
-  }, [user?.id, clearPendingForegroundNotifications]);
-
-  // Cleanup object URLs
-  useEffect(() => {
-    return () => objectUrlManager.revokeAll();
-  }, []);
-
-  // ============================================================
-  // Handle quick template send – detect location by presence
-  // ============================================================
-  const handleQuickSend = useCallback(async (templateData, options = {}) => {
-    const { instant = false } = options;
-    if (!instant) return;
-
-    const localId = generateSecureId();
-    
-    const hasLocation = !!(
-      templateData.location || 
-      templateData.location_lat || 
-      templateData.location_lng
-    );
-    
-    const messageContent = {
-      text: templateData.text,
-      location_lat: hasLocation ? (templateData.location?.lat || templateData.location_lat) : null,
-      location_lng: hasLocation ? (templateData.location?.lng || templateData.location_lng) : null,
-      location_address: hasLocation ? (templateData.location?.address || templateData.location_address) : null,
-    };
-
-    const messageType = hasLocation ? MessageType.LOCATION : MessageType.TEXT;
-    const replyPreviewText =
-      replyToMessage?.reply_preview_text ||
-      summarizeMessageForReply(replyToMessage) ||
-      null;
-
-    const optimisticMessage = {
-      localId,
-      text: messageContent.text,
-      sender_id: user.id,
-      sender_name: user.fullName || user.email,
-      sender_avatar: user.avatarUrl,
-      is_critical: templateData.isCritical,
-      is_emergency: templateData.priority <= EmergencyLevel.HIGH,
-      priority: templateData.priority,
-      type: messageType,
-      status: isOnline ? MessageStatus.SENDING : MessageStatus.PRIORITY_QUEUED,
-      localTimestamp: new Date().toISOString(),
-      reply_to_message_id: replyToMessage?.id || null,
-      reply_preview_text: replyPreviewText,
-      visibility: chatChannelRef.current,
-      ...(hasLocation && {
-        location_lat: messageContent.location_lat,
-        location_lng: messageContent.location_lng,
-        location_address: messageContent.location_address,
-      }),
-    };
-
-    if (optimisticMessage.is_emergency) {
-      setIsEmergencyMode(true);
-      setTimeout(() => setIsEmergencyMode(false), 10000);
-    }
-
-    if (isMountedRef.current) {
-      setMessages(prev => [...prev, optimisticMessage]);
-      scrollToBottom('auto', true);
-    }
-
-    if (!isOnline) {
-      addToQueue(optimisticMessage);
-      toast.info('Message queued - will send when online');
-      return;
-    }
-
-    (async () => {
-      try {
-        let sent;
-        if (hasLocation) {
-          sent = await messageService.sendLocation({
-            lat: messageContent.location_lat,
-            lng: messageContent.location_lng,
-            address: messageContent.location_address,
-            text: messageContent.text,
-            senderId: user.id,
-            senderName: user.fullName || user.email,
-            senderAvatar: user.avatarUrl,
-            isCritical: templateData.isCritical,
-            visibility: chatChannelRef.current,
-            replyToMessageId: replyToMessage?.id || null,
-            replyPreviewText,
-            clientMessageId: localId,
-          });
-        } else {
-          sent = await messageService.sendText({
-            text: messageContent.text,
-            senderId: user.id,
-            senderName: user.fullName || user.email,
-            senderAvatar: user.avatarUrl,
-            isCritical: templateData.isCritical,
-            visibility: chatChannelRef.current,
-            replyToMessageId: replyToMessage?.id || null,
-            replyPreviewText,
-            clientMessageId: localId,
-          });
-        }
-
-        if (isMountedRef.current) {
-          setMessages(prev => prev.map(m => 
-            m.localId === localId ? { ...sent, status: MessageStatus.SENT } : m
-          ));
-          playMessageSent();
-
-          if (optimisticMessage.is_emergency) {
-            toast.success('🚨 Emergency sent', { icon: '🚨', duration: 2000 });
-          }
-          setReplyToMessage(null);
-        }
-
-      } catch (error) {
-        captureChatError(error, { operation: 'quickSend' });
-        if (isMountedRef.current) {
-          setMessages(prev => prev.map(m => 
-            m.localId === localId ? { ...m, status: MessageStatus.FAILED } : m
-          ));
-          addToQueue(optimisticMessage);
-          toast.error('Send failed - queued for retry');
-        }
-      }
-    })();
-
-  }, [user, isOnline, addToQueue, scrollToBottom, replyToMessage, summarizeMessageForReply]);
-
-  // Regular text send
-  const handleSendText = useCallback(async (text, options = {}) => {
-    if (!rateLimiter.canProceed()) {
-      toast.error('Please slow down');
-      return;
-    }
-
-    const isCritical = detectCriticalMessage(text);
-    const localId = generateSecureId();
-    const replyToMessageId = options.replyToMessageId || replyToMessage?.id || null;
-    const replyPreviewText =
-      options.replyPreviewText ||
-      replyToMessage?.reply_preview_text ||
-      summarizeMessageForReply(replyToMessage) ||
-      null;
-    
-    const optimisticMessage = {
-      localId,
-      text,
-      sender_id: user.id,
-      sender_name: user.fullName || user.email,
-      sender_avatar: user.avatarUrl,
-      is_critical: isCritical,
-      type: MessageType.TEXT,
-      status: isOnline ? MessageStatus.SENDING : MessageStatus.FAILED,
-      localTimestamp: new Date().toISOString(),
-      reply_to_message_id: replyToMessageId,
-      reply_preview_text: replyPreviewText,
-      visibility: chatChannelRef.current,
-    };
-
-    if (isMountedRef.current) {
-      setMessages(prev => [...prev, optimisticMessage]);
-      scrollToBottom();
-    }
-
-    if (!isOnline) {
-      addToQueue(optimisticMessage);
-      return;
-    }
-
-    try {
-      const sent = await messageService.sendText({
-        text,
-        senderId: user.id,
-        senderName: user.fullName || user.email,
-        senderAvatar: user.avatarUrl,
-        isCritical,
-        visibility: chatChannelRef.current,
-        replyToMessageId,
-        replyPreviewText,
-        clientMessageId: localId,
-      });
-
-      if (isMountedRef.current) {
-        setMessages(prev => prev.map(m => 
-          m.localId === localId ? { ...sent, status: MessageStatus.SENT } : m
-        ));
-        playMessageSent();
-        setReplyToMessage(null);
-      }
-    } catch (err) {
-      captureChatError(err, { operation: 'sendText' });
-      if (isMountedRef.current) {
-        setMessages(prev => prev.map(m => 
-          m.localId === localId ? { ...m, status: MessageStatus.FAILED } : m
-        ));
-        addToQueue(optimisticMessage);
-      }
-    }
-  }, [user, isOnline, addToQueue, scrollToBottom, replyToMessage, summarizeMessageForReply]);
-
-  const removeCurrentIncomingItem = useCallback(() => {
-    setIncomingOverlay((prev) => {
-      if (prev.queue.length === 0) return prev;
-      const { queue, index } = prev;
-      const next = queue.filter((_, i) => i !== index);
-      const nextIndex = next.length === 0 ? 0 : Math.min(index, next.length - 1);
-      return { queue: next, index: nextIndex };
-    });
-  }, []);
-
-  const handleIncomingOverlayOpen = useCallback(() => {
-    setIncomingOverlay((prev) => {
-      const item = prev.queue.length
-        ? prev.queue[Math.min(prev.index, prev.queue.length - 1)]
-        : null;
-      const vis = item?.message?.visibility;
-      if (isOpsChatRef.current && vis && vis !== chatChannelRef.current) {
-        queueMicrotask(() => setChatChannel(vis));
-      }
-      if (prev.queue.length === 0) return prev;
-      const { queue, index } = prev;
-      const next = queue.filter((_, i) => i !== index);
-      const nextIndex = next.length === 0 ? 0 : Math.min(index, next.length - 1);
-      return { queue: next, index: nextIndex };
-    });
-    scrollToBottom('smooth', true);
-  }, [scrollToBottom]);
+  const report = useChatIncidentReport(user);
 
   const handleIncomingOverlayQuickReply = useCallback(
     async (text) => {
-      await handleSendText(text);
-      if (!isMountedRef.current) return;
-      removeCurrentIncomingItem();
-      scrollToBottom('smooth', true);
+      await composer.handleSendText(text);
+      if (!session.isMountedRef.current) return;
+      session.removeCurrentIncomingItem();
+      session.scrollToBottom('smooth', true);
     },
-    [handleSendText, removeCurrentIncomingItem, scrollToBottom]
+    [composer, session]
   );
-
-  const dismissAllIncoming = useCallback(() => {
-    setIncomingOverlay({ queue: [], index: 0 });
-  }, []);
-
-  const goPrevIncoming = useCallback(() => {
-    setIncomingOverlay((prev) => {
-      const maxIdx = Math.max(0, prev.queue.length - 1);
-      const idx = Math.min(prev.index, maxIdx);
-      return { ...prev, index: Math.max(0, idx - 1) };
-    });
-  }, []);
-
-  const goNextIncoming = useCallback(() => {
-    setIncomingOverlay((prev) => {
-      const maxIdx = Math.max(0, prev.queue.length - 1);
-      const idx = Math.min(prev.index, maxIdx);
-      return { ...prev, index: Math.min(maxIdx, idx + 1) };
-    });
-  }, []);
-
-  // Image send
-  const handleSendImage = useCallback(async (file) => {
-    const localId = generateSecureId();
-    const objectUrl = objectUrlManager.create(file, localId);
-
-    const optimisticMessage = {
-      localId,
-      text: '',
-      type: MessageType.IMAGE,
-      media_url: objectUrl,
-      sender_id: user.id,
-      sender_name: user.fullName || user.email,
-      sender_avatar: user.avatarUrl,
-      status: MessageStatus.SENDING,
-      localTimestamp: new Date().toISOString(),
-      reply_to_message_id: replyToMessage?.id || null,
-      reply_preview_text:
-        replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
-      visibility: chatChannelRef.current,
-    };
-
-    if (isMountedRef.current) {
-      setMessages(prev => [...prev, optimisticMessage]);
-      scrollToBottom();
-    }
-
-    try {
-      const { url } = await storageService.uploadImage(file);
-      const sent = await messageService.sendImage({
-        fileUrl: url,
-        senderId: user.id,
-        senderName: user.fullName || user.email,
-        senderAvatar: user.avatarUrl,
-        visibility: chatChannelRef.current,
-        replyToMessageId: replyToMessage?.id || null,
-        replyPreviewText:
-          replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
-        clientMessageId: localId,
-      });
-
-      objectUrlManager.revoke(localId);
-      
-      if (isMountedRef.current) {
-        setMessages(prev => prev.map(m => 
-          m.localId === localId ? { ...sent, status: MessageStatus.SENT, media_url: url } : m
-        ));
-        playMessageSent();
-        setReplyToMessage(null);
-      }
-    } catch (err) {
-      captureChatError(err, { operation: 'sendImage' });
-      if (isMountedRef.current) {
-        setMessages(prev => prev.map(m => 
-          m.localId === localId ? { ...m, status: MessageStatus.FAILED } : m
-        ));
-        addToQueue({ ...optimisticMessage, file });
-      }
-    }
-  }, [user, addToQueue, scrollToBottom, replyToMessage, summarizeMessageForReply]);
-
-  // 🔥 UPDATED: Voice send with previewUrl parameter + smarter URL handling
-  const handleSendVoice = useCallback(async (blob, duration, previewUrl) => {
-    const localId = generateSecureId();
-    
-    const objectUrl = previewUrl || objectUrlManager.create(blob, localId);
-
-    const optimisticMessage = {
-      localId,
-      text: '',
-      type: MessageType.VOICE,
-      media_url: objectUrl,  // 🔑 Use media_url consistently
-      blob: blob,
-      duration: duration,
-      sender_id: user.id,
-      sender_name: user.fullName || user.email,
-      sender_avatar: user.avatarUrl,
-      status: MessageStatus.SENDING,
-      localTimestamp: new Date().toISOString(),
-      reply_to_message_id: replyToMessage?.id || null,
-      reply_preview_text:
-        replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
-      visibility: chatChannelRef.current,
-    };
-
-    if (isMountedRef.current) {
-      setMessages(prev => [...prev, optimisticMessage]);
-      scrollToBottom();
-    }
-
-    try {
-      // Upload to Supabase storage
-      const { url: storageUrl } = await storageService.uploadVoice(blob, duration);
-      devLog('Voice uploaded to:', storageUrl);
-      
-      // Send message to database
-      const sent = await messageService.sendVoice({
-        fileUrl: storageUrl,
-        duration,
-        senderId: user.id,
-        senderName: user.fullName || user.email,
-        senderAvatar: user.avatarUrl,
-        visibility: chatChannelRef.current,
-        replyToMessageId: replyToMessage?.id || null,
-        replyPreviewText:
-          replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
-        clientMessageId: localId,
-      });
-
-      devLog('Message saved to DB:', sent);
-
-      // Clean up temporary object URL
-      objectUrlManager.revoke(localId);
-      if (previewUrl && previewUrl !== objectUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      
-      if (isMountedRef.current) {
-        setMessages(prev => prev.map(m => 
-          m.localId === localId ? { 
-            ...m, 
-            id: sent.id,
-            status: MessageStatus.SENT,
-            media_url: storageUrl,  // 🔑 Ensure we use the storage URL
-            blob: null
-          } : m
-        ));
-        playMessageSent();
-        setReplyToMessage(null);
-      }
-    } catch (err) {
-      captureChatError(err, { operation: 'sendVoice' });
-      if (isMountedRef.current) {
-        setMessages(prev => prev.map(m => 
-          m.localId === localId ? { ...m, status: MessageStatus.FAILED } : m
-        ));
-        addToQueue({ ...optimisticMessage, blob });
-      }
-    }
-  }, [user, addToQueue, scrollToBottom, replyToMessage, summarizeMessageForReply]);
-
-  // ============================================================
-  // Location send with defensive destructuring + mounted guard
-  // ============================================================
-  const handleSendLocation = useCallback(async (position) => {
-    if (!user?.id) {
-      toast.error('You must be signed in to send location');
-      return;
-    }
-
-    // Defensive: GeolocationPosition, { latitude, longitude }, or { lat, lng }
-    let latitude;
-    let longitude;
-
-    if (position?.coords) {
-      ({ latitude, longitude } = position.coords);
-    } else if (position?.lat != null && position?.lng != null) {
-      ({ lat: latitude, lng: longitude } = position);
-    } else if (position?.latitude != null && position?.longitude != null) {
-      ({ latitude, longitude } = position);
-    } else {
-      console.error('Invalid position format received:', position);
-      toast.error('Invalid location data received');
-      return;
-    }
-
-    const lat = Number(latitude);
-    const lng = Number(longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      console.error('Invalid coordinates:', { latitude, longitude, lat, lng });
-      toast.error('Invalid location coordinates');
-      return;
-    }
-
-    if (!isMountedRef.current) return;
-
-    try {
-      // Geocoding (optional) — must not hang indefinitely (blocks bubble + send)
-      let address = null;
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-          {
-            headers: { 'User-Agent': 'NeighbourhoodWatch/1.0' },
-            signal: controller.signal,
-          }
-        );
-        clearTimeout(timeoutId);
-        if (response.ok && isMountedRef.current) {
-          const data = await response.json();
-          address = data.display_name?.split(',').slice(0, 3).join(',');
-        }
-      } catch (e) {
-        if (e?.name !== 'AbortError') {
-          devLog('Geocoding failed (non-critical):', e);
-        }
-      }
-
-      if (!isMountedRef.current) return;
-
-      const localId = generateSecureId();
-      const optimisticMessage = {
-        localId,
-        text: '',
-        type: MessageType.LOCATION,
-        location_lat: lat,
-        location_lng: lng,
-        location_address: address,
-        sender_id: user.id,
-        sender_name: user.fullName || user.email,
-        sender_avatar: user.avatarUrl,
-        status: MessageStatus.SENDING,
-        localTimestamp: new Date().toISOString(),
-        reply_to_message_id: replyToMessage?.id || null,
-        reply_preview_text:
-          replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
-        visibility: chatChannelRef.current,
-      };
-
-      setMessages(prev => [...prev, optimisticMessage]);
-      scrollToBottom();
-
-      if (!isOnline) {
-        addToQueue(optimisticMessage);
-        toast.success('Location saved; will send when you are back online');
-        return;
-      }
-
-      try {
-        const sent = await messageService.sendLocation({
-          lat,
-          lng,
-          address,
-          senderId: user.id,
-          senderName: user.fullName || user.email,
-          senderAvatar: user.avatarUrl,
-          visibility: chatChannelRef.current,
-          replyToMessageId: replyToMessage?.id || null,
-          replyPreviewText:
-            replyToMessage?.reply_preview_text || summarizeMessageForReply(replyToMessage) || null,
-          clientMessageId: localId,
-        });
-
-        if (isMountedRef.current) {
-          setMessages(prev => prev.map(m => 
-            m.localId === localId ? { ...sent, status: MessageStatus.SENT } : m
-          ));
-          playMessageSent();
-          toast.success('Location sent');
-          setReplyToMessage(null);
-        }
-      } catch (err) {
-        captureChatError(err, { operation: 'sendLocation' });
-        if (isMountedRef.current) {
-          toast.error(err?.message || 'Could not send location');
-          setMessages(prev => prev.map(m => 
-            m.localId === localId ? { ...m, status: MessageStatus.FAILED } : m
-          ));
-          addToQueue(optimisticMessage);
-        }
-      }
-    } catch {
-      console.error('Location send error');
-      toast.error('Failed to process location');
-    }
-  }, [user, isOnline, addToQueue, scrollToBottom, replyToMessage, summarizeMessageForReply]);
 
   const handleReplyRequest = useCallback(
     (message) => {
@@ -1089,135 +102,27 @@ export default function ChatContainer() {
         reply_preview_text: summarizeMessageForReply(message),
       });
     },
-    [summarizeMessageForReply]
+    []
   );
 
-  const onClearReply = useCallback(() => setReplyToMessage(null), []);
-
-  const handleCompileReport = useCallback((message) => {
-    const summary = summarizeMessageForReply(message);
-    const when = localDateTimeParts();
-    setReportDraft({
-      sourceMessageId: message?.id || null,
-      type: 'Suspicious Activity',
-      location: message?.location_address || '',
-      description:
-        `Compiled from emergency chat (${formatWatchDateTime(message?.created_at) || formatWatchDateTime(new Date()) || 'now'}):\n` +
-        `Initial message by: ${message?.sender_name || 'Unknown'}\n` +
-        `Compiled into report by: ${user?.fullName || user?.email || 'Unknown'}\n` +
-        `${summary}`,
-      suspectName: '',
-      incidentDate: when.date,
-      incidentTime: when.time,
-      pinLat: message?.location_lat ?? null,
-      pinLng: message?.location_lng ?? null,
-      showMapPicker: false,
-      sourceSenderName: message?.sender_name || 'Unknown',
-      compiledByName: user?.fullName || user?.email || 'Unknown',
-    });
-  }, [summarizeMessageForReply, user?.email, user?.fullName]);
-
-  const handleSaveCompiledReport = useCallback(async () => {
-    const hasPin =
-      Number.isFinite(Number(reportDraft?.pinLat)) &&
-      Number.isFinite(Number(reportDraft?.pinLng));
-    const hasLocationText = Boolean(reportDraft?.location?.trim());
-    const hasLocation = hasLocationText || hasPin;
-    if (!reportDraft?.description?.trim() || !hasLocation || !reportDraft?.type) {
-      if (!reportDraft?.description?.trim()) {
-        toast.error('Please add a description');
-      } else if (!hasLocation) {
-        toast.error('Add a location in the text field or drop a pin on the map');
-      } else {
-        toast.error('Please choose an incident type');
-      }
-      return;
-    }
-    try {
-      const pinText = hasPin
-        ? `Pinned coordinates: ${Number(reportDraft.pinLat).toFixed(6)}, ${Number(reportDraft.pinLng).toFixed(6)}`
-        : null;
-      const dateStr = reportDraft.incidentDate || new Date().toISOString().split('T')[0];
-      const timeRaw = (reportDraft.incidentTime || '00:00').slice(0, 5);
-      const [th, tm] = timeRaw.split(':').map((x) => Number.parseInt(x, 10));
-      const safeH = Number.isFinite(th) ? Math.min(23, Math.max(0, th)) : 0;
-      const safeM = Number.isFinite(tm) ? Math.min(59, Math.max(0, tm)) : 0;
-      const localWhen = new Date(
-        `${dateStr}T${String(safeH).padStart(2, '0')}:${String(safeM).padStart(2, '0')}:00`
-      );
-      const timeLabel = `${String(safeH).padStart(2, '0')}:${String(safeM).padStart(2, '0')}`;
-      let bodyText = reportDraft.description.trim();
-      bodyText = pinText ? `${bodyText}\n\n${pinText}` : bodyText;
-      bodyText = `${bodyText}\n\nIncident occurred (local): ${dateStr} ${timeLabel}`;
-      const finalDescription = bodyText;
-      const finalLocation =
-        reportDraft.location.trim() ||
-        (hasPin
-          ? `Pinned location (${Number(reportDraft.pinLat).toFixed(5)}, ${Number(reportDraft.pinLng).toFixed(5)})`
-          : '');
-      const payload = {
-        incident_date: Number.isFinite(localWhen.getTime()) ? localWhen.toISOString() : dateStr,
-        location: finalLocation,
-        type: reportDraft.type,
-        description: finalDescription,
-        suspect_name: reportDraft.suspectName?.trim() || null,
-        status: 'pending',
-        submitted_at: new Date().toISOString(),
-        submitted_by: user.id,
-        submitted_by_name: user.fullName || user.email,
-        organization_id: getWorkingOrganizationId() || user.organizationId || null,
-      };
-      const { error } = await supabase.from('incidents').insert(payload);
-      if (error) throw error;
-      toast.success('Incident compiled and saved');
-      setReportDraft(null);
-    } catch (err) {
-      toast.error(`Could not save report: ${err.message || 'unknown error'}`);
-    }
-  }, [reportDraft, user]);
-
-  // Get location for quick templates
-  const getLocation = useCallback(() => {
-    return getChatGeolocationPosition({ quick: true }).then((pos) => ({
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-    }));
-  }, []);
-
   const handleChannelChange = useCallback((next) => {
-    if (!next || next === chatChannelRef.current) return;
-    const list = messagesRef.current;
+    if (!next || next === session.chatChannelRef.current) return;
+    const list = session.messagesRef.current;
     const last = list?.[list.length - 1];
     const serverId =
       last?.id && typeof last.id === 'string' && !String(last.id).startsWith('msg-')
         ? last.id
         : null;
-    void markChatVisited(serverId, chatChannelRef.current);
+    void markChatVisited(serverId, session.chatChannelRef.current);
     setReplyToMessage(null);
     setChatChannel(next);
-  }, []);
-
-  const toggleSound = useCallback(() => setSoundEnabled(prev => !prev), []);
-  
-  const toggleNotifications = useCallback(() => {
-    if (!('Notification' in window)) return;
-    if (Notification.permission === 'granted') {
-      setNotificationsEnabled(prev => !prev);
-    } else {
-      Notification.requestPermission().then(permission => {
-        if (isMountedRef.current) {
-          setNotificationsEnabled(permission === 'granted');
-          if (permission === 'granted') localStorage.setItem('notificationsRequested', 'true');
-        }
-      });
-    }
-  }, []);
+  }, [session.chatChannelRef, session.messagesRef]);
 
   const handleToggleReaction = useCallback(
     async (messageId, emoji) => {
       if (!user?.id || !messageId || !emoji) return;
-      const hasReacted = !!reactionState?.[messageId]?.[emoji]?.includes(user.id);
-      setReactionState((prev) => {
+      const hasReacted = !!session.reactionState?.[messageId]?.[emoji]?.includes(user.id);
+      session.setReactionState((prev) => {
         const next = { ...prev };
         const messageBucket = { ...(next[messageId] || {}) };
         const users = new Set(messageBucket[emoji] || []);
@@ -1235,7 +140,7 @@ export default function ChatContainer() {
           await messageService.addReaction({ messageId, reaction: emoji, userId: user.id });
         }
       } catch {
-        setReactionState((prev) => {
+        session.setReactionState((prev) => {
           const next = { ...prev };
           const messageBucket = { ...(next[messageId] || {}) };
           const users = new Set(messageBucket[emoji] || []);
@@ -1249,10 +154,10 @@ export default function ChatContainer() {
         toast.error('Could not update reaction');
       }
     },
-    [reactionState, user?.id]
+    [session, user]
   );
 
-  if (isLoading) {
+  if (session.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <BrandedLoader message="Loading chat…" size="lg" />
@@ -1260,15 +165,12 @@ export default function ChatContainer() {
     );
   }
 
-  const overlayQueue = incomingOverlay.queue;
+  const overlayQueue = session.incomingOverlay.queue;
   const overlayIdx = overlayQueue.length
-    ? Math.min(incomingOverlay.index, overlayQueue.length - 1)
+    ? Math.min(session.incomingOverlay.index, overlayQueue.length - 1)
     : 0;
   const overlayCurrent = overlayQueue.length ? overlayQueue[overlayIdx] : null;
 
-  // ============================================================================
-  // 🔑 MOBILE-OPTIMIZED CONTAINER (Replaces lines ~350+)
-  // ============================================================================
   return (
     <div
       className="min-h-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))] max-md:flex max-md:min-h-0 max-md:flex-col max-md:overflow-hidden max-md:h-[calc(100dvh-4rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] max-[639px]:overflow-x-hidden sm:px-4 sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] md:h-auto md:min-h-screen md:min-h-[100dvh] md:overflow-visible md:pb-6 md:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] lg:px-8"
@@ -1276,7 +178,7 @@ export default function ChatContainer() {
       <div className="max-w-4xl mx-auto flex min-h-0 w-full flex-1 flex-col h-chat-shell">
         <ChatHeader
           isOnline={isOnline}
-          messageCount={messages.length}
+          messageCount={session.messages.length}
           isEmergencyMode={isEmergencyMode}
           channel={chatChannel}
           canSwitchChannels={isOpsChat}
@@ -1308,35 +210,35 @@ export default function ChatContainer() {
             aria-hidden
           />
           <MessageList
-            messages={messages}
+            messages={session.messages}
             currentUserId={user?.id}
-            containerRef={containerRef}
-            endRef={endRef}
-            typingUsers={typingUsers}
-            onCriticalMessageVisible={handleCriticalMessageVisible}
-            reactionsByMessage={reactionState}
+            containerRef={session.containerRef}
+            endRef={session.endRef}
+            typingUsers={session.typingUsers}
+            onCriticalMessageVisible={session.handleCriticalMessageVisible}
+            reactionsByMessage={session.reactionState}
             onToggleReaction={handleToggleReaction}
             onReplyRequest={handleReplyRequest}
-            onCompileReport={handleCompileReport}
+            onCompileReport={report.handleCompileReport}
           />
 
           <MessageInput
-            onSendText={handleSendText}
-            onSendImage={handleSendImage}
-            onSendVoice={handleSendVoice}
-            onSendLocation={handleSendLocation}
-            onQuickTemplateSend={handleQuickSend}
+            onSendText={composer.handleSendText}
+            onSendImage={composer.handleSendImage}
+            onSendVoice={composer.handleSendVoice}
+            onSendLocation={composer.handleSendLocation}
+            onQuickTemplateSend={composer.handleQuickSend}
             isOnline={isOnline}
             disabled={inputRateLimited}
             isEmergencyMode={isEmergencyMode}
-            soundEnabled={soundEnabled}
-            onToggleSound={toggleSound}
-            notificationsEnabled={notificationsEnabled}
-            onToggleNotifications={toggleNotifications}
-            getLocationForTemplates={getLocation}
-            onComposerTyping={onComposerTyping}
+            soundEnabled={session.soundEnabled}
+            onToggleSound={session.toggleSound}
+            notificationsEnabled={session.notificationsEnabled}
+            onToggleNotifications={session.toggleNotifications}
+            getLocationForTemplates={composer.getLocation}
+            onComposerTyping={session.onComposerTyping}
             replyToMessage={replyToMessage}
-            onClearReply={onClearReply}
+            onClearReply={() => setReplyToMessage(null)}
             composerPlaceholder={
               !isOnline
                 ? 'Offline…'
@@ -1351,138 +253,21 @@ export default function ChatContainer() {
         <ChatIncomingOverlay
           currentItem={overlayCurrent}
           position={{ current: overlayIdx + 1, total: overlayQueue.length }}
-          onDismissCurrent={removeCurrentIncomingItem}
-          onDismissAll={dismissAllIncoming}
-          onNavigatePrev={goPrevIncoming}
-          onNavigateNext={goNextIncoming}
-          onOpen={handleIncomingOverlayOpen}
+          onDismissCurrent={session.removeCurrentIncomingItem}
+          onDismissAll={session.dismissAllIncoming}
+          onNavigatePrev={session.goPrevIncoming}
+          onNavigateNext={session.goNextIncoming}
+          onOpen={session.handleIncomingOverlayOpen}
           onQuickReply={handleIncomingOverlayQuickReply}
           quickReplyDisabled={inputRateLimited}
         />
       )}
-      {reportDraft && (
-        <div className="fixed inset-0 z-[1200] flex items-end justify-center bg-black/50 p-3 sm:items-center">
-          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Compile Incident Report</h3>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Drafted from selected chat message. Save and continue chatting.
-            </p>
-            <div className="mt-3 space-y-2">
-              <select
-                value={reportDraft.type}
-                onChange={(e) => setReportDraft((p) => ({ ...p, type: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              >
-                {INCIDENT_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={reportDraft.location}
-                onChange={(e) => setReportDraft((p) => ({ ...p, location: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                placeholder="Location"
-              />
-              <div className="rounded-lg border border-gray-200 p-2 dark:border-gray-600">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-gray-600 dark:text-gray-300">Optional: place location pin on map</p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReportDraft((p) => ({ ...p, showMapPicker: !p.showMapPicker }))
-                    }
-                    className="rounded-md border border-gray-300 px-2 py-1 text-xs dark:border-gray-600"
-                  >
-                    {reportDraft.showMapPicker ? 'Hide map' : 'Open map'}
-                  </button>
-                </div>
-                {Number.isFinite(Number(reportDraft.pinLat)) && Number.isFinite(Number(reportDraft.pinLng)) && (
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-teal-700 dark:text-teal-300">
-                      Pin: {Number(reportDraft.pinLat).toFixed(6)}, {Number(reportDraft.pinLng).toFixed(6)}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setReportDraft((p) => ({ ...p, pinLat: null, pinLng: null }))}
-                      className="rounded-md border border-gray-300 px-2 py-0.5 text-[11px] dark:border-gray-600"
-                    >
-                      Clear pin
-                    </button>
-                  </div>
-                )}
-                {reportDraft.showMapPicker && (
-                  <div className="mt-2">
-                    <Suspense fallback={<div className="h-[180px] animate-pulse rounded-[10px] bg-gray-100 dark:bg-gray-700" />}>
-                    <IncidentPinPicker
-                      pin={
-                        Number.isFinite(Number(reportDraft.pinLat)) &&
-                        Number.isFinite(Number(reportDraft.pinLng))
-                          ? { lat: Number(reportDraft.pinLat), lng: Number(reportDraft.pinLng) }
-                          : null
-                      }
-                      onPick={({ lat, lng }) =>
-                        setReportDraft((p) => ({ ...p, pinLat: lat, pinLng: lng }))
-                      }
-                    />
-                    </Suspense>
-                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                      Tap map to place or move the pin.
-                    </p>
-                  </div>
-                )}
-              </div>
-              <input
-                value={reportDraft.suspectName}
-                onChange={(e) => setReportDraft((p) => ({ ...p, suspectName: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                placeholder="Suspect name (optional)"
-              />
-              <div>
-                <label className="mb-1 block text-xs text-gray-600 dark:text-gray-400">
-                  When it happened
-                </label>
-                <div className="flex flex-wrap items-stretch gap-2">
-                  <input
-                    type="date"
-                    value={reportDraft.incidentDate || ''}
-                    onChange={(e) => setReportDraft((p) => ({ ...p, incidentDate: e.target.value }))}
-                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                  />
-                  <input
-                    type="time"
-                    value={reportDraft.incidentTime || ''}
-                    onChange={(e) => setReportDraft((p) => ({ ...p, incidentTime: e.target.value }))}
-                    className="w-[8.5rem] shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                  />
-                </div>
-              </div>
-              <textarea
-                value={reportDraft.description}
-                onChange={(e) => setReportDraft((p) => ({ ...p, description: e.target.value }))}
-                className="h-32 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div className="mt-3 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setReportDraft(null)}
-                className="rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSaveCompiledReport()}
-                className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700"
-              >
-                Save Incident
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ChatIncidentReportModal
+        draft={report.reportDraft}
+        onChange={report.setReportDraft}
+        onClose={() => report.setReportDraft(null)}
+        onSave={report.handleSaveCompiledReport}
+      />
     </div>
   );
 }

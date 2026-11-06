@@ -1,25 +1,9 @@
 // src/pages/Dashboard.jsx
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
-import { FaUser, FaMapMarkerAlt, FaEnvelope, FaPlay, FaStop, FaTrophy, FaSync, FaMapMarkerAlt as FaMapPin, FaRoute, FaRoad, FaCalendarAlt, FaClipboardList, FaCar, FaToolbox, FaBook, FaInfoCircle, FaShieldAlt, FaPhone, FaClock, FaStopwatch, FaFire, FaHome } from "react-icons/fa";
-import ActiveThreatsBanner from "../components/patrol/ActiveThreatsBanner";
-import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
-import toast from '../utils/notify';
-import SoundToggle from "../components/SoundToggle";
-import ThemeToggle from "../components/ThemeToggle";
-import AppNotificationBell from "../components/layout/AppNotificationBell";
-import VehicleIcon, { normalizeVehicleType, PatrolInfoIcon, ProfileVehicleGlyph } from '../components/VehicleIcon';
-import { getVehicleDisplayText } from '../utils/vehicleDisplay';
-import { 
-  playChatNotification,
-  playPatrolStart, 
-  playPatrolEnd, 
-  playPatrolWarning, 
-  playPatrolAutoEnd,
-  playPatrolSigninNotification
-} from '../utils/sound';
+import { playChatNotification } from '../utils/sound';
 import { useChatNotifications } from '../chat/hooks/useChatNotifications';
 import { useUnreadCount } from '../chat/hooks/useUnreadCount';
 import {
@@ -28,79 +12,39 @@ import {
   canAccessPatrolOpsChat,
   defaultChatChannel,
 } from '../chat/utils/chatChannels';
-import { OpsChatUnreadSplit } from '../chat/components/OpsChatUnreadSplit';
-import { Avatar } from '../chat/components/common/Avatar';
-import { useGPSTracking } from '../hooks/useGPSTracking';
 import { useSharedGeolocation } from '../hooks/useSharedGeolocation';
-import { enrichPatrolRowsWithAvatars } from '../utils/enrichPatrolAvatars';
-import { resolvePatrolAvatarUrl } from '../utils/patrolAvatarUrl';
-import { syncActivePatrolVehicleFromVehicleList } from '../utils/syncActivePatrolVehicle';
-import { isLightMobilityVehicleType, getVehicleTypePublicLabel } from '../utils/vehicleTypeConstants';
+import ActiveThreatsBanner from "../components/patrol/ActiveThreatsBanner";
+import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
 import PatrollerPhotoPreview from '../components/patrol/PatrollerPhotoPreview';
-import UpcomingScheduledPatrollers from '../components/patrol/UpcomingScheduledPatrollers';
-import HouseholdsAwayCard from '../components/patrol/HouseholdsAwayCard';
-import { DEFAULT_PATROL_ZONE, formatPatrolPlaceLabel } from '../config/neighborhoodRegions';
-import { adaptivePollIntervalMs, subscribeDataBudgetHints } from '../utils/dataSaverProfile';
-import startPatrolIcon from '../assets/start-patrol-icon.png';
-import appMark from '../assets/app-mark.png';
-import Button from '../components/ui/Button';
 import ErrorState from '../components/ui/ErrorState';
-import IconButton from '../components/ui/IconButton';
-import Skeleton from '../components/ui/Skeleton';
 import PageSkeleton from '../components/layout/PageSkeleton';
-import AreaWeatherChip from '../components/layout/AreaWeatherChip';
 import { canAccessAdminPanel, canReviewFeedback, isStaffForModerationAlerts } from '../auth/staffRoles';
 import { canAccessPatrolSchedule, canAccessSosBoard, canStartOrEndPatrol, canStaffVerifyResident, canUseHouseholdMode, canViewCityHub, canViewIntelligence, homePathForRole, isHouseholdModeRole } from '../auth/roleMatrix';
 import { hasHydratedAppRole } from '../auth/appRole';
 import { useProfileAccessGate } from '../auth/useProfileAccessGate';
 import ProfileLoadRecovery from '../components/ProfileLoadRecovery';
 import { useActiveOrganization } from '../auth/useActiveOrganization';
-import { useScopedOrganization, belongsToActiveOrganization } from '../utils/organizationScope';
+import { useScopedOrganization } from '../utils/organizationScope';
 import { useUnreadCityHubCount } from '../hooks/useUnreadCityHubCount';
 import { useEquipmentPendingCounts } from '../hooks/useEquipmentPendingCounts';
 import { equipmentAdminBadgeCount, equipmentMyBadgeCount } from '../utils/equipment';
-import { parsePatrolTime, formatWatchDate } from '../utils/watchTime';
+import { normalizeVehicleType } from '../components/VehicleIcon';
+import { isLightMobilityVehicleType, getVehicleTypePublicLabel } from '../utils/vehicleTypeConstants';
+import { formatWatchDate } from '../utils/watchTime';
 import { chatNotificationTag } from '../utils/chatNotificationGuard';
 import PatrolShareSheet from '../components/patrol/share/PatrolShareSheet';
-import PatrolShareBanner from '../components/patrol/share/PatrolShareBanner';
-import { fetchPatrolShare } from '../utils/sharePatrol';
 import { DEFAULT_SHARE_TIME_ZONE } from '../utils/patrolFormat';
+import { playThrottled } from './dashboard/patrolTiming';
+import { usePatrolLifecycle } from './dashboard/usePatrolLifecycle';
+import DashboardHeader from './dashboard/DashboardHeader';
+import ActivePatrolsPanel from './dashboard/ActivePatrolsPanel';
+import PatrolStatusColumn from './dashboard/PatrolStatusColumn';
+import GpsTrackingPanel from './dashboard/GpsTrackingPanel';
+import DashboardProfileCard from './dashboard/DashboardProfileCard';
+import DashboardPrimaryActions from './dashboard/DashboardPrimaryActions';
+import DashboardShortcutGrid from './dashboard/DashboardShortcutGrid';
+import { PatrolWarningModal, VehiclePickerModal } from './dashboard/PatrolDialogs';
 
-// --- Constants ---
-/** Warn after this many seconds on patrol (2h). */
-const PATROL_WARNING_SECONDS = 7200;
-/** Grace period after the 2h mark before auto-end if the patroller does not end (30m). Guide: total 2.5h. */
-const AUTO_CLOSE_EXTENSION_SECONDS = 1800;
-/** Absolute patrol end from start_time = 2h + 30m (matches Guide / auto-end expectations). */
-const PATROL_MAX_ELAPSED_MS = (PATROL_WARNING_SECONDS + AUTO_CLOSE_EXTENSION_SECONDS) * 1000;
-
-// Sound throttling
-const soundThrottleRef = {};
-function playThrottled(key, fn) {
-  const now = Date.now();
-  if (!soundThrottleRef[key] || now - soundThrottleRef[key] > 1000) {
-    fn();
-    soundThrottleRef[key] = now;
-  }
-}
-
-// Reliable audio unlock (Web Audio API)
-let audioUnlocked = false;
-function unlockAudio() {
-  if (audioUnlocked) return;
-  audioUnlocked = true;
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const buf = ctx.createBuffer(1, 1, 22050);
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.connect(ctx.destination);
-  src.start(0);
-  ctx.resume();
-}
-
-// ---------------------------------------------------------------------------
-// Dashboard
-// ---------------------------------------------------------------------------
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
@@ -111,37 +55,8 @@ export default function Dashboard() {
   const equipmentMine = equipmentMyBadgeCount(equipmentCounts);
   const equipmentBadge = equipmentMine + equipmentAdminBadgeCount(equipmentCounts);
 
-  // --- Patrol state ---
-  const [activePatrol, setActivePatrol] = useState(null);
-  // WhatsApp share sheet: { kind: 'start' | 'end', patrol } (patrol = DB row incl. share_ref)
-  const [shareTarget, setShareTarget] = useState(null);
-  const [shareRefreshKey, setShareRefreshKey] = useState(0);
-  const [startTime, setStartTime] = useState(null);
-  const [loadingPatrol, setLoadingPatrol] = useState(true);
-  const [allActivePatrols, setAllActivePatrols] = useState([]);
-  const [fetchError, setFetchError] = useState(null);
-  const [fetchAllError, setFetchAllError] = useState(null);
-  const [fetchAllLoading, setFetchAllLoading] = useState(false);
-
-  const [showWarning, setShowWarning] = useState(false);
-  const [autoCloseAt, setAutoCloseAt] = useState(null);
-  const [showVehiclePicker, setShowVehiclePicker] = useState(false);
-  const [vehiclesList, setVehiclesList] = useState([]);
-  const [patrolPhotoPreview, setPatrolPhotoPreview] = useState(null);
-
-  // Threat banner reads the shared watch (low accuracy until a patrol upgrades it).
   const userLocation = useSharedGeolocation('banner');
 
-  const warningTriggeredRef = useRef(false);
-  const isEndingRef = useRef(false);
-  const isStartingRef = useRef(false);
-  const fetchAllGenRef = useRef(0);
-  const [, setTick] = useState(0);
-  const prevPatrolsRef = useRef(null);
-  const patrolAvatarUrlByUserIdRef = useRef({});
-  const [upcomingScheduleRefresh, setUpcomingScheduleRefresh] = useState(0);
-
-  // --- Unread: ops keep Patrol ops vs Neighbours split (never merged) ---
   const isOpsChat = canAccessPatrolOpsChat(user?.role);
   const { count: patrolUnread, refetch: refetchPatrolUnread } = useUnreadCount(
     isOpsChat ? user?.id : null,
@@ -165,7 +80,6 @@ export default function Dashboard() {
     }
   }, [isOpsChat, refetchPatrolUnread, refetchNeighbourUnread, refetchResidentUnread]);
 
-  // Handle new messages (sound is owned by useChatNotifications — avoid double play)
   const handleNewMessage = useCallback((message) => {
     refetchUnread();
     if (Notification.permission === 'granted') {
@@ -182,7 +96,6 @@ export default function Dashboard() {
     }
   }, [refetchUnread]);
 
-  // Subscribe to chat notifications
   useChatNotifications(user?.id, handleNewMessage);
 
   const [pendingIncidentCount, setPendingIncidentCount] = useState(0);
@@ -279,7 +192,6 @@ export default function Dashboard() {
     };
   }, [user?.role, fetchPendingFeedbackCount]);
 
-  // PWA / Chromium: badge on home-screen icon when there are unread chat messages
   useEffect(() => {
     if (typeof navigator === 'undefined') return;
     const nav = navigator;
@@ -290,7 +202,22 @@ export default function Dashboard() {
     }
   }, [unreadCount]);
 
-  // --- Memoized derived values ---
+  useEffect(() => {
+    let cancelled = false;
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !cancelled) refetchUnread();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', handleVisibilityChange); };
+  }, [refetchUnread]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const handleFocus = () => { if (!cancelled) refetchUnread(); };
+    window.addEventListener('focus', handleFocus);
+    return () => { cancelled = true; window.removeEventListener('focus', handleFocus); };
+  }, [refetchUnread]);
+
   const primaryVehicle = useMemo(() => {
     if (user?.vehicles && user.vehicles.length > 0) {
       return user.vehicles.find(v => v.is_primary) || user.vehicles[0];
@@ -324,467 +251,21 @@ export default function Dashboard() {
   const unreadCityHubCount = useUnreadCityHubCount(canUseCityHub && !!(user?.id || user?.uid), user?.id || user?.uid);
   const canVerifyResidents = canStaffVerifyResident(user?.role);
   const canOpenHousehold = isHouseholdModeRole(user?.role) && canUseHouseholdMode(user?.role);
+  const canAccessAdmin = canAccessAdminPanel(user?.role);
   const todayDate = new Date().toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
-  const elapsed = startTime ? Math.floor((Date.now() - startTime.getTime()) / 1000) : 0;
-
-  // --- Fetch all active patrols ---
-  const fetchAll = useCallback(async () => {
-    const runId = ++fetchAllGenRef.current;
-    setFetchAllLoading(prev => {
-      if (prevPatrolsRef.current === null) return true;
-      return prev;
-    });
-    try {
-      const { data, error } = await scope(supabase.from('active_patrols').select('*'));
-      if (runId !== fetchAllGenRef.current) return;
-      if (error) throw error;
-      const incoming = await enrichPatrolRowsWithAvatars(supabase, data || []);
-      if (runId !== fetchAllGenRef.current) return;
-      incoming.forEach((p) => {
-        patrolAvatarUrlByUserIdRef.current[p.user_id] = p.patrol_avatar_url;
-      });
-      // Always apply poll results so vehicle/start_time updates are not skipped when IDs match.
-      setAllActivePatrols(incoming);
-      prevPatrolsRef.current = incoming;
-      setFetchAllError(null);
-    } catch (err) {
-      if (runId !== fetchAllGenRef.current) return;
-      setFetchAllError(err.message);
-    } finally {
-      if (runId === fetchAllGenRef.current) setFetchAllLoading(false);
-    }
-  }, [scope]);
-
-  // --- Manual refresh ---
-  const refreshData = useCallback(() => {
-    fetchAll();
-    refetchUnread();
-    setUpcomingScheduleRefresh((n) => n + 1);
-  }, [fetchAll, refetchUnread]);
-
-  // Polling fallback (interval stretches on slow / Data Saver / background tab)
-  useEffect(() => {
-    let timeoutId = 0;
-    let cancelled = false;
-    const schedule = () => {
-      if (timeoutId) window.clearTimeout(timeoutId);
-      const ms = adaptivePollIntervalMs(30000, { maxMs: 120000 });
-      timeoutId = window.setTimeout(() => {
-        if (cancelled) return;
-        void fetchAll();
-        schedule();
-      }, ms);
-    };
-    schedule();
-    const unsub = subscribeDataBudgetHints(() => {
-      if (!cancelled) schedule();
-    });
-    return () => {
-      cancelled = true;
-      if (timeoutId) window.clearTimeout(timeoutId);
-      unsub();
-    };
-  }, [fetchAll]);
-
-  // Visibility change
-  useEffect(() => {
-    let cancelled = false;
-    const handleVisibilityChange = () => {
-      if (!document.hidden && !cancelled) refetchUnread();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => { cancelled = true; document.removeEventListener('visibilitychange', handleVisibilityChange); };
-  }, [refetchUnread]);
-
-  // Window focus
-  useEffect(() => {
-    let cancelled = false;
-    const handleFocus = () => { if (!cancelled) refetchUnread(); };
-    window.addEventListener('focus', handleFocus);
-    return () => { cancelled = true; window.removeEventListener('focus', handleFocus); };
-  }, [refetchUnread]);
-
-  // --- Real‑time subscriptions ---
-  useEffect(() => {
-    if (!user) return;
-    const subscription = supabase
-      .channel('patrol-starts')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_patrols' }, (payload) => {
-        if (!belongsToActiveOrganization(payload.new, activeOrganizationId, includeUnscoped)) return;
-        if (payload.new.user_id !== user.id) playThrottled('patrol-start', playPatrolSigninNotification);
-      })
-      .subscribe();
-    return () => supabase.removeChannel(subscription);
-  }, [user, activeOrganizationId, includeUnscoped]);
-
-  useEffect(() => {
-    const subscription = supabase
-      .channel('all-active-patrols')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_patrols' }, async (payload) => {
-        const row = payload.new;
-        if (!row?.user_id) return;
-        if (!belongsToActiveOrganization(row, activeOrganizationId, includeUnscoped)) return;
-        const [enriched] = await enrichPatrolRowsWithAvatars(supabase, [row]);
-        const next = enriched ?? {
-          ...row,
-          patrol_avatar_url:
-            patrolAvatarUrlByUserIdRef.current[row.user_id] ??
-            (user?.id === row.user_id ? user.avatarUrl : null) ??
-            null,
-          patroller_phone: null,
-        };
-        setAllActivePatrols((prev) => {
-          if (prev.some((p) => p.user_id === next.user_id)) return prev;
-          patrolAvatarUrlByUserIdRef.current[next.user_id] = next.patrol_avatar_url;
-          return [...prev, next];
-        });
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'active_patrols' }, (payload) => {
-        setAllActivePatrols(prev => prev.filter(p => p.user_id !== payload.old.user_id));
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'active_patrols' }, (payload) => {
-        if (!belongsToActiveOrganization(payload.new, activeOrganizationId, includeUnscoped)) {
-          setAllActivePatrols((prev) => prev.filter((p) => p.user_id !== payload.new.user_id));
-          return;
-        }
-        setAllActivePatrols(prev => prev.map(p => {
-          if (p.user_id !== payload.new.user_id) return p;
-          return {
-            ...payload.new,
-            patrol_avatar_url:
-              p.patrol_avatar_url ??
-              patrolAvatarUrlByUserIdRef.current[payload.new.user_id] ??
-              null,
-            patroller_phone: p.patroller_phone ?? null,
-          };
-        }));
-      })
-      .subscribe();
-    return () => supabase.removeChannel(subscription);
-  }, [user?.id, user?.avatarUrl, activeOrganizationId, includeUnscoped]);
-
-  // --- GPS Tracking Hook ---
-  // DB: active_patrols_pkey is (user_id) — there is no separate id column. patrol_locations.patrol_id FK targets that key.
-  // Map/history scope by start_time so points from past sessions (same user_id) don’t stitch into one line.
-  const { 
-    isTracking, 
-    totalDistance, 
-    routePoints,
-    startTracking, 
-    stopTracking,
-  } = useGPSTracking({ 
-    patrolId: activePatrol?.user_id,
-    userId: user?.id 
+  const patrol = usePatrolLifecycle({
+    user,
+    scope,
+    activeOrganization,
+    activeOrganizationId,
+    includeUnscoped,
+    canDoPatrolOps,
+    refetchUnread,
   });
 
-  useEffect(() => {
-    if (activePatrol?.user_id && user?.id && !isTracking) {
-      startTracking();
-    }
-  }, [activePatrol?.user_id, user?.id, isTracking, startTracking]);
-
-  // Vehicle columns only — GPS updates replace activePatrol without changing these.
-  const patrolSyncUserId = activePatrol?.user_id;
-  const patrolSyncVehicleId = activePatrol?.vehicle_id;
-  const patrolSyncVehicleColor = activePatrol?.vehicle_color;
-  const patrolSyncMakeModel = activePatrol?.vehicle_make_model;
-  const patrolSyncVehicleReg = activePatrol?.vehicle_reg;
-  const patrolSyncVehicleType = activePatrol?.vehicle_type;
-
-  // Keep active_patrols vehicle_* in sync with user_vehicles (map reads DB; stale color after vehicle swap)
-  useEffect(() => {
-    if (!user?.id || !patrolSyncUserId || patrolSyncUserId !== user.id) return;
-    if (!user.vehicles?.length) return;
-    const patrolSnapshot = {
-      user_id: patrolSyncUserId,
-      vehicle_id: patrolSyncVehicleId,
-      vehicle_color: patrolSyncVehicleColor,
-      vehicle_make_model: patrolSyncMakeModel,
-      vehicle_reg: patrolSyncVehicleReg,
-      vehicle_type: patrolSyncVehicleType,
-    };
-    let cancelled = false;
-    (async () => {
-      const { updated, data } = await syncActivePatrolVehicleFromVehicleList(
-        supabase,
-        user.id,
-        user.vehicles,
-        patrolSnapshot
-      );
-      if (cancelled || !updated || !data) return;
-      setActivePatrol(data);
-      setAllActivePatrols((prev) => prev.map((p) => (p.user_id === user.id ? { ...p, ...data } : p)));
-    })();
-    return () => { cancelled = true; };
-  }, [
-    user?.id,
-    user?.vehicles,
-    patrolSyncUserId,
-    patrolSyncVehicleId,
-    patrolSyncVehicleColor,
-    patrolSyncMakeModel,
-    patrolSyncVehicleReg,
-    patrolSyncVehicleType,
-  ]);
-
-  // --- Patrol logic ---
-  const startPatrolWithVehicle = useCallback(async (vehicleId) => {
-    if (isStartingRef.current || isEndingRef.current) return;
-    isStartingRef.current = true;
-    const vehicle = user.vehicles.find(v => v.id === vehicleId);
-    try {
-      const { data: existing, error: existingErr } = await scope(
-        supabase.from('active_patrols').select('user_id, start_time')
-      ).eq('user_id', user.id).maybeSingle();
-      if (existingErr) throw existingErr;
-      if (existing) {
-        toast.error("You already have an active patrol.");
-        const started = parsePatrolTime(existing.start_time);
-        setActivePatrol((prev) => prev || { ...existing, user_id: user.id });
-        if (started) setStartTime(started);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('active_patrols')
-        .insert({
-          user_id: user.id,
-          user_name: user.fullName || user.email,
-          vehicle_id: vehicleId,
-          vehicle_type: normalizeVehicleType(vehicle.vehicle_type, vehicle.make_model) || 'car',
-          vehicle_make_model: vehicle.make_model,
-          vehicle_reg: vehicle.registration,
-          vehicle_color: vehicle.color,
-          start_time: new Date().toISOString(),
-          zone: activeOrganization?.name || DEFAULT_PATROL_ZONE,
-          organization_id: activeOrganization?.id || user.organizationId || null,
-        })
-        .select();
-      if (error) throw error;
-      if (data && data.length > 0) {
-        const newPatrol = data[0];
-        setActivePatrol(newPatrol);
-        setStartTime(parsePatrolTime(newPatrol.start_time) || new Date());
-        toast.success("Patrol started!");
-        playPatrolStart();
-        startTracking();
-        if (newPatrol.share_ref) setShareTarget({ kind: 'start', patrol: newPatrol });
-        setShareRefreshKey((k) => k + 1);
-      }
-    } catch (err) {
-      console.error("Check-in failed:", err);
-      toast.error("Check-in failed: " + err.message);
-    } finally {
-      isStartingRef.current = false;
-    }
-  }, [user, startTracking, activeOrganization, scope]);
-
-  const startPatrolWithLegacy = useCallback(async () => {
-    if (isStartingRef.current || isEndingRef.current) return;
-    isStartingRef.current = true;
-    try {
-      const { data: existing, error: existingErr } = await scope(
-        supabase.from('active_patrols').select('user_id, start_time')
-      ).eq('user_id', user.id).maybeSingle();
-      if (existingErr) throw existingErr;
-      if (existing) {
-        toast.error("You already have an active patrol.");
-        const started = parsePatrolTime(existing.start_time);
-        setActivePatrol((prev) => prev || { ...existing, user_id: user.id });
-        if (started) setStartTime(started);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('active_patrols')
-        .insert({
-          user_id: user.id,
-          user_name: user.fullName || user.email,
-          vehicle_type: normalizeVehicleType(user.carType, null),
-          car_type: user.carType || "—",
-          reg_number: user.registrationNumber || "—",
-          vehicle_color: user.vehicleColor || "gray",
-          start_time: new Date().toISOString(),
-          zone: activeOrganization?.name || DEFAULT_PATROL_ZONE,
-          organization_id: activeOrganization?.id || user.organizationId || null,
-        })
-        .select();
-      if (error) throw error;
-      if (data && data.length > 0) {
-        const newPatrol = data[0];
-        setActivePatrol(newPatrol);
-        setStartTime(parsePatrolTime(newPatrol.start_time) || new Date());
-        toast.success("Patrol started!");
-        playPatrolStart();
-        startTracking();
-        if (newPatrol.share_ref) setShareTarget({ kind: 'start', patrol: newPatrol });
-        setShareRefreshKey((k) => k + 1);
-      }
-    } catch (err) {
-      console.error("Check-in failed:", err);
-      toast.error("Check-in failed: " + err.message);
-    } finally {
-      isStartingRef.current = false;
-    }
-  }, [user, startTracking, activeOrganization, scope]);
-
-  const handleCheckIn = useCallback(async () => {
-    if (!user) return;
-    if (!canDoPatrolOps) {
-      toast.error("Your role does not allow starting patrols.");
-      return;
-    }
-    if (user.vehicles && user.vehicles.length > 1) {
-      setVehiclesList(user.vehicles);
-      setShowVehiclePicker(true);
-      return;
-    }
-    if (user.vehicles && user.vehicles.length === 1) {
-      await startPatrolWithVehicle(user.vehicles[0].id);
-      return;
-    }
-    await startPatrolWithLegacy();
-  }, [user, startPatrolWithVehicle, startPatrolWithLegacy, canDoPatrolOps]);
-
-  const handleCheckOut = useCallback(async (autoClosed = false) => {
-    if (!activePatrol || isEndingRef.current) return;
-    isEndingRef.current = true;
-    const endedShareRef = activePatrol.share_ref || null;
-    try {
-      // Stop GPS tracking before ending patrol
-      await stopTracking();
-      
-      let { error: rpcError } = await supabase.rpc('end_patrol', {
-        p_user_id: user.id,
-        p_auto_closed: Boolean(autoClosed),
-      });
-      // Until migration is applied, older end_patrol(uuid) still works for manual ends.
-      if (
-        rpcError &&
-        /p_auto_closed|could not find the function|function public\.end_patrol/i.test(
-          String(rpcError.message || rpcError)
-        )
-      ) {
-        ({ error: rpcError } = await supabase.rpc('end_patrol', { p_user_id: user.id }));
-      }
-      // Pre-idempotent migration: double-end / admin force-end raises P0001.
-      const alreadyEnded = rpcError && /no active patrol/i.test(String(rpcError.message || rpcError));
-      if (rpcError && !alreadyEnded) throw rpcError;
-      setAllActivePatrols(prev => prev.filter(p => p.user_id !== user.id));
-      setActivePatrol(null);
-      setStartTime(null);
-      setShowWarning(false);
-      setAutoCloseAt(null);
-      warningTriggeredRef.current = false;
-      if (alreadyEnded) {
-        toast.success("Patrol already ended.");
-      } else {
-        toast.success(autoClosed ? "Patrol auto-ended (time limit reached)." : "Patrol ended. Log saved.");
-        if (autoClosed) playPatrolAutoEnd();
-        else playPatrolEnd();
-      }
-      // Offer the sign-off share (sign-off time comes from the server-written log row).
-      if (endedShareRef && !autoClosed) {
-        fetchPatrolShare(endedShareRef)
-          .then((row) => {
-            if (row?.end_time) setShareTarget({ kind: 'end', patrol: row });
-          })
-          .catch((err) => console.warn('get_patrol_share failed', err))
-          .finally(() => setShareRefreshKey((k) => k + 1));
-      } else {
-        setShareRefreshKey((k) => k + 1);
-      }
-    } catch (err) {
-      console.error("Check-out failed:", err);
-      toast.error("Check-out failed: " + err.message);
-    } finally {
-      isEndingRef.current = false;
-    }
-  }, [activePatrol, user, stopTracking]);
-
-  useEffect(() => {
-    if (!startTime) return;
-    const startMs = startTime.getTime();
-
-    const updateTimer = () => {
-      const now = Date.now();
-      const diff = Math.floor((now - startMs) / 1000);
-      setTick((prev) => prev + 1);
-
-      // First time past 2h: show modal + schedule auto-end at patrol start + 2.5h (not start + 30m — that was a bug).
-      if (
-        diff >= PATROL_WARNING_SECONDS &&
-        !warningTriggeredRef.current &&
-        !showWarning &&
-        autoCloseAt == null
-      ) {
-        warningTriggeredRef.current = true;
-        setShowWarning(true);
-        playPatrolWarning();
-        setAutoCloseAt(startMs + PATROL_MAX_ELAPSED_MS);
-      }
-
-      if (autoCloseAt != null && now >= autoCloseAt) {
-        void handleCheckOut(true);
-      }
-    };
-
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [startTime, showWarning, autoCloseAt, handleCheckOut]);
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    const fetchInitial = async () => {
-      try {
-        const { data, error } = await scope(
-          supabase.from('active_patrols').select('*')
-        ).eq('user_id', user.id).maybeSingle();
-        if (cancelled) return;
-        if (error) throw error;
-        if (data) { 
-          setActivePatrol(data); 
-          setStartTime(parsePatrolTime(data.start_time)); 
-        }
-        else setActivePatrol(null);
-        setFetchError(null);
-      } catch (err) {
-        if (cancelled) return;
-        setFetchError(err.message);
-      } finally {
-        if (!cancelled) setLoadingPatrol(false);
-      }
-    };
-    fetchInitial();
-    fetchAll();
-    return () => { cancelled = true; };
-  }, [user, fetchAll, scope]);
-
-  const formatTime = (seconds) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
-
-  const formatElapsed = (seconds) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return `${h}h ${m}m`;
-  };
-
-  useEffect(() => {
-    const clickHandler = () => unlockAudio();
-    document.addEventListener('click', clickHandler, { once: true });
-    return () => document.removeEventListener('click', clickHandler);
-  }, []);
-
-  // Unknown role must not paint the patrol dashboard. Residents (and other
-  // role homes) redirect here, before that markup, including after a profile error.
   if (profileView === "session" || profileView === "pending" || !hasHydratedAppRole(user?.role)) {
     if (profileView === "offline" || profileView === "error") {
       return (
@@ -806,12 +287,12 @@ export default function Dashboard() {
     return <Navigate to={home} replace />;
   }
 
-  if (fetchError && !activePatrol && loadingPatrol === false) {
+  if (patrol.fetchError && !patrol.activePatrol && patrol.loadingPatrol === false) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
         <ErrorState
           title="Error loading patrol"
-          message={fetchError}
+          message={patrol.fetchError}
           onRetry={() => window.location.reload()}
         />
       </div>
@@ -820,15 +301,14 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 md:pb-8 motion-safe:scroll-smooth">
-      {/* ACTIVE THREATS BANNER - CRITICAL INTEGRATION */}
       {canUseSosBoard ? <ActiveSosBanner /> : null}
       {userLocation && (
         <ActiveThreatsBanner userLocation={userLocation} maxDistanceKm={2} />
       )}
-      {shareTarget ? (
+      {patrol.shareTarget ? (
         <PatrolShareSheet
-          kind={shareTarget.kind}
-          patrol={shareTarget.patrol}
+          kind={patrol.shareTarget.kind}
+          patrol={patrol.shareTarget.patrol}
           organizationName={activeOrganization?.name || ''}
           timeZone={activeOrganization?.timezone || DEFAULT_SHARE_TIME_ZONE}
           phone={user?.phone || ''}
@@ -836,659 +316,134 @@ export default function Dashboard() {
           viewerFullName={user?.fullName || ''}
           viewerNameParts={[user?.user_metadata?.first_name, user?.user_metadata?.last_name]}
           location={userLocation}
-          onClose={() => setShareTarget(null)}
+          onClose={() => patrol.setShareTarget(null)}
           onShared={(sharedAt) => {
-            const ref = shareTarget.patrol?.share_ref;
-            if (shareTarget.kind === 'start' && ref) {
-              setActivePatrol((prev) => (prev && prev.share_ref === ref ? { ...prev, start_shared_at: sharedAt } : prev));
+            const ref = patrol.shareTarget.patrol?.share_ref;
+            if (patrol.shareTarget.kind === 'start' && ref) {
+              patrol.setActivePatrol((prev) => (prev && prev.share_ref === ref ? { ...prev, start_shared_at: sharedAt } : prev));
             }
-            setShareRefreshKey((k) => k + 1);
+            patrol.setShareRefreshKey((k) => k + 1);
           }}
         />
       ) : null}
 
       <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <DashboardHeader
+          user={user}
+          firstName={firstName}
+          initials={initials}
+          todayDate={todayDate}
+          activeOrganization={activeOrganization}
+          isGlobalOperator={isGlobalOperator}
+          onRefresh={patrol.refreshData}
+          onOpenProfile={() => navigate('/profile')}
+          onChangeArea={() => navigate("/choose-area")}
+        />
 
-        <div className="mb-5 flex items-center gap-2 sm:gap-3 lg:gap-4">
-          <img
-            src={appMark}
-            alt=""
-            width={128}
-            height={128}
-            decoding="async"
-            className="h-9 w-9 shrink-0 rounded-xl object-contain sm:h-10 sm:w-10 lg:h-11 lg:w-11"
-          />
-          <span className="text-base font-bold tracking-tight text-gray-900 dark:text-white sm:text-lg lg:text-xl">
-            Watchman
-          </span>
-        </div>
-
-        {/* Header — compact bento strip */}
-        <div className="bg-gradient-to-r from-teal-600 to-teal-700 dark:from-teal-800 dark:to-teal-900 rounded-2xl shadow-xl overflow-hidden mb-6 motion-safe:transition-shadow">
-          <div className="px-5 py-6 sm:px-8 sm:py-7">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div className="flex items-start space-x-4 min-w-0">
-                <button type="button" onClick={() => navigate('/profile')} aria-label={`Open profile for ${firstName}`} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-full shrink-0">
-                  {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover ring-2 ring-white dark:ring-gray-300 shadow-md" />
-                  ) : (
-                    <div className="h-16 w-16 rounded-full bg-white dark:bg-gray-200 text-teal-600 dark:text-teal-800 flex items-center justify-center text-2xl font-bold shadow-md">
-                      {initials}
-                    </div>
-                  )}
-                </button>
-                <div className="min-w-0">
-                  <h1 className="text-2xl sm:text-3xl font-bold text-white break-words">Welcome back, {firstName}!</h1>
-                  <p className="text-teal-100 text-sm mt-1">{todayDate}</p>
-                  <AreaWeatherChip
-                    organizationId={activeOrganization?.id}
-                    className="mt-1 text-white/90"
-                  />
-                  <p className="mt-2 flex items-start gap-1.5 text-sm font-medium text-white">
-                    <FaMapMarkerAlt className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-100" aria-hidden />
-                    <span className="min-w-0 break-words">{activeOrganization?.name || formatPatrolPlaceLabel()}</span>
-                  </p>
-                  {isGlobalOperator ? (
-                    <button
-                      type="button"
-                      onClick={() => navigate("/choose-area")}
-                      className="mt-2 inline-block bg-white/20 hover:bg-white/30 text-white text-xs px-2 py-1 rounded-full"
-                    >
-                      Change neighbourhood
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="flex space-x-3 shrink-0">
-                <IconButton label="Refresh data" onClick={refreshData} className="bg-white/20 text-white hover:bg-white/30 motion-safe:transition">
-                  <FaSync className="w-4 h-4" aria-hidden />
-                </IconButton>
-                <SoundToggle />
-                <AppNotificationBell variant="brand" />
-                <ThemeToggle />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Currently on Patrol (others) */}
-        {fetchAllError ? (
-          <div className="mb-6">
-            <ErrorState
-              title="Error loading active patrols"
-              message={fetchAllError}
-              onRetry={refreshData}
-            />
-          </div>
-        ) : fetchAllLoading ? (
-          <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-6 py-8 dark:border-amber-800/60 dark:bg-amber-950/20">
-            <Skeleton lines={4} />
-          </div>
-        ) : allActivePatrols.length > 0 && (
-          <div className="mb-8 rounded-2xl border border-green-200 dark:border-green-800 bg-green-50/90 dark:bg-green-950/25 shadow-soft overflow-hidden">
-            <div className="px-6 py-4 border-b border-green-200/80 dark:border-green-800/80 bg-green-100/50 dark:bg-green-900/20">
-              <h2 className="text-lg font-semibold text-green-900 dark:text-green-100">🟢 Currently on Patrol</h2>
-            </div>
-            <div className="p-4 sm:p-5">
-              <div className="grid gap-4 sm:grid-cols-2">
-                {allActivePatrols.map((p) => {
-                  const started = parsePatrolTime(p.start_time);
-                  const elapsedSec = started ? Math.floor((Date.now() - started.getTime()) / 1000) : 0;
-                  const vehicleType = normalizeVehicleType(p.vehicle_type, p.car_type);
-                  const vehicleColor = p.vehicle_color || 'gray';
-                  const vehicleDisplay = getVehicleDisplayText(
-                    p.vehicle_type,
-                    p.car_type,
-                    p.vehicle_make_model,
-                    p.vehicle_reg,
-                    p.reg_number
-                  );
-                  const patrolAvatarDisplayUrl = resolvePatrolAvatarUrl(p, user);
-
-                  return (
-                    <div
-                      key={p.user_id}
-                      className="rounded-xl border border-green-200 dark:border-green-800 bg-white/80 dark:bg-gray-900/60 p-4 shadow-sm"
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center shrink-0 rounded-full border-0 bg-transparent p-0 m-0 appearance-none focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
-                          onClick={() =>
-                            setPatrolPhotoPreview({
-                              name: p.user_name || 'Patrol',
-                              imageUrl: patrolAvatarDisplayUrl,
-                            })
-                          }
-                          aria-label={`View photo of ${p.user_name || 'patroller'}`}
-                        >
-                          <Avatar name={p.user_name || 'Patrol'} avatarUrl={patrolAvatarDisplayUrl} size="sm" />
-                        </button>
-                        <p className="font-semibold text-gray-900 dark:text-white truncate">{p.user_name}</p>
-                      </div>
-                      <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                        <div className="flex items-center gap-1.5">
-                          <VehicleIcon type={vehicleType} color={vehicleColor} size="sm" />
-                          <span>{vehicleDisplay}</span>
-                        </div>
-                        {(p.patroller_phone || '').trim() ? (
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <PatrolInfoIcon icon={FaPhone} colorKey={vehicleColor} />
-                            <span className="truncate">{p.patroller_phone}</span>
-                          </div>
-                        ) : null}
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <PatrolInfoIcon icon={FaClock} colorKey={vehicleColor} />
-                          <span>Started: {started ? started.toLocaleTimeString() : '—'}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <PatrolInfoIcon icon={FaStopwatch} colorKey={vehicleColor} />
-                          <span>Elapsed: {formatElapsed(elapsedSec)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+        <ActivePatrolsPanel
+          fetchAllError={patrol.fetchAllError}
+          fetchAllLoading={patrol.fetchAllLoading}
+          allActivePatrols={patrol.allActivePatrols}
+          viewer={user}
+          nowMs={patrol.nowMs}
+          onRetry={patrol.refreshData}
+          onPreviewPhoto={patrol.setPatrolPhotoPreview}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-8 items-stretch">
-        {/* Patrol column: status + upcoming schedule (fills height beside profile on large screens) */}
-        <div className={`lg:col-span-7 flex flex-col gap-4 min-h-0 h-full ${activePatrol ? 'lg:row-span-2' : ''}`}>
-          {canDoPatrolOps ? (
-            <PatrolShareBanner refreshKey={shareRefreshKey} onOpen={setShareTarget} />
-          ) : null}
-          <div className="shrink-0 min-h-0">
-          <div className={`relative overflow-hidden rounded-2xl p-6 motion-safe:transition-all motion-safe:duration-300
-            ${activePatrol 
-              ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25' 
-              : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-card'
+          <PatrolStatusColumn
+            activePatrol={patrol.activePatrol}
+            canDoPatrolOps={canDoPatrolOps}
+            canUsePatrolSchedule={canUsePatrolSchedule}
+            shareRefreshKey={patrol.shareRefreshKey}
+            onOpenShare={patrol.setShareTarget}
+            elapsed={patrol.elapsed}
+            loadingPatrol={patrol.loadingPatrol}
+            onCheckIn={patrol.handleCheckIn}
+            onCheckOut={patrol.handleCheckOut}
+            upcomingScheduleRefresh={patrol.upcomingScheduleRefresh}
+          />
+          {patrol.activePatrol && (
+            <GpsTrackingPanel
+              isTracking={patrol.isTracking}
+              totalDistance={patrol.totalDistance}
+              routePoints={patrol.routePoints}
+            />
+          )}
+          <DashboardProfileCard
+            user={user}
+            primaryVehicle={primaryVehicle}
+            primaryVehicleSummaryText={primaryVehicleSummaryText}
+          />
+        </div>
+
+        <DashboardPrimaryActions
+          onReportIncident={() => navigate("/incident/new")}
+          onOpenChat={() => {
+            if (isOpsChat && neighbourUnread > 0 && patrolUnread === 0) {
+              navigate('/chat?room=resident');
+            } else if (isOpsChat) {
+              navigate('/chat?room=patrol');
+            } else {
+              navigate('/chat');
             }
-          `}>
-            {/* Background decoration for active state */}
-            {activePatrol && (
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-            )}
-            
-            <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <div
-                  className={`w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center text-2xl overflow-hidden
-                  ${activePatrol
-                    ? 'bg-white/20 backdrop-blur-sm'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                  }
-                `}
-                >
-                  {activePatrol ? (
-                    <span className="text-white" aria-hidden>
-                      ✓
-                    </span>
-                  ) : (
-                    <img
-                      src={startPatrolIcon}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      width={128}
-                      height={128}
-                      decoding="async"
-                    />
-                  )}
-                </div>
-                <div>
-                  <h2 className={`text-xl font-bold ${activePatrol ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
-                    {activePatrol ? 'Patrol Active' : 'Ready to Start'}
-                  </h2>
-                  {activePatrol && (
-                    <div className="mt-1 flex items-baseline gap-2">
-                      <span className="text-4xl font-mono font-bold tracking-tight">
-                        {formatTime(elapsed)}
-                      </span>
-                      <span className="text-emerald-100 text-sm font-medium">elapsed</span>
-                    </div>
-                  )}
-                  {!activePatrol && (
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                      Start a patrol to begin tracking your route
-                    </p>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                {activePatrol && canDoPatrolOps && (
-                  <Button type="button" variant="danger" onClick={() => handleCheckOut(false)}>
-                    <FaStop className="mr-2" aria-hidden /> End Patrol
-                  </Button>
-                )}
-                {!activePatrol && canDoPatrolOps && (
-                  <Button type="button" variant="success" onClick={handleCheckIn} disabled={loadingPatrol}>
-                    <FaPlay className="mr-2" aria-hidden /> Start Patrol
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          </div>
+          }}
+          isOpsChat={isOpsChat}
+          patrolUnread={patrolUnread}
+          neighbourUnread={neighbourUnread}
+          unreadCount={unreadCount}
+          onOpenPatrolChat={() => navigate('/chat?room=patrol')}
+          onOpenNeighbourChat={() => navigate('/chat?room=resident')}
+          canUseIntelligence={canUseIntelligence}
+          onOpenIntelligence={() => navigate('/intelligence')}
+        />
 
-          {canUsePatrolSchedule ? (
-            <UpcomingScheduledPatrollers
-              className="lg:flex-1"
-              refreshNonce={upcomingScheduleRefresh}
-            />
-          ) : null}
-          <HouseholdsAwayCard />
-        </div>
+        <DashboardShortcutGrid
+          canOpenHousehold={canOpenHousehold}
+          canUsePatrolSchedule={canUsePatrolSchedule}
+          canUseIntelligence={canUseIntelligence}
+          canUseSosBoard={canUseSosBoard}
+          canVerifyResidents={canVerifyResidents}
+          canAccessAdmin={canAccessAdmin}
+          canUseCityHub={canUseCityHub}
+          equipmentMine={equipmentMine}
+          equipmentBadge={equipmentBadge}
+          pendingIncidentCount={pendingIncidentCount}
+          pendingFeedbackCount={pendingFeedbackCount}
+          unreadCityHubCount={unreadCityHubCount}
+          onNavigate={navigate}
+        />
 
-        {/* GPS — above Your profile on large screens (right column); below patrol on mobile */}
-        {activePatrol && (
-          <div className="lg:col-span-5 mb-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-card min-h-0 flex flex-col">
-            <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-6 sm:py-5 bg-gradient-to-r from-slate-50 via-teal-50/60 to-teal-50/80 dark:from-gray-800 dark:via-teal-950/25 dark:to-teal-950/35 border-b border-gray-200/90 dark:border-gray-700/90">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700 shadow-sm dark:bg-teal-900/50 dark:text-teal-200">
-                  <FaMapMarkerAlt className="w-5 h-5" aria-hidden />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white tracking-tight">
-                    GPS tracking
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 hidden sm:block">
-                    Your route is saved while this patrol is active
-                  </p>
-                </div>
-              </div>
-              <div
-                className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold tabular-nums shadow-sm border ${
-                  isTracking
-                    ? 'bg-green-100 text-green-900 border-green-200/80 dark:bg-green-900/35 dark:text-green-100 dark:border-green-700/50'
-                    : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700/80 dark:text-gray-200 dark:border-gray-600'
-                }`}
-                role="status"
-                aria-live="polite"
-              >
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full motion-safe:transition-colors ${
-                    isTracking ? 'bg-green-500 motion-safe:animate-pulse' : 'bg-gray-400 dark:bg-gray-500'
-                  }`}
-                  aria-hidden
-                />
-                {isTracking ? 'Live · Active' : 'Inactive'}
-              </div>
-            </div>
-
-            {(totalDistance > 0 || routePoints.length > 0) && (
-              <div className="px-5 py-4 sm:px-6 flex flex-wrap gap-3 bg-gray-50/70 dark:bg-gray-900/30">
-                {totalDistance > 0 && (
-                  <div className="flex flex-1 min-w-[10rem] items-center gap-3 rounded-xl border border-gray-200/80 dark:border-gray-600/80 bg-white dark:bg-gray-800/80 px-4 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                      <FaRoad className="w-4 h-4" aria-hidden />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                        Distance
-                      </p>
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {totalDistance.toFixed(2)} km
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {routePoints.length > 0 && (
-                  <div className="flex flex-1 min-w-[10rem] items-center gap-3 rounded-xl border border-gray-200/80 dark:border-gray-600/80 bg-white dark:bg-gray-800/80 px-4 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                      <FaRoute className="w-4 h-4" aria-hidden />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                        Route points
-                      </p>
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {routePoints.length}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Profile — secondary bento cell */}
-        <div className="lg:col-span-5 bento-tile overflow-hidden flex flex-col min-h-[12rem]">
-          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 shrink-0">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Your profile</h2>
-          </div>
-          <div className="p-5 space-y-3 flex-1">
-            <div className="flex items-center space-x-3">
-              <FaUser className="text-teal-500 dark:text-teal-400 w-5 h-5 shrink-0" />
-              <span className="text-gray-700 dark:text-gray-300 text-sm">
-                <span className="font-medium">Name:</span> {user?.fullName || "Not provided"}
-              </span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <FaMapMarkerAlt className="text-teal-500 dark:text-teal-400 w-5 h-5 shrink-0" />
-              <span className="text-gray-700 dark:text-gray-300 text-sm">
-                <span className="font-medium">Address:</span> {user?.address || "Not provided"}
-              </span>
-            </div>
-            {primaryVehicle ? (
-              <div className="flex items-center space-x-3">
-                <ProfileVehicleGlyph
-                  type={primaryVehicle.vehicle_type}
-                  carType={primaryVehicle.car_type || user.carType}
-                />
-                <span className="text-gray-700 dark:text-gray-300 text-sm">
-                  <span className="font-medium">Primary vehicle:</span>{" "}
-                  {primaryVehicleSummaryText}
-                </span>
-              </div>
-            ) : (user?.carType || user?.registrationNumber) && (
-              <div className="flex items-center space-x-3">
-                <ProfileVehicleGlyph
-                  type={user.carType}
-                  carType={user.registrationNumber ? 'car' : null}
-                />
-                <span className="text-gray-700 dark:text-gray-300 text-sm">
-                  <span className="font-medium">Vehicle:</span>{" "}
-                  {user.carType && user.registrationNumber
-                    ? `${user.carType} (${user.registrationNumber})`
-                    : user.carType || user.registrationNumber}
-                </span>
-              </div>
-            )}
-            <div className="flex items-center space-x-3">
-              <FaEnvelope className="text-teal-500 dark:text-teal-400 w-5 h-5 shrink-0" />
-              <span className="text-gray-700 dark:text-gray-300 text-sm break-all">
-                <span className="font-medium">Email:</span> {user?.email}
-              </span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <FaPhone className="text-teal-500 dark:text-teal-400 w-5 h-5 shrink-0" />
-              <span className="text-gray-700 dark:text-gray-300 text-sm">
-                <span className="font-medium">Phone:</span> {user?.phone?.trim() ? user.phone : 'Not provided'}
-              </span>
-            </div>
-          </div>
-        </div>
-        </div>
-
-        {/* Primary actions — gradient + SVG (matches bento; scales cleanly vs raster PNGs) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 mb-4">
-          <button
-            type="button"
-            onClick={() => navigate("/incident/new")}
-            className="bento-tile-interactive flex flex-col items-center justify-center gap-2 min-h-[5.5rem] rounded-lg border-0 bg-gradient-to-br from-emerald-600 to-teal-600 text-white font-semibold p-4 shadow-lg shadow-emerald-900/20 hover:shadow-xl transition dark:from-emerald-700 dark:to-teal-800"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="text-sm text-center leading-tight">Report incident</span>
-          </button>
-          <div className="bento-tile-interactive relative flex flex-col items-center justify-center gap-2 min-h-[5.5rem] rounded-lg border-0 bg-gradient-to-br from-violet-600 to-purple-800 text-white font-semibold p-4 shadow-lg shadow-purple-900/25 hover:shadow-xl transition dark:from-violet-700 dark:to-purple-900">
-            <button
-              type="button"
-              className="absolute inset-0 z-0 rounded-lg"
-              onClick={() => {
-                if (isOpsChat && neighbourUnread > 0 && patrolUnread === 0) {
-                  navigate('/chat?room=resident');
-                } else if (isOpsChat) {
-                  navigate('/chat?room=patrol');
-                } else {
-                  navigate('/chat');
-                }
-              }}
-              aria-label={
-                isOpsChat
-                  ? `Open chat. Patrol ops ${patrolUnread} unread, Neighbours ${neighbourUnread} unread`
-                  : 'Open emergency chat'
-              }
-            />
-            <div className="relative z-10 pointer-events-none flex flex-col items-center justify-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              <span className="text-sm text-center leading-tight">Emergency chat</span>
-            </div>
-            {isOpsChat ? (
-              <div className="absolute top-2 right-2 z-20 max-w-[calc(100%-1rem)]">
-                <OpsChatUnreadSplit
-                  patrolUnread={patrolUnread}
-                  neighbourUnread={neighbourUnread}
-                  size="sm"
-                  className="flex-wrap justify-end"
-                  onPatrolClick={() => navigate('/chat?room=patrol')}
-                  onNeighbourClick={() => navigate('/chat?room=resident')}
-                />
-              </div>
-            ) : unreadCount > 0 ? (
-              <span className="absolute top-2 right-2 z-20 bg-red-500 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center motion-safe:animate-pulse">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            ) : null}
-          </div>
-          {canUseIntelligence ? (
-            <button
-              type="button"
-              onClick={() => navigate('/intelligence')}
-              className="bento-tile-interactive col-span-2 sm:col-span-1 flex flex-col items-center justify-center gap-2 min-h-[5.5rem] rounded-lg border-0 bg-gradient-to-br from-red-600 to-red-400 text-white font-semibold p-4 shadow-lg shadow-red-900/25 hover:shadow-xl transition dark:from-red-700 dark:to-red-600"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <span className="text-sm text-center leading-tight">Intelligence</span>
-            </button>
-          ) : null}
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-8">
-          {canOpenHousehold ? (
-            <button type="button" onClick={() => navigate('/resident')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-              <FaHome className="text-teal-600 dark:text-teal-400 shrink-0" aria-hidden />
-              <span>Resident Portal</span>
-            </button>
-          ) : null}
-          {canUsePatrolSchedule ? (
-            <button type="button" onClick={() => navigate('/schedule')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-              <FaCalendarAlt className="text-indigo-500 dark:text-indigo-400 shrink-0" aria-hidden />
-              <span>Patrol schedule</span>
-            </button>
-          ) : null}
-          <button type="button" onClick={() => navigate('/incidents')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-            <FaClipboardList className="text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden />
-            <span>View incidents</span>
-          </button>
-          {canUseIntelligence ? (
-            <button type="button" onClick={() => navigate('/hotspots')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-              <FaFire className="text-red-600 dark:text-red-400 shrink-0" aria-hidden />
-              <span>Hotspots</span>
-            </button>
-          ) : null}
-          <button type="button" onClick={() => navigate('/leaderboard')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-            <FaTrophy className="text-amber-500 shrink-0" aria-hidden />
-            <span>Leaderboard</span>
-          </button>
-          {canUseSosBoard ? (
-            <button type="button" onClick={() => navigate('/sos')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-              <FaPhone className="text-red-600 dark:text-red-400 shrink-0" aria-hidden />
-              <span>SOS board</span>
-            </button>
-          ) : null}
-          {canVerifyResidents && !canAccessAdminPanel(user?.role) ? (
-            <button type="button" onClick={() => navigate('/admin/residents')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-              <FaUser className="text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden />
-              <span>Verify residents</span>
-            </button>
-          ) : null}
-          <button type="button" onClick={() => navigate('/vehicles')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-            <FaCar className="text-slate-600 dark:text-slate-300 shrink-0" aria-hidden />
-            <span>Vehicles</span>
-          </button>
-          <button type="button" onClick={() => navigate(equipmentMine ? '/equipment/mine' : '/equipment')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-            <FaToolbox className="text-teal-600 dark:text-teal-400 shrink-0" aria-hidden />
-            <span>Equipment</span>
-            {equipmentBadge ? (
-              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white" aria-label={`${equipmentBadge} waiting`}>
-                {equipmentBadge > 99 ? '99+' : equipmentBadge}
-              </span>
-            ) : null}
-          </button>
-          <button type="button" onClick={() => navigate('/guide')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-            <FaBook className="text-violet-600 dark:text-violet-400 shrink-0" aria-hidden />
-            <span>Guide</span>
-          </button>
-          <button type="button" onClick={() => navigate('/about')} className="bento-tile-interactive p-3 text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center justify-center gap-2 text-center">
-            <FaInfoCircle className="text-sky-600 dark:text-sky-400 shrink-0" aria-hidden />
-            <span>About</span>
-          </button>
-          {canAccessAdminPanel(user?.role) && (
-            <button
-              type="button"
-              onClick={() => navigate('/admin')}
-              className="relative bento-tile-interactive col-span-2 md:col-span-4 lg:col-span-5 p-3 text-sm font-semibold text-teal-700 dark:text-teal-300 flex items-center justify-center gap-2 text-center bg-teal-50/80 dark:bg-teal-950/40 border-teal-200/60 dark:border-teal-800/60"
-            >
-              <FaShieldAlt className="text-teal-600 dark:text-teal-400 shrink-0" aria-hidden />
-              <span>Admin panel</span>
-              {(pendingIncidentCount + pendingFeedbackCount) > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-1.5 sm:top-1 sm:right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center motion-safe:animate-pulse"
-                  aria-label={`${pendingIncidentCount} incident(s) pending, ${pendingFeedbackCount} feedback item(s) pending review`}
-                >
-                  {(pendingIncidentCount + pendingFeedbackCount) > 99
-                    ? '99+'
-                    : pendingIncidentCount + pendingFeedbackCount}
-                </span>
-              )}
-            </button>
-          )}
-          {canUseCityHub && (
-            <button
-              type="button"
-              onClick={() => navigate('/city-hub')}
-              className={`relative bento-tile-interactive col-span-2 md:col-span-4 lg:col-span-5 p-3 text-sm font-semibold flex items-center justify-center gap-2 text-center ${
-                unreadCityHubCount > 0
-                  ? 'text-red-800 dark:text-red-200 bg-red-50/90 dark:bg-red-950/45 ring-2 ring-red-500/85 shadow-[0_0_12px_rgba(239,68,68,0.28)]'
-                  : 'text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-950/40 border-rose-200/60 dark:border-rose-800/60'
-              }`}
-            >
-              <FaMapPin className={`shrink-0 ${unreadCityHubCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-rose-600 dark:text-rose-400'}`} aria-hidden />
-              <span>City hub</span>
-              {unreadCityHubCount > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-1.5 sm:top-1 sm:right-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center motion-safe:animate-pulse"
-                  aria-label={`${unreadCityHubCount} unread City Hub post${unreadCityHubCount === 1 ? '' : 's'}`}
-                >
-                  {unreadCityHubCount > 99 ? '99+' : unreadCityHubCount}
-                </span>
-              )}
-            </button>
-          )}
-        </div>
-
-        {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-500 dark:text-gray-400 flex justify-between items-center border-t border-gray-200 dark:border-gray-700 pt-4">
           <span>Neighbourhood Watch Platform • Member since {user?.createdAt ? formatWatchDate(user.createdAt) || "recently" : "recently"}</span>
           <button type="button" onClick={signOut} className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition text-xs underline">Sign Out</button>
         </div>
       </div>
 
-
-      {/* Patrol Time Warning Modal */}
-      {showWarning && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-sm w-full p-6">
-            <h2 className="text-xl font-bold mb-4 dark:text-white">Patrol Time Warning</h2>
-            <p className="text-gray-700 dark:text-gray-300 mb-4">You've been on patrol for 2 hours. Do you want to continue?</p>
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowWarning(false);
-                  // Keep auto-end at start + 2.5h — Continue only dismisses the modal.
-                  if (autoCloseAt == null && startTime) {
-                    setAutoCloseAt(startTime.getTime() + PATROL_MAX_ELAPSED_MS);
-                  }
-                  warningTriggeredRef.current = true;
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Continue
-              </button>
-              <button onClick={() => handleCheckOut(false)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-                End Patrol
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Vehicle Picker Modal */}
-      {showVehiclePicker && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Select Vehicle</h2>
-            <div className="space-y-2">
-              {vehiclesList.map(v => {
-                const reg = v.registration?.trim();
-                const norm = normalizeVehicleType(v.vehicle_type, v.make_model);
-                const label = isLightMobilityVehicleType(v.vehicle_type)
-                  ? getVehicleTypePublicLabel(v.vehicle_type)
-                  : reg
-                    ? `${v.make_model}  (${reg})`
-                    : v.make_model;
-
-                const subtitle = isLightMobilityVehicleType(v.vehicle_type)
-                  ? null
-                  : `${getVehicleTypePublicLabel(norm)} · ${v.color || 'unknown color'}`;
-
-                return (
-                  <button
-                    key={v.id}
-                    onClick={() => { setShowVehiclePicker(false); startPatrolWithVehicle(v.id); }}
-                    className="w-full text-left p-3 border border-gray-100 dark:border-gray-600 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 transition"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div style={{
-                        width: 36, height: 36,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        borderRadius: '50%',
-                        backgroundColor: '#f1f5f9',
-                        flexShrink: 0,
-                      }}>
-                        <VehicleIcon type={v.vehicle_type || 'car'} color={v.color} size="md" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 dark:text-white truncate">{label}</p>
-                        {subtitle && (
-                          <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{subtitle}</p>
-                        )}
-                      </div>
-                      {v.is_primary && (
-                        <span className="ml-auto text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-full font-medium flex-shrink-0">
-                          Primary
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              onClick={() => setShowVehiclePicker(false)}
-              className="mt-4 w-full py-2 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <PatrolWarningModal
+        showWarning={patrol.showWarning}
+        autoCloseAt={patrol.autoCloseAt}
+        startTime={patrol.startTime}
+        warningTriggeredRef={patrol.warningTriggeredRef}
+        onDismissWarning={() => patrol.setShowWarning(false)}
+        onScheduleAutoClose={patrol.setAutoCloseAt}
+        onEndPatrol={() => patrol.handleCheckOut(false)}
+      />
+      <VehiclePickerModal
+        open={patrol.showVehiclePicker}
+        vehicles={patrol.vehiclesList}
+        onPick={(vehicleId) => {
+          patrol.setShowVehiclePicker(false);
+          patrol.startPatrolWithVehicle(vehicleId);
+        }}
+        onClose={() => patrol.setShowVehiclePicker(false)}
+      />
 
       <PatrollerPhotoPreview
-        open={!!patrolPhotoPreview}
-        onClose={() => setPatrolPhotoPreview(null)}
-        name={patrolPhotoPreview?.name}
-        imageUrl={patrolPhotoPreview?.imageUrl}
+        open={!!patrol.patrolPhotoPreview}
+        onClose={() => patrol.setPatrolPhotoPreview(null)}
+        name={patrol.patrolPhotoPreview?.name}
+        imageUrl={patrol.patrolPhotoPreview?.imageUrl}
       />
     </div>
   );
