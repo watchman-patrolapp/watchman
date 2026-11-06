@@ -1875,9 +1875,20 @@ SELECT pg_temp.check('P3c', 'Org A nw_admin records a contribution without creat
 SELECT pg_temp.assert('P3c', 'liability is stored and the function does not insert a payment',
   (SELECT liability_decision = 'contribution_requested' AND liability_amount_cents = 50000
    FROM public.equipment_issue_reports WHERE id = pg_temp.eq('iss1'))
-  AND position('INSERT INTO public.payments' IN pg_get_functiondef('public.decide_equipment_liability(uuid,text,bigint,text)'::regprocedure)) = 0
-  AND position('INSERT INTO public.charges' IN pg_get_functiondef('public.decide_equipment_liability(uuid,text,bigint,text)'::regprocedure)) = 0
-  AND position('INSERT INTO public.invoices' IN pg_get_functiondef('public.equipment_apply_write_off(uuid,uuid,text)'::regprocedure)) = 0,
+  AND EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'decide_equipment_liability')
+  AND EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'equipment_apply_write_off')
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname IN ('decide_equipment_liability', 'equipment_apply_write_off')
+      AND pg_get_functiondef(p.oid) ~* 'INSERT INTO public\.(payments|charges|invoices)'),
   'checked as postgres');
 UPDATE public.equipment_units SET purchase_price_cents = 250000 WHERE id = pg_temp.eq('r1');
 SELECT pg_temp.check('P3c', 'write-off of R2,500 waits for a second admin',
