@@ -32,6 +32,9 @@ import { canStaffManageIncidents } from "../auth/staffRoles";
 import { useScopedOrganization } from "../utils/organizationScope";
 import { parsePatrolTime } from "../utils/watchTime";
 import { approvedIncidentsQueryKey, fetchApprovedIncidentPage } from "../utils/incidentListQuery";
+import LastUpdatedNote from "../offline/LastUpdatedNote";
+import { OFFLINE_SCREENS, OFFLINE_WRITE_MESSAGE, userFacingWriteError } from "../offline/policy";
+import { useScreenSnapshot } from "../offline/useScreenSnapshot";
 
 /** Newest / latest-first timestamps for date-style sorts */
 const SORT_OPTIONS = [
@@ -335,6 +338,9 @@ export default function IncidentList() {
   const [scrollMargin, setScrollMargin] = useState(0);
 
   const showAdminDelete = canStaffManageIncidents(user?.role);
+  const userId = user?.uid || user?.id || null;
+  const incidentSnap = useScreenSnapshot(userId, activeOrganizationId, OFFLINE_SCREENS.incidents);
+  const saveIncidentCache = incidentSnap.save;
   const queryKey = approvedIncidentsQueryKey(activeOrganizationId, includeUnscoped);
 
   const incidentsQuery = useInfiniteQuery({
@@ -345,19 +351,26 @@ export default function IncidentList() {
     getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
 
+  const incidentsFromCache = !incidentsQuery.data ? incidentSnap.record?.data?.pages : null;
+  const showingCachedIncidents = Array.isArray(incidentsFromCache);
   const incidents = useMemo(
-    () => (incidentsQuery.data?.pages || []).flatMap((page) => page.rows),
-    [incidentsQuery.data]
+    () => (incidentsQuery.data?.pages || incidentsFromCache || []).flatMap((page) => page.rows || []),
+    [incidentsQuery.data, incidentsFromCache]
   );
   const evidenceFailed = (incidentsQuery.data?.pages || []).some((page) => page.evidenceFailed);
   const updatesFailed = (incidentsQuery.data?.pages || []).some((page) => page.updatesFailed);
-  const loading = incidentsQuery.isLoading;
+  const loading = incidentsQuery.isLoading && !showingCachedIncidents;
 
   useEffect(() => {
     if (incidentsQuery.error) console.error(incidentsQuery.error);
   }, [incidentsQuery.error]);
-  const error = incidentsQuery.isError && incidents.length === 0
-    ? "Incidents could not be loaded. Try again."
+  useEffect(() => {
+    if (!incidentsQuery.data) return;
+    void saveIncidentCache({ pages: incidentsQuery.data.pages });
+  }, [incidentsQuery.data, saveIncidentCache]);
+  const offlineNow = typeof navigator !== "undefined" && navigator.onLine === false;
+  const error = incidentsQuery.isError && !showingCachedIncidents
+    ? (offlineNow ? OFFLINE_WRITE_MESSAGE : "Incidents could not be loaded. Try again.")
     : null;
 
   const sortedIncidents = useMemo(() => {
@@ -379,8 +392,8 @@ export default function IncidentList() {
       if (!result.ok) {
         toast.error(
           result.error?.includes("admin_delete_incident") || result.error?.includes("function")
-            ? `Delete failed: ${result.error} — run the SQL migration admin_delete_incident in Supabase.`
-            : `Delete failed: ${result.error || "Unknown error"}`
+            ? "Delete isn’t available until the latest incident SQL is applied."
+            : userFacingWriteError({ message: result.error }, "Could not delete that incident.")
         );
         return;
       }
@@ -477,6 +490,11 @@ export default function IncidentList() {
         </div>
 
         {/* Error State */}
+        {showingCachedIncidents ? (
+          <div className="mb-4">
+            <LastUpdatedNote savedAt={incidentSnap.savedAt} />
+          </div>
+        ) : null}
         {error && (
           <div className="mb-6">
             <ErrorState title="Failed to load incidents" message={error} onRetry={retryIncidents} />

@@ -9,6 +9,9 @@ import { registerEmergencyChatPush } from '../utils/emergencyChatPush'
 import { permissionsPrimerWasDismissed } from '../utils/permissionsPrimerStorage'
 import { hasHydratedAppRole, sessionUserForAppState } from './appRole'
 import { nextProfileLoadStep, profileLoadAttemptPlan } from './profileLoadRetry'
+import { isOfflineOrNetworkError } from '../offline/policy'
+import { readProfileSnapshot, saveProfileSnapshot } from '../offline/snapshots'
+import { clearOfflineSession } from '../offline/sessionCleanup'
 
 export function useAuth() {
   const context = useContext(AuthContext);
@@ -156,6 +159,7 @@ export const AuthProvider = ({ children }) => {
   /** When a second caller hits "already fetching", await this so we don't setLoading before user exists */
   const profileFetchPromiseRef = useRef(null)
   const bootstrapStartedAtRef = useRef(0)
+  const profileCacheRetryRef = useRef(false)
 
   useEffect(() => {
     mounted.current = true
@@ -316,6 +320,7 @@ export const AuthProvider = ({ children }) => {
         lastFetchedUid.current = authUser.id
         setProfileError(null)
         setUser(nextUser)
+        void saveProfileSnapshot(nextUser)
         devLog('Auth: Profile phase 1 loaded for', authUser.id)
 
         void (async () => {
@@ -338,6 +343,7 @@ export const AuthProvider = ({ children }) => {
               userRef.current = next
               return next
             })
+            if (userRef.current?.uid === authUser.id) void saveProfileSnapshot(userRef.current)
             devLog('Auth: Profile phase 2 loaded for', authUser.id)
           } catch (e) {
             console.warn('Auth: Profile phase 2 error:', e)
@@ -348,6 +354,32 @@ export const AuthProvider = ({ children }) => {
 
       if (!failure) return
       console.error('Auth: Error fetching profile:', failure.message)
+      if (failure.code === 'offline' || isOfflineOrNetworkError(failure)) {
+        const cached = await readProfileSnapshot(authUser.id)
+        if (cached?.data?.role && stillCurrent()) {
+          const restored = {
+            ...(sessionUserForAppState(authUser, { profileLoaded: true }) || {}),
+            ...cached.data,
+            uid: authUser.id,
+            profileLoaded: true,
+            profileFromCache: true,
+            profileSavedAt: cached.savedAt,
+          }
+          userRef.current = restored
+          lastFetchedUid.current = authUser.id
+          setProfileError(null)
+          setUser(restored)
+          devLog('Auth: Profile restored from offline cache for', authUser.id)
+          if (browserIsOnline() && !profileCacheRetryRef.current && typeof window !== 'undefined') {
+            profileCacheRetryRef.current = true
+            window.setTimeout(() => {
+              if (!mounted.current || !userRef.current?.profileFromCache) return
+              void fetchUserProfile(authUser, true)
+            }, 8000)
+          }
+          return
+        }
+      }
       const prev = userRef.current
       if (prev && (prev.uid === authUser.id || prev.id === authUser.id) && hasHydratedAppRole(prev.role)) {
         console.warn('Auth: Profile refetch failed -- preserving existing data.')
@@ -409,7 +441,7 @@ export const AuthProvider = ({ children }) => {
     const onOnline = () => {
       const current = userRef.current
       if (!current?.uid && !current?.id) return
-      if (hasHydratedAppRole(current.role) && !profileErrorRef.current) return
+      if (hasHydratedAppRole(current.role) && !profileErrorRef.current && !current.profileFromCache) return
       void retryProfile()
     }
     window.addEventListener('online', onOnline)
@@ -552,6 +584,8 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (_event === 'SIGNED_OUT') {
+        const previousId = userRef.current?.uid || userRef.current?.id
+        void clearOfflineSession(previousId)
         if (mounted.current) {
           lastFetchedUid.current = null
           profileFetchGenRef.current += 1
@@ -719,17 +753,29 @@ export const AuthProvider = ({ children }) => {
     retryProfile,
     signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
     signOut: async () => {
+      let userId = userRef.current?.uid || userRef.current?.id || null
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession()
         if (session?.user?.id) {
+          userId = session.user.id
           await supabase.from('user_push_tokens').delete().eq('user_id', session.user.id)
         }
       } catch (e) {
         console.warn('Push token cleanup:', e)
       }
-      await supabase.auth.signOut()
+      await clearOfflineSession(userId)
+      try {
+        await supabase.auth.signOut()
+      } catch (e) {
+        console.warn('Auth: signOut:', e)
+        try {
+          await supabase.auth.signOut({ scope: 'local' })
+        } catch {
+          /* local keys are cleared below either way */
+        }
+      }
       clearAllSupabaseAuthKeys()
     },
     signUp: (email, password, options) => 

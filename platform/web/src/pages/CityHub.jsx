@@ -30,6 +30,9 @@ import {
 } from "../utils/cityHubAuthors";
 import { parseCityHubContent } from "../utils/cityHubContent";
 import { formatWatchDateTime } from "../utils/watchTime";
+import LastUpdatedNote from "../offline/LastUpdatedNote";
+import { OFFLINE_SCREENS, OFFLINE_WRITE_MESSAGE } from "../offline/policy";
+import { readScreenSnapshot, writeScreenSnapshot } from "../offline/snapshots";
 import { CITY_HUB_PHOTO_BUCKET } from "../utils/cityHubPhotos";
 import { friendlyMediaMessage, removeCityHubPostMedia, useSignedMediaSrcList } from "../utils/privateMedia";
 
@@ -396,6 +399,7 @@ export default function CityHub() {
   const [bannerStats, setBannerStats] = useState(EMPTY_CITY_HUB_STATS);
   const [unreadPostIds, setUnreadPostIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
+  const [savedAt, setSavedAt] = useState(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [editingPost, setEditingPost] = useState(null);
@@ -418,6 +422,8 @@ export default function CityHub() {
   const loadPosts = useCallback(async () => {
     const gen = ++loadGenRef.current;
     setLoading(true);
+    setPosts([]);
+    setSavedAt(null);
     try {
       const { data, error } = await supabase
         .from("city_hub_posts")
@@ -460,6 +466,13 @@ export default function CityHub() {
       });
 
       setPosts(hydratedPosts);
+      setSavedAt(null);
+      if (user?.id) {
+        void writeScreenSnapshot(
+          { userId: user.id, organizationId: activeOrganizationId, screen: OFFLINE_SCREENS.cityHub },
+          { posts: hydratedPosts }
+        );
+      }
       const lastSeen = visitSeenAtRef.current;
       setUnreadPostIds(
         new Set(
@@ -477,11 +490,26 @@ export default function CityHub() {
     } catch (err) {
       if (gen !== loadGenRef.current) return;
       console.error(err);
-      toast.error("Could not load city hub posts.");
+      const cached = user?.id
+        ? await readScreenSnapshot({
+          userId: user.id,
+          organizationId: activeOrganizationId,
+          screen: OFFLINE_SCREENS.cityHub,
+        })
+        : null;
+      if (gen !== loadGenRef.current) return;
+      if (Array.isArray(cached?.data?.posts)) {
+        setPosts(cached.data.posts);
+        setSavedAt(cached.savedAt);
+        return;
+      }
+      setSavedAt(null);
+      const offlineNow = typeof navigator !== "undefined" && navigator.onLine === false;
+      toast.error(offlineNow ? OFFLINE_WRITE_MESSAGE : "Could not load city hub posts.");
     } finally {
       if (gen === loadGenRef.current) setLoading(false);
     }
-  }, []);
+  }, [user?.id, activeOrganizationId]);
 
   useEffect(() => {
     visitSeenAtRef.current = readCityHubLastSeen(actorId);
@@ -861,6 +889,7 @@ export default function CityHub() {
 
         <section className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Latest updates</h2>
+          {savedAt ? <div className="mb-3"><LastUpdatedNote savedAt={savedAt} /></div> : null}
           {loading ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">Loading posts...</p>
           ) : posts.length === 0 ? (

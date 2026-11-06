@@ -6,6 +6,10 @@ export const CRIMINAL_PHOTOS_BUCKET = 'criminal-photos';
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const signedUrlCache = new Map();
 
+export function clearCriminalPhotoSignedCache() {
+  signedUrlCache.clear();
+}
+
 /**
  * Object path inside criminal-photos, or null when `storedUrl` is some other image.
  * Profiles keep the public object URL (`getPublicUrl`) as a stable id. Signing

@@ -44,6 +44,15 @@ import DashboardProfileCard from './dashboard/DashboardProfileCard';
 import DashboardPrimaryActions from './dashboard/DashboardPrimaryActions';
 import DashboardShortcutGrid from './dashboard/DashboardShortcutGrid';
 import { PatrolWarningModal, VehiclePickerModal } from './dashboard/PatrolDialogs';
+import LastUpdatedNote from '../offline/LastUpdatedNote';
+import { OFFLINE_SCREENS, userFacingReadError } from '../offline/policy';
+import { patchScreenSnapshot, readScreenSnapshot } from '../offline/snapshots';
+
+function earlierStamp(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return a < b ? a : b;
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -108,10 +117,26 @@ export default function Dashboard() {
       ).eq("status", "pending").not("type", "ilike", "SOS");
       if (error) throw error;
       setPendingIncidentCount(count || 0);
-    } catch {
-      /* RLS or network — leave badge unchanged */
+      if (user?.id) {
+        void patchScreenSnapshot(
+          { userId: user.id, organizationId: activeOrganizationId, screen: OFFLINE_SCREENS.dashboard },
+          (current) => ({ ...(current || {}), pendingIncidentCount: count || 0 })
+        );
+      }
+    } catch (err) {
+      if (!user?.id) return;
+      const cached = await readScreenSnapshot({
+        userId: user.id,
+        organizationId: activeOrganizationId,
+        screen: OFFLINE_SCREENS.dashboard,
+      });
+      if (cached?.data && typeof cached.data.pendingIncidentCount === "number") {
+        setPendingIncidentCount(cached.data.pendingIncidentCount);
+        return;
+      }
+      console.warn(userFacingReadError(err, "Could not refresh incident count."));
     }
-  }, [user?.role, scope]);
+  }, [user?.role, user?.id, scope, activeOrganizationId]);
 
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
 
@@ -123,10 +148,26 @@ export default function Dashboard() {
       ).is("reviewed_at", null);
       if (error) throw error;
       setPendingFeedbackCount(count || 0);
-    } catch {
-      /* RLS or missing table before migration */
+      if (user?.id) {
+        void patchScreenSnapshot(
+          { userId: user.id, organizationId: activeOrganizationId, screen: OFFLINE_SCREENS.dashboard },
+          (current) => ({ ...(current || {}), pendingFeedbackCount: count || 0 })
+        );
+      }
+    } catch (err) {
+      if (!user?.id) return;
+      const cached = await readScreenSnapshot({
+        userId: user.id,
+        organizationId: activeOrganizationId,
+        screen: OFFLINE_SCREENS.dashboard,
+      });
+      if (cached?.data && typeof cached.data.pendingFeedbackCount === "number") {
+        setPendingFeedbackCount(cached.data.pendingFeedbackCount);
+        return;
+      }
+      console.warn(userFacingReadError(err, "Could not refresh feedback count."));
     }
-  }, [user?.role, scope]);
+  }, [user?.role, user?.id, scope, activeOrganizationId]);
 
   useEffect(() => {
     if (!isStaffForModerationAlerts(user?.role)) {
@@ -287,7 +328,7 @@ export default function Dashboard() {
     return <Navigate to={home} replace />;
   }
 
-  if (patrol.fetchError && !patrol.activePatrol && patrol.loadingPatrol === false) {
+  if (patrol.fetchError && !patrol.activePatrol && !patrol.mineFromCache && patrol.loadingPatrol === false) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
         <ErrorState
@@ -340,6 +381,9 @@ export default function Dashboard() {
           onChangeArea={() => navigate("/choose-area")}
         />
 
+        {(patrol.allFromCache || patrol.mineFromCache) ? (
+          <LastUpdatedNote savedAt={earlierStamp(patrol.allSavedAt, patrol.mineSavedAt)} />
+        ) : null}
         <ActivePatrolsPanel
           fetchAllError={patrol.fetchAllError}
           fetchAllLoading={patrol.fetchAllLoading}

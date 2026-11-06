@@ -4,6 +4,7 @@ import {
   buildQueuedPoint,
   classifyInsertResult,
   createPatrolLocationQueue,
+  dropQueuedPointsForUser,
   enqueuePoint,
   insertBodyFromPoint,
   parseQueue,
@@ -209,6 +210,32 @@ test('queue is idempotent and flush drops saved and duplicate points', async () 
   assert.equal(result.kept, 1);
   assert.equal(stored[0].id, keep.id);
   assert.deepEqual(inserted, [keep.id, dup.id, sent.id]);
+});
+
+test('sign-out drops only that patroller’s unsent points', async () => {
+  const mine = buildQueuedPoint({
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+    patrolId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    userId: 'user-a',
+    coords: { latitude: 1, longitude: 2 },
+  });
+  const other = buildQueuedPoint({
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+    patrolId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    userId: 'user-b',
+    coords: { latitude: 3, longitude: 4 },
+  });
+  assert.deepEqual(dropQueuedPointsForUser([mine, other], 'user-a'), [other]);
+  let stored = [mine, other];
+  const queue = createPatrolLocationQueue({
+    load: async () => stored,
+    save: async (next) => {
+      stored = next;
+    },
+    insertRow: async () => 'sent',
+  });
+  await queue.clearUser('user-a');
+  assert.deepEqual(stored, [other]);
 });
 
 test('duplicate key and HTTP 409 count as success', () => {

@@ -17,17 +17,22 @@ import {
   listEquipmentCatalogue,
 } from "../../utils/equipment";
 import EquipmentShell, { EquipmentBanner, EquipmentNotice, FilterPills, SEARCH_INPUT } from "./EquipmentShell";
+import LastUpdatedNote from "../../offline/LastUpdatedNote";
+import { OFFLINE_SCREENS, OFFLINE_WRITE_MESSAGE, isOfflineOrNetworkError } from "../../offline/policy";
+import { readScreenSnapshot, writeScreenSnapshot } from "../../offline/snapshots";
 
 /** /equipment: patrol members browse the Watch's gear (Needs-style card grid). */
 export default function EquipmentCatalogue() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const userId = user?.id;
   const { activeOrganizationId } = useScopedOrganization();
   const back = homeBackNav(user?.role, user?.platformRole);
   const isManager = canManageEquipment(user?.role, user?.platformRole);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hint, setHint] = useState("");
+  const [savedAt, setSavedAt] = useState(null);
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
   const counts = useEquipmentPendingCounts(Boolean(user?.id), activeOrganizationId);
@@ -36,17 +41,40 @@ export default function EquipmentCatalogue() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setSavedAt(null);
+    setItems([]);
     await runEquipmentSweep(); // flags overdue loans / expires stale requests; ignored on older DBs
     const { data, error } = await listEquipmentCatalogue();
     setLoading(false);
     if (error) {
+      const cached = userId
+        ? await readScreenSnapshot({
+          userId,
+          organizationId: activeOrganizationId,
+          screen: OFFLINE_SCREENS.equipment,
+        })
+        : null;
+      if (Array.isArray(cached?.data?.items)) {
+        setItems(cached.data.items);
+        setSavedAt(cached.savedAt);
+        setHint("");
+        return;
+      }
       setItems([]);
-      setHint(equipmentErrorMessage(error));
+      setSavedAt(null);
+      setHint(isOfflineOrNetworkError(error) ? OFFLINE_WRITE_MESSAGE : equipmentErrorMessage(error, "Could not load equipment."));
       return;
     }
     setHint("");
+    setSavedAt(null);
     setItems(data);
-  }, []);
+    if (userId) {
+      void writeScreenSnapshot(
+        { userId, organizationId: activeOrganizationId, screen: OFFLINE_SCREENS.equipment },
+        { items: data }
+      );
+    }
+  }, [userId, activeOrganizationId]);
 
   useEffect(() => {
     void load();
@@ -112,6 +140,7 @@ export default function EquipmentCatalogue() {
       {chips.length > 1 ? (
         <FilterPills options={[{ id: "all", label: "All" }, ...chips.map((c) => ({ id: c.id, label: c.name }))]} value={category} onChange={setCategory} />
       ) : null}
+      {savedAt ? <LastUpdatedNote savedAt={savedAt} /> : null}
       {hint ? <EquipmentNotice>{hint}</EquipmentNotice> : null}
       {loading && !items.length ? <p className="text-sm text-gray-500 dark:text-gray-400">Loading equipment...</p> : null}
       {!loading && !hint && shown.length === 0 ? (
