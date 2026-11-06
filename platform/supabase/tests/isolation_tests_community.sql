@@ -1791,11 +1791,18 @@ BEGIN
   INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
   VALUES (pg_temp.id('eq_na2'), '00000000-0000-0000-0000-000000000000', 'authenticated',
           'authenticated', 'g7-eq-na2-' || sfx || '@example.invalid', now(), now());
-  INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
-  VALUES (pg_temp.id('eq_na2'), 'g7-eq-na2-' || sfx || '@example.invalid', 'G7 Second Admin',
-          'nw_admin', pg_temp.id('org_a'), true, 'active');
+  -- Signup hook may already have inserted this id (same email), which raises users_email_key.
+  EXECUTE format(
+    'INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
+     VALUES (%L, %L, %L, %L, %L, true, %L)
+     ON CONFLICT (id) DO UPDATE
+       SET role = EXCLUDED.role, organization_id = EXCLUDED.organization_id,
+           full_name = EXCLUDED.full_name, verified = true, status = EXCLUDED.status',
+    pg_temp.id('eq_na2'), 'g7-eq-na2-' || sfx || '@example.invalid',
+    'G7 Second Admin', 'nw_admin', pg_temp.id('org_a'), 'active');
   INSERT INTO public.organization_members (organization_id, user_id, member_role, status)
-  VALUES (pg_temp.id('org_a'), pg_temp.id('eq_na2'), 'nw_admin', 'active');
+  VALUES (pg_temp.id('org_a'), pg_temp.id('eq_na2'), 'nw_admin', 'active')
+  ON CONFLICT (organization_id, user_id) DO NOTHING;
 END
 $na2$;
 SELECT pg_temp.check('P3c', 'control: A nw_admin grants equipment_custodian to p2',
