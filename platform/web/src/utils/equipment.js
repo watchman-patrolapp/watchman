@@ -1,6 +1,7 @@
 import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "./isRpcNotFound";
 import { COMMUNITY_MEDIA_BUCKET } from "./communityMedia";
+import { resolveSignedMediaUrl } from "./privateMedia";
 import { normalizeAppRole } from "../auth/staffRoles";
 import { canAccessPlatformConsole } from "../auth/platformRoles";
 import { PATROL_MEMBER_ROLES } from "../auth/roleMatrix";
@@ -31,10 +32,10 @@ export function canBrowseEquipment(role, platformRole) {
   return PATROL_MEMBER_ROLES.includes(normalizeAppRole(role));
 }
 
+/** Signed URL for a community-media path. Display should use useSignedMediaSrc. */
 export function equipmentPhotoUrl(path) {
-  if (!path) return null;
-  const { data } = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path);
-  return data?.publicUrl ?? null;
+  if (!path) return Promise.resolve(null);
+  return resolveSignedMediaUrl(path, COMMUNITY_MEDIA_BUCKET);
 }
 
 export function equipmentErrorMessage(error, fallback = "Something went wrong. Try again.") {

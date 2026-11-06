@@ -352,7 +352,13 @@ export default function IncidentList() {
   const evidenceFailed = (incidentsQuery.data?.pages || []).some((page) => page.evidenceFailed);
   const updatesFailed = (incidentsQuery.data?.pages || []).some((page) => page.updatesFailed);
   const loading = incidentsQuery.isLoading;
-  const error = incidentsQuery.isError && incidents.length === 0 ? incidentsQuery.error?.message || "Failed to load incidents" : null;
+
+  useEffect(() => {
+    if (incidentsQuery.error) console.error(incidentsQuery.error);
+  }, [incidentsQuery.error]);
+  const error = incidentsQuery.isError && incidents.length === 0
+    ? "Incidents could not be loaded. Try again."
+    : null;
 
   const sortedIncidents = useMemo(() => {
     const list = [...incidents];

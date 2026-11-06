@@ -7,10 +7,25 @@ import {
   listWishlistLedger,
   wishlistErrorMessage,
   wishlistLedgerSummary,
-  wishlistPhotoUrl,
 } from "../../utils/equipmentWishlist";
+import { COMMUNITY_MEDIA_BUCKET } from "../../utils/communityMedia";
+import { useSignedMediaSrc } from "../../utils/privateMedia";
 
 const ICONS = { contribution_received: FaArrowDown, purchase: FaArrowUp, correction: FaUndo };
+
+function ReceiptLink({ path }) {
+  const src = useSignedMediaSrc(path, COMMUNITY_MEDIA_BUCKET);
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) {
+    return <span className="text-xs text-gray-500 dark:text-gray-400">{src === null || broken ? "Receipt unavailable" : "Receipt"}</span>;
+  }
+  return (
+    <a href={src} target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-2 text-xs font-medium text-teal-700 hover:underline dark:text-teal-400">
+      <img src={src} alt="Receipt" loading="lazy" className="h-12 w-12 rounded-lg border border-gray-200 object-cover dark:border-gray-600" onError={() => setBroken(true)} />
+      <FaReceipt aria-hidden /> View receipt
+    </a>
+  );
+}
 
 /**
  * Transparent, append-only ledger for one item: contributions in, purchases out,
@@ -85,7 +100,7 @@ export default function NeedLedger({ itemId, refreshKey = 0, onCorrect = null })
           {rows.map((r) => {
             const meta = LEDGER_KIND_META[r.kind] || LEDGER_KIND_META.correction;
             const Icon = ICONS[r.kind] || FaUndo;
-            const receiptUrl = r.receipt_path ? wishlistPhotoUrl(r.receipt_path) : null;
+            const receiptPath = r.receipt_path || "";
             const left = Number(r.amount_cents || 0) - (corrected.get(r.id) || 0);
             const sign = r.kind === "contribution_received" ? "+" : "-";
             return (
@@ -118,12 +133,7 @@ export default function NeedLedger({ itemId, refreshKey = 0, onCorrect = null })
                     </p>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                    {receiptUrl ? (
-                      <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-2 text-xs font-medium text-teal-700 hover:underline dark:text-teal-400">
-                        <img src={receiptUrl} alt="Receipt" loading="lazy" className="h-12 w-12 rounded-lg border border-gray-200 object-cover dark:border-gray-600" />
-                        <FaReceipt aria-hidden /> View receipt
-                      </a>
-                    ) : null}
+                    {receiptPath ? <ReceiptLink path={receiptPath} /> : null}
                     {onCorrect && r.kind !== "correction" && left > 0 ? (
                       <button type="button" onClick={() => onCorrect(r, left)} className="rounded-lg border border-amber-300 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/30">
                         Correct

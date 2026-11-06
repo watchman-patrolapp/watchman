@@ -1,5 +1,7 @@
 import { FaBoxOpen } from "react-icons/fa";
 import { Chip } from "./NeedCard";
+import PrivateMediaImg from "../media/PrivateMediaImg";
+import { COMMUNITY_MEDIA_BUCKET } from "../../utils/communityMedia";
 import {
   WISHLIST_PRIORITY_META,
   WISHLIST_STATUS_META,
@@ -7,7 +9,6 @@ import {
   wishlistAcquiredPct,
   wishlistItemPhotoPaths,
   wishlistItemTotals,
-  wishlistPhotoUrl,
 } from "../../utils/equipmentWishlist";
 
 // Every row is its own grid, so only the title column may flex; the rest need fixed widths to align.
@@ -36,7 +37,7 @@ export default function NeedsList({ items, renderActions }) {
 function NeedRow({ item, actions }) {
   const status = WISHLIST_STATUS_META[item.status] || WISHLIST_STATUS_META.needed;
   const priority = WISHLIST_PRIORITY_META[item.priority];
-  const thumb = wishlistPhotoUrl(wishlistItemPhotoPaths(item)[0]);
+  const thumbPath = wishlistItemPhotoPaths(item)[0];
   const { acquired, needed, pct } = wishlistAcquiredPct(item.quantity_acquired, item.quantity_needed);
   const totals = wishlistItemTotals(item);
   const remaining = item.status === "cancelled" ? "-" : totals ? formatEstPrice(totals.remainingCents) : "No price";
@@ -46,7 +47,11 @@ function NeedRow({ item, actions }) {
     <li className={`space-y-3 px-4 py-3 lg:space-y-0 ${COLS} ${item.status === "cancelled" ? "opacity-70" : ""}`}>
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
-          {thumb ? <img src={thumb} alt="" loading="lazy" className="h-full w-full object-contain p-0.5" /> : <FaBoxOpen className="h-5 w-5 text-gray-300 dark:text-gray-600" aria-hidden />}
+          {thumbPath ? (
+            <PrivateMediaImg stored={thumbPath} bucket={COMMUNITY_MEDIA_BUCKET} alt="" loading="lazy" className="h-full w-full object-contain p-0.5" />
+          ) : (
+            <FaBoxOpen className="h-5 w-5 text-gray-300 dark:text-gray-600" aria-hidden />
+          )}
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-gray-900 dark:text-white" title={item.title}>

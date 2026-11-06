@@ -76,11 +76,7 @@ export const uploadEvidenceFiles = async (supabase, incidentId, entryId, files) 
         continue;
       }
 
-      const { data: urlData } = supabase.storage
-        .from('incident-photos')
-        .getPublicUrl(filePath);
-        
-      urls.push(urlData.publicUrl);
+      urls.push(filePath);
     } catch (err) {
       console.error(`Error uploading ${file.name}:`, err);
     }

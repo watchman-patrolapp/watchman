@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { INCIDENT_PHOTOS_BUCKET, resolveMediaRef } from "./privateMediaPath";
 import { formatWatchDate } from "./watchTime";
 
 export const CITY_HUB_SHARE_POST_TYPES = [
@@ -75,7 +76,7 @@ export function buildCityHubShareDraft({
   }
 
   lines.push(
-    "This is a neighborhood-to-city briefing. Reporter identity, witnesses, street address, photos, and case numbers are omitted."
+    "This is a neighborhood-to-city briefing. Reporter identity, witnesses, street address, and case numbers are omitted. Photos are attached only when selected."
   );
 
   return {
@@ -95,6 +96,31 @@ export function buildCityHubShareDraft({
       })
       .filter(Boolean),
   };
+}
+
+/** Incident photos an admin can choose to copy into City Hub. Deduped by object path. */
+export async function loadIncidentShareMedia(incidentId) {
+  if (!incidentId) return [];
+  const [incidentRes, evidenceRes] = await Promise.all([
+    supabase.from("incidents").select("media_urls").eq("id", incidentId).maybeSingle(),
+    supabase.from("incident_evidence").select("media_urls").eq("incident_id", incidentId),
+  ]);
+  if (incidentRes.error || evidenceRes.error) return [];
+  const stored = [
+    ...(incidentRes.data?.media_urls || []),
+    ...(evidenceRes.data || []).flatMap((row) => row.media_urls || []),
+  ];
+  const seen = new Set();
+  const choices = [];
+  for (const value of stored) {
+    const ref = resolveMediaRef(value, INCIDENT_PHOTOS_BUCKET);
+    if (!ref || ref.bucket !== INCIDENT_PHOTOS_BUCKET) continue;
+    const key = `${ref.bucket}:${ref.path}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    choices.push({ key, stored: value, bucket: ref.bucket, path: ref.path });
+  }
+  return choices;
 }
 
 export async function fetchCityHubShareForIncident(incidentId) {
