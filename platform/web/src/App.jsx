@@ -114,6 +114,8 @@ const EquipmentAdminLabels = lazy(() => import("./pages/equipment/admin/Equipmen
 const EquipmentMine = lazy(() => import("./pages/equipment/EquipmentMine"));
 const EquipmentAdminRequests = lazy(() => import("./pages/equipment/admin/EquipmentAdminRequests"));
 const EquipmentAdminCertifications = lazy(() => import("./pages/equipment/admin/EquipmentAdminCertifications"));
+const EquipmentAdminMaintenance = lazy(() => import("./pages/equipment/admin/EquipmentAdminMaintenance"));
+const EquipmentHandover = lazy(() => import("./pages/equipment/EquipmentHandover"));
 const NeedsAdmin = lazy(() => import("./pages/admin/NeedsAdmin"));
 const CityAdminDashboard = lazy(() => import("./pages/CityAdminDashboard"));
 const SosEscalationBoard = lazy(() => import("./pages/SosEscalationBoard"));
@@ -419,6 +421,28 @@ function AppRoutes() {
               <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
                 <RequireActiveOrganization>
                   <EquipmentAdminRequests />
+                </RequireActiveOrganization>
+              </RequireRole>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/equipment/handover/:transferId"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={PATROL_MEMBER_ROLES} allowPlatformConsole>
+                <EquipmentHandover />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/equipment/admin/maintenance"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={EQUIPMENT_MANAGER_ROLES} allowPlatformConsole>
+                <RequireActiveOrganization>
+                  <EquipmentAdminMaintenance />
                 </RequireActiveOrganization>
               </RequireRole>
             </PrivateRoute>

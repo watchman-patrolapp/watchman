@@ -4,13 +4,17 @@ import { useNavigate, useParams } from "react-router-dom";
 import NeedGallery from "../../components/needs/NeedGallery";
 import { Chip } from "../../components/needs/NeedCard";
 import { DANGER_BTN, IssueDialog, SECONDARY_BTN, TransferDialog } from "../../components/equipment/EquipmentLoanDialogs";
+import EquipmentMaintenanceLog from "../../components/equipment/EquipmentMaintenanceLog";
 import {
   EQUIPMENT_CONDITION_LABELS,
   ISSUE_KIND_LABELS,
   LOAN_STATUS_META,
+  addEquipmentIssueCaseNumber,
   cancelEquipmentTransfer,
+  casNumberError,
   formatDueIn,
   listEquipmentUnitCustody,
+  normalizeCasNumber,
   runEquipmentSweep,
   EQUIPMENT_LEDGER_EVENT_LABELS,
   equipmentCategoryEmoji,
@@ -50,6 +54,7 @@ export default function EquipmentUnitPage() {
   const [custody, setCustody] = useState([]);
   const [dialog, setDialog] = useState(null);
   const [flash, setFlash] = useState("");
+  const [caseNo, setCaseNo] = useState("");
 
   const load = useCallback(
     async (sweep = false) => {
@@ -128,6 +133,32 @@ export default function EquipmentUnitPage() {
                     {unit.issue.holder_name ? `Last with ${unit.issue.holder_name}. ` : ""}
                     {unit.issue.note}
                   </p>
+                  {unit.issue.cas_pending && !unit.i_am_latest_holder && !unit.can_manage ? (
+                    <p className="mt-1 text-sm text-rose-900 dark:text-rose-100">SAPS case number still needed.</p>
+                  ) : null}
+                  {unit.issue.cas_pending && (unit.i_am_latest_holder || unit.can_manage) ? (
+                    <form
+                      className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const normalized = normalizeCasNumber(caseNo);
+                        if (!normalized || !unit.issue.id) return;
+                        const { error } = await addEquipmentIssueCaseNumber(unit.issue.id, normalized);
+                        if (error) return setFlash(equipmentErrorMessage(error));
+                        setCaseNo("");
+                        done("Case number saved. Reminders will stop.");
+                      }}
+                    >
+                      <label className="min-w-0 flex-1 text-xs font-semibold text-rose-900 dark:text-rose-100">
+                        SAPS case number
+                        <input value={caseNo} onChange={(ev) => setCaseNo(ev.target.value)} placeholder="CAS 123/10/2026" className="mt-1 w-full rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm text-gray-900" />
+                      </label>
+                      <button type="submit" disabled={Boolean(casNumberError(caseNo)) || !normalizeCasNumber(caseNo)} className={SECONDARY_BTN}>
+                        Save case number
+                      </button>
+                    </form>
+                  ) : null}
+                  {unit.issue.case_number ? <p className="mt-1 text-sm text-rose-900 dark:text-rose-100">Case {unit.issue.case_number}</p> : null}
                 </div>
               </div>
             ) : null}
@@ -165,7 +196,7 @@ export default function EquipmentUnitPage() {
                 )}
               </InfoBox>
             </div>
-            {canTransfer || unit.my_transfer_id || canReport ? (
+            {canTransfer || unit.my_transfer_id || unit.my_handover_id || canReport ? (
               <InfoSection title="Actions">
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   {canTransfer ? (
@@ -176,6 +207,11 @@ export default function EquipmentUnitPage() {
                   {unit.my_transfer_id ? (
                     <button type="button" onClick={cancelTransfer} className={SECONDARY_BTN}>
                       Transfer requested · Cancel
+                    </button>
+                  ) : null}
+                  {unit.my_handover_id ? (
+                    <button type="button" onClick={() => navigate(`/equipment/handover/${unit.my_handover_id}`)} className={SECONDARY_BTN}>
+                      Open hand-over
                     </button>
                   ) : null}
                   {canReport ? (
@@ -202,6 +238,9 @@ export default function EquipmentUnitPage() {
                 whenFor={(h) => formatWhen(h.occurred_at)}
                 metaFor={(h) => [h.actor_name ? `by ${h.actor_name}` : null, h.holder_name ? `to ${h.holder_name}` : null].filter(Boolean).join(" · ")}
               />
+            </InfoSection>
+            <InfoSection title="Service log">
+              <EquipmentMaintenanceLog unitId={unit.id} canManage={Boolean(unit.can_manage)} />
             </InfoSection>
             <InfoSection title="Who had it">
               {custody.length === 0 ? <p className="text-sm text-gray-600 dark:text-gray-300">Not borrowed yet.</p> : null}

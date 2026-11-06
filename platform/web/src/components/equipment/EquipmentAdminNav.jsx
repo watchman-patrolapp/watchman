@@ -7,6 +7,7 @@ import { equipmentAdminBadgeCount } from "../../utils/equipment";
 const LINKS = [
   { to: "/equipment/admin/items", label: "Catalogue" },
   { to: "/equipment/admin/requests", label: "Loan desk", badge: true },
+  { to: "/equipment/admin/maintenance", label: "Service log" },
   { to: "/equipment/admin/certifications", label: "Training sign-offs" },
   { to: "/equipment/admin/labels", label: "QR labels" },
 ];

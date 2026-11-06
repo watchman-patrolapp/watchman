@@ -13,6 +13,7 @@ Do not run them against production to "catch up". The migrations already applied
 | `incident_section_updates_constraints.sql` | Combines the section-key check, `target_evidence_id`, and `NOTIFY pgrst`. The pieces are in `20260329230000`, `20260329240000`, and `20260329250000`. |
 | `user_push_tokens_full.sql` | Dashboard copy of `20260329123000_user_push_tokens.sql` plus deploy notes. |
 | `schedule_chat_retention_cron.sql` | One-shot `pg_cron` schedule for `run_chat_messages_retention_purge`. Still the script to run in the SQL Editor after enabling `pg_cron`. The applied migration `20260401141000` comment still says `supabase/sql/`; that file was not edited. |
+| `schedule_equipment_cron.sql` | One-shot `pg_cron` schedule for `run_equipment_housekeeping` (every 15 minutes). Run after `20261106180200` if the migration could not schedule the job itself. |
 | `chat_messages_push_webhook_template.sql` | Template with `__PROJECT_REF__` and `__CHAT_NOTIFY_WEBHOOK_SECRET__`. Not safe to execute as-is. |
 
 Isolation tests moved to `platform/supabase/tests/`, not here.

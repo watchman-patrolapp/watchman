@@ -28,6 +28,20 @@ export const EQUIPMENT_LEDGER_EVENT_LABELS = Object.freeze({
   status_changed: "Status changed",
   certification_granted: "Certification granted",
   certification_revoked: "Certification revoked",
+  transfer_requested: "Hand-over requested",
+  transfer_accepted: "Hand-over accepted",
+  transfer_declined: "Hand-over declined",
+  transfer_expired: "Hand-over expired",
+  transfer_cancelled: "Hand-over cancelled",
+  handover_giver_confirmed: "Holder confirmed the hand-over",
+  handover_receiver_confirmed: "Receiver confirmed the hand-over",
+  transfer_forced: "Hand-over completed by an admin",
+  maintenance_logged: "Service recorded",
+  incident_updated: "Issue updated",
+  write_off_proposed: "Write-off waiting for a second admin",
+  write_off_approved: "Written off",
+  liability_decided: "Liability recorded",
+  overdue_escalated: "Overdue reminder escalated",
 });
 
 const CATEGORY_EMOJI = Object.freeze({
@@ -93,6 +107,9 @@ export function equipmentErrorMessage(error, isNotFound = false, fallback = "Som
   if (/forbidden/i.test(msg)) return "You can't manage equipment here.";
   if (/not authenticated/i.test(msg)) return "Please sign in again.";
   if (/no organization/i.test(msg)) return "Choose a neighbourhood first.";
+  if (/syntax error|duplicate key|violates |SQLSTATE|permission denied|relation "|function public\.|column "|invalid input syntax/i.test(msg)) {
+    return fallback;
+  }
   return msg || fallback;
 }
 

@@ -1592,15 +1592,95 @@ SELECT pg_temp.expect_error('P3b', 'A nw_admin (not holder) approves transfer ->
   pg_temp.id('a_admin'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'not found');
 SELECT pg_temp.expect_error('P3b', 'B patroller approves transfer -> not found',
   pg_temp.id('eq_bp'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'not found');
-SELECT pg_temp.check('P3b', 'control: holder p1 accepts the transfer',
-  pg_temp.id('eq_p1'), 'true', format('SELECT public.respond_equipment_transfer(%L, true) IS NOT NULL', pg_temp.eq('tr1')));
+CREATE TEMP TABLE g7_txt (k text PRIMARY KEY, v text) ON COMMIT DROP;
+DO $acc$
+DECLARE
+  resp jsonb;
+BEGIN
+  PERFORM pg_temp.as_user(pg_temp.id('eq_p1'));
+  resp := public.respond_equipment_transfer(pg_temp.eq('tr1'), true);
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_txt VALUES ('code', resp->>'code');
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3c', 'accept returns a 6-digit hand-over code',
+          coalesce(resp->>'code' ~ '^[0-9]{6}$' AND (resp->>'ok')::boolean, false),
+          coalesce(resp::text, 'null'));
+EXCEPTION WHEN others THEN
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3c', 'accept returns a 6-digit hand-over code', false, SQLERRM);
+END
+$acc$;
+SELECT pg_temp.assert('P3c', 'accept puts the unit in transfer and keeps p1 as holder',
+  (SELECT u.status = 'in_transfer' AND u.current_holder_id = pg_temp.id('eq_p1')
+      AND l.status = 'active'
+      AND t.status = 'accepted' AND t.handover_by > now() AND t.respond_by > t.created_at
+   FROM public.equipment_units u, public.equipment_loans l, public.equipment_transfers t
+   WHERE u.id = pg_temp.eq('r1') AND l.id = pg_temp.eq('loan1') AND t.id = pg_temp.eq('tr1')),
+  'checked as postgres');
 SELECT pg_temp.expect_error('P3b', 'second accept -> no longer open',
   pg_temp.id('eq_p1'), format('SELECT public.respond_equipment_transfer(%L, true)', pg_temp.eq('tr1')), 'no longer open');
-SELECT pg_temp.assert('P3b', 'G7-R1 now held by p2; p1 loan transferred, p2 loan active with same due time',
+SELECT pg_temp.check('P3c', 'wrong code does not move the unit',
+  pg_temp.id('eq_p2'), 'true', format(
+    'SELECT (public.confirm_equipment_handover_receiver(%L, %L, %L, true)->>''ok'')::boolean = false',
+    pg_temp.eq('tr1'),
+    CASE WHEN (SELECT v FROM g7_txt WHERE k = 'code') = '000000' THEN '000001' ELSE '000000' END,
+    'good'));
+SELECT pg_temp.assert('P3c', 'one wrong code is counted',
+  (SELECT code_attempts = 1 FROM public.equipment_transfers WHERE id = pg_temp.eq('tr1')),
+  'checked as postgres');
+UPDATE public.equipment_transfers SET handover_by = now() - interval '1 minute' WHERE id = pg_temp.eq('tr1');
+SELECT pg_temp.check('P3c', 'confirm after 6 hours expires the hand-over',
+  pg_temp.id('eq_p2'), 'true', format(
+    'SELECT (public.confirm_equipment_handover_receiver(%L, %L, %L, true)->>''ok'')::boolean = false',
+    pg_temp.eq('tr1'), (SELECT v FROM g7_txt WHERE k = 'code'), 'good'));
+SELECT pg_temp.assert('P3c', 'expired hand-over leaves the unit with p1',
+  (SELECT u.status = 'checked_out' AND u.current_holder_id = pg_temp.id('eq_p1')
+      AND t.status = 'expired'
+   FROM public.equipment_units u, public.equipment_transfers t
+   WHERE u.id = pg_temp.eq('r1') AND t.id = pg_temp.eq('tr1')),
+  'checked as postgres');
+SELECT pg_temp.check('P3c', 'control: p2 asks again so the 12 hour window can expire',
+  pg_temp.id('eq_p2'), 'ok', format('SELECT public.request_equipment_transfer(%L)', pg_temp.eq('r1')));
+UPDATE public.equipment_transfers SET respond_by = now() - interval '1 minute'
+ WHERE unit_id = pg_temp.eq('r1') AND status = 'requested';
+SELECT pg_temp.check('P3c', 'sweep expires a request older than 12 hours',
+  pg_temp.id('eq_p1'), 'true', 'SELECT (public.equipment_sweep()->>''expired_transfers'')::int >= 1');
+SELECT pg_temp.check('P3c', 'control: p2 asks again for the real hand-over',
+  pg_temp.id('eq_p2'), 'ok', format('SELECT public.request_equipment_transfer(%L, %L)', pg_temp.eq('r1'), 'Gate'));
+UPDATE g7_eq SET v = (SELECT id FROM public.equipment_transfers WHERE to_user_id = pg_temp.id('eq_p2') AND status = 'requested')
+ WHERE k = 'tr1';
+DO $acc2$
+DECLARE
+  resp jsonb;
+BEGIN
+  PERFORM pg_temp.as_user(pg_temp.id('eq_p1'));
+  resp := public.respond_equipment_transfer(pg_temp.eq('tr1'), true);
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_txt VALUES ('code2', resp->>'code')
+  ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v;
+EXCEPTION WHEN others THEN
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3c', 'second accept stored a code', false, SQLERRM);
+END
+$acc2$;
+SELECT pg_temp.check('P3c', 'receiver confirms the code first',
+  pg_temp.id('eq_p2'), 'true', format(
+    'SELECT (public.confirm_equipment_handover_receiver(%L, %L, %L, true)->>''completed'')::boolean = false',
+    pg_temp.eq('tr1'), (SELECT v FROM g7_txt WHERE k = 'code2'), 'good'));
+SELECT pg_temp.check('P3c', 'holder confirms and the hand-over completes',
+  pg_temp.id('eq_p1'), 'true', format(
+    'SELECT (public.confirm_equipment_handover_giver(%L)->>''completed'')::boolean',
+    pg_temp.eq('tr1')));
+SELECT pg_temp.assert('P3c', 'G7-R1 now held by p2; p1 loan transferred; four hand-over ledger events',
   (SELECT u.current_holder_id = pg_temp.id('eq_p2') AND u.status = 'checked_out'
      AND (SELECT status FROM public.equipment_loans WHERE id = pg_temp.eq('loan1')) = 'transferred'
      AND (SELECT due_at FROM public.equipment_loans WHERE unit_id = u.id AND status = 'active')
          = (SELECT due_at FROM public.equipment_loans WHERE id = pg_temp.eq('loan1'))
+     AND (SELECT count(*) FROM public.equipment_ledger
+          WHERE unit_id = u.id AND event IN (
+            'transfer_requested', 'transfer_accepted', 'handover_giver_confirmed', 'handover_receiver_confirmed')) >= 4
    FROM public.equipment_units u WHERE u.id = pg_temp.eq('r1')),
   'checked as postgres');
 SELECT pg_temp.expect_rows('P3b', 'custody history shows 2 holders (A committee view)',
@@ -1698,6 +1778,112 @@ SELECT pg_temp.expect_error('P3b', 'approve after sign-off revoked -> refused',
     (SELECT id FROM public.equipment_loans WHERE item_id = pg_temp.eq('drone') AND status = 'requested')), 'no training sign-off');
 SELECT pg_temp.expect_error('P3b', 'p2 without sign-off asks for drone transfer -> refused',
   pg_temp.id('eq_p2'), format('SELECT public.request_equipment_transfer(%L)', pg_temp.eq('d1')), 'sign-off required');
+
+-- -----------------------------------------------------------------------------
+-- P3c - hand-over timeouts are above. Here: overdue escalation, CAS reminders,
+-- four-eyes write-off, NW-admin liability, maintenance isolation.
+-- -----------------------------------------------------------------------------
+DO $na2$
+DECLARE
+  sfx text := left(replace(gen_random_uuid()::text, '-', ''), 10);
+BEGIN
+  INSERT INTO g7_ids VALUES ('eq_na2', gen_random_uuid());
+  INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
+  VALUES (pg_temp.id('eq_na2'), '00000000-0000-0000-0000-000000000000', 'authenticated',
+          'authenticated', 'g7-eq-na2-' || sfx || '@example.invalid', now(), now());
+  INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
+  VALUES (pg_temp.id('eq_na2'), 'g7-eq-na2-' || sfx || '@example.invalid', 'G7 Second Admin',
+          'nw_admin', pg_temp.id('org_a'), true, 'active');
+  INSERT INTO public.organization_members (organization_id, user_id, member_role, status)
+  VALUES (pg_temp.id('org_a'), pg_temp.id('eq_na2'), 'nw_admin', 'active');
+END
+$na2$;
+SELECT pg_temp.check('P3c', 'control: A nw_admin grants equipment_custodian to p2',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.grant_org_capability(%L, %L)', pg_temp.id('eq_p2'), 'equipment_custodian'));
+SELECT pg_temp.check('P3c', 'control: p1 requests the radio again',
+  pg_temp.id('eq_p1'), 'ok', format('SELECT public.request_equipment_loan(%L)', pg_temp.eq('radio')));
+INSERT INTO g7_eq VALUES ('loan3', (SELECT id FROM public.equipment_loans
+  WHERE requester_id = pg_temp.id('eq_p1') AND item_id = pg_temp.eq('radio') AND status = 'requested'));
+SELECT pg_temp.check('P3c', 'control: approve and collect loan 3',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.approve_equipment_loan(%L), public.confirm_equipment_collection(%L)', pg_temp.eq('loan3'), pg_temp.eq('loan3')));
+UPDATE public.equipment_loans SET due_at = now() - interval '30 hours' WHERE id = pg_temp.eq('loan3');
+SELECT pg_temp.check('P3c', 'sweep tells the borrower first',
+  pg_temp.id('a_comm'), 'true', 'SELECT (public.equipment_sweep()->>''overdue'')::int = 1');
+UPDATE public.equipment_loans SET overdue_notified_at = now() - interval '25 hours', escalation_level = 1
+ WHERE id = pg_temp.eq('loan3');
+SELECT pg_temp.check('P3c', 'sweep escalates to custodians and NW admins together when both windows have passed',
+  pg_temp.id('a_comm'), 'true',
+  'SELECT (j->>''custodians_notified'')::int = 1 AND (j->>''admins_notified'')::int = 1 FROM (SELECT public.equipment_sweep() AS j) s');
+SELECT pg_temp.assert('P3c', 'custodian got an equipment notice and the NW admin got the mandatory kind',
+  EXISTS (SELECT 1 FROM public.app_notifications WHERE user_id = pg_temp.id('eq_p2') AND kind = 'equipment' AND title LIKE 'Gear still out:%')
+  AND EXISTS (SELECT 1 FROM public.app_notifications WHERE user_id = pg_temp.id('a_admin') AND kind = 'equipment_overdue_escalation'),
+  'checked as postgres');
+SELECT pg_temp.check('P3c', 'latest holder reports theft with no case number',
+  pg_temp.id('eq_p1'), 'ok', format('SELECT public.report_equipment_issue(%L, %L, %L)', pg_temp.eq('r1'), 'theft', 'Taken from the bakkie'));
+INSERT INTO g7_eq VALUES ('iss1', (SELECT id FROM public.equipment_issue_reports WHERE unit_id = pg_temp.eq('r1') AND cleared_at IS NULL));
+SELECT pg_temp.assert('P3c', 'theft without a case number is reminded in 48 hours',
+  (SELECT cas_reminder_at > now() + interval '47 hours' AND saps_case_number IS NULL
+   FROM public.equipment_issue_reports WHERE id = pg_temp.eq('iss1')),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P3c', 'a bad case number is refused',
+  pg_temp.id('eq_p1'), format('SELECT public.add_equipment_issue_case_number(%L, %L)', pg_temp.eq('iss1'), '12345'), 'SAPS case number');
+UPDATE public.equipment_issue_reports SET cas_reminder_at = now() - interval '1 minute' WHERE id = pg_temp.eq('iss1');
+SELECT pg_temp.check('P3c', 'sweep reminds about the missing case number',
+  pg_temp.id('a_comm'), 'true', 'SELECT (public.equipment_sweep()->>''cas_reminders'')::int = 1');
+SELECT pg_temp.assert('P3c', 'the reporter was asked for the case number',
+  EXISTS (SELECT 1 FROM public.app_notifications WHERE user_id = pg_temp.id('eq_p1') AND title = 'SAPS case number still needed'),
+  'checked as postgres');
+SELECT pg_temp.check('P3c', 'the reporter adds CAS 45/11/2026',
+  pg_temp.id('eq_p1'), 'ok', format('SELECT public.add_equipment_issue_case_number(%L, %L, %L)', pg_temp.eq('iss1'), 'cas 45/11/2026', 'Kwanokuthula'));
+SELECT pg_temp.assert('P3c', 'case number stored and reminders stopped',
+  (SELECT saps_case_number = 'CAS 45/11/2026' AND cas_reminder_at IS NULL FROM public.equipment_issue_reports WHERE id = pg_temp.eq('iss1')),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P3c', 'Org B cannot add a case number on an Org A issue',
+  pg_temp.id('b_admin'), format('SELECT public.add_equipment_issue_case_number(%L, %L)', pg_temp.eq('iss1'), 'CAS 1/1/2026'), 'not found');
+SELECT pg_temp.expect_error('P3c', 'a custodian who is not NW admin cannot decide liability',
+  pg_temp.id('eq_p2'), format('SELECT public.decide_equipment_liability(%L, %L, %s)', pg_temp.eq('iss1'), 'no_fault', 'NULL'), 'only an NW admin');
+SELECT pg_temp.expect_error('P3c', 'Org B nw_admin cannot decide Org A liability',
+  pg_temp.id('b_admin'), format('SELECT public.decide_equipment_liability(%L, %L)', pg_temp.eq('iss1'), 'no_fault'), 'not found');
+SELECT pg_temp.check('P3c', 'Org A nw_admin records a contribution without creating a charge',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.decide_equipment_liability(%L, %L, %s, %L)', pg_temp.eq('iss1'), 'contribution_requested', '50000', 'Offline only'));
+SELECT pg_temp.assert('P3c', 'liability is stored and the function does not insert a payment',
+  (SELECT liability_decision = 'contribution_requested' AND liability_amount_cents = 50000
+   FROM public.equipment_issue_reports WHERE id = pg_temp.eq('iss1'))
+  AND position('INSERT INTO public.payments' IN pg_get_functiondef('public.decide_equipment_liability(uuid,text,bigint,text)'::regprocedure)) = 0
+  AND position('INSERT INTO public.charges' IN pg_get_functiondef('public.decide_equipment_liability(uuid,text,bigint,text)'::regprocedure)) = 0
+  AND position('INSERT INTO public.invoices' IN pg_get_functiondef('public.equipment_apply_write_off(uuid,uuid,text)'::regprocedure)) = 0,
+  'checked as postgres');
+UPDATE public.equipment_units SET purchase_price_cents = 250000 WHERE id = pg_temp.eq('r1');
+SELECT pg_temp.check('P3c', 'write-off of R2,500 waits for a second admin',
+  pg_temp.id('a_admin'), 'true', format('SELECT public.clear_equipment_issue(%L, %L, %L) = %L', pg_temp.eq('iss1'), 'retired', 'Beyond repair', 'pending'));
+SELECT pg_temp.assert('P3c', 'the unit stays stolen until the second admin approves',
+  (SELECT status = 'stolen' FROM public.equipment_units WHERE id = pg_temp.eq('r1'))
+  AND EXISTS (SELECT 1 FROM public.equipment_write_offs WHERE unit_id = pg_temp.eq('r1') AND status = 'pending' AND proposed_by = pg_temp.id('a_admin')),
+  'checked as postgres');
+SELECT pg_temp.expect_error('P3c', 'the same admin cannot approve their own write-off',
+  pg_temp.id('a_admin'), format('SELECT public.approve_equipment_write_off(%L)', pg_temp.eq('r1')), 'different admin');
+SELECT pg_temp.check('P3c', 'a second NW admin approves the write-off',
+  pg_temp.id('eq_na2'), 'true', format('SELECT public.approve_equipment_write_off(%L, %L) = %L', pg_temp.eq('r1'), 'Agreed', 'retired'));
+SELECT pg_temp.assert('P3c', 'unit retired, issue cleared, still no charge row',
+  (SELECT u.status = 'retired' AND r.cleared_at IS NOT NULL AND w.status = 'approved' AND w.approved_by = pg_temp.id('eq_na2')
+   FROM public.equipment_units u, public.equipment_issue_reports r, public.equipment_write_offs w
+   WHERE u.id = pg_temp.eq('r1') AND r.id = pg_temp.eq('iss1') AND w.unit_id = u.id AND w.status = 'approved'),
+  'checked as postgres');
+UPDATE public.equipment_units SET purchase_price_cents = 50000 WHERE id = pg_temp.eq('d1');
+SELECT pg_temp.check('P3c', 'a write-off under R2,000 does not need a second admin',
+  pg_temp.id('a_admin'), 'true', format('SELECT public.set_equipment_unit_status_admin(%L, %L, %L) = %L', pg_temp.eq('d1'), 'retired', 'Old stock', 'retired'));
+SELECT pg_temp.check('P3c', 'control: A nw_admin logs a repair',
+  pg_temp.id('a_admin'), 'ok', format('SELECT public.log_equipment_maintenance(%L, %L, %L)', pg_temp.eq('r1'), 'repair', 'New battery'));
+SELECT pg_temp.expect_rows('P3c', 'an Org A member sees the service record',
+  pg_temp.id('a_comm'), format('SELECT 1 FROM public.list_equipment_maintenance(%L)', pg_temp.eq('r1')), 1);
+SELECT pg_temp.expect_error('P3c', 'Org B cannot read Org A service records',
+  pg_temp.id('b_admin'), format('SELECT * FROM public.list_equipment_maintenance(%L)', pg_temp.eq('r1')), 'not found');
+SELECT pg_temp.expect_error('P3c', 'patroller cannot read equipment_maintenance_logs directly',
+  pg_temp.id('eq_p1'), 'SELECT 1 FROM public.equipment_maintenance_logs', 'permission denied');
+SELECT pg_temp.expect_error('P3c', 'patroller cannot read equipment_write_offs directly',
+  pg_temp.id('eq_p1'), 'SELECT 1 FROM public.equipment_write_offs', 'permission denied');
+SELECT pg_temp.expect_error('P3c', 'patroller cannot insert a maintenance row',
+  pg_temp.id('eq_p1'), format('INSERT INTO public.equipment_maintenance_logs (organization_id, unit_id, kind) VALUES (%L, %L, %L)', pg_temp.id('org_a'), pg_temp.eq('r1'), 'repair'), 'permission denied');
 
 -- Ledger
 SELECT pg_temp.assert('P3b', 'G7-R1 status changes are all in the ledger (>= 10 rows)',

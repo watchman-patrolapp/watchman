@@ -29,11 +29,13 @@ export function isOpenLoan(loan) {
 export const ISSUE_KIND_LABELS = Object.freeze({ damage: "Damage", theft: "Theft", malfunction: "Not working" });
 
 export const TRANSFER_STATUS_LABELS = Object.freeze({
-  requested: "Waiting for the holder",
-  accepted: "Accepted",
+  requested: "Waiting for the holder (12 hours)",
+  accepted: "Hand-over in progress (6 hours)",
+  completed: "Handed over",
   declined: "Declined",
   cancelled: "Cancelled",
   expired: "Expired",
+  forced: "Completed by an admin",
 });
 
 /** Default loan length when an item has no limit (matches the server: 7 days). */
