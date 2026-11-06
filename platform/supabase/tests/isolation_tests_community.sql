@@ -2040,18 +2040,63 @@ SELECT pg_temp.assert('P3d', 'G7-S1 is now with p2 and the ledger says recorded 
   (SELECT current_holder_id = pg_temp.id('eq_p2') AND status = 'checked_out' FROM public.equipment_units WHERE id = pg_temp.eq('s1'))
   AND EXISTS (SELECT 1 FROM public.equipment_ledger WHERE unit_id = pg_temp.eq('s1') AND event = 'paper_handover_recorded'),
   'checked as postgres');
-SELECT pg_temp.check('P3d', 'the same offline issue id is stored once',
-  pg_temp.id('eq_p2'), 'true', format(
-    'SELECT public.report_equipment_issue(%L, %L, %L, NULL, NULL, NULL, %L) = public.report_equipment_issue(%L, %L, %L, NULL, NULL, NULL, %L)',
-    pg_temp.eq('s1'), 'damage', 'Case cracked', '44444444-4444-4444-8444-444444444444',
-    pg_temp.eq('s1'), 'damage', 'Case cracked', '44444444-4444-4444-8444-444444444444'));
+-- report_equipment_issue allows the loan with the newest collected_at, not current_holder_id.
+-- Collection uses clock_timestamp(); the paper loan uses now(), which is earlier in this
+-- single transaction, so the latest holder is still p1. Read that id as the session owner.
+DO $p3d_issue$
+DECLARE
+  v_unit uuid := pg_temp.eq('s1');
+  v_holder uuid;
+  v_client uuid := '44444444-4444-4444-8444-444444444444';
+  v_a uuid;
+  v_b uuid;
+BEGIN
+  SELECT l.requester_id INTO v_holder
+  FROM public.equipment_loans l
+  WHERE l.unit_id = v_unit AND l.collected_at IS NOT NULL
+  ORDER BY l.collected_at DESC, l.created_at DESC
+  LIMIT 1;
+  PERFORM pg_temp.as_user(v_holder);
+  v_a := public.report_equipment_issue(v_unit, 'damage', 'Case cracked', NULL, NULL, NULL, v_client);
+  v_b := public.report_equipment_issue(v_unit, 'damage', 'Case cracked', NULL, NULL, NULL, v_client);
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3d', 'the same offline issue id is stored once',
+          v_a IS NOT NULL AND v_a = v_b, format('holder %s -> %s', v_holder, v_a));
+EXCEPTION WHEN others THEN
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3d', 'the same offline issue id is stored once', false, SQLERRM);
+END
+$p3d_issue$;
 SELECT pg_temp.assert('P3d', 'one open issue for G7-S1',
   (SELECT count(*) = 1 FROM public.equipment_issue_reports WHERE unit_id = pg_temp.eq('s1') AND cleared_at IS NULL),
   'checked as postgres');
-SELECT pg_temp.check('P3d', 'export row count matches the Org A ledger for the period',
-  pg_temp.id('a_admin'), 'true', format(
-    'SELECT (SELECT count(*) FROM public.export_equipment_ledger(%L::timestamptz, now() + interval ''1 day'')) = (SELECT count(*) FROM public.equipment_ledger WHERE organization_id = %L AND occurred_at >= %L::timestamptz)',
-    '2000-01-01', pg_temp.id('org_a'), '2000-01-01'));
+-- Authenticated has no grant on equipment_ledger. Count the RPC as the admin,
+-- then count the table as the session owner.
+DO $p3d_export$
+DECLARE
+  v_org uuid := pg_temp.id('org_a');
+  v_admin uuid := pg_temp.id('a_admin');
+  v_rpc bigint;
+  v_tbl bigint;
+BEGIN
+  PERFORM pg_temp.as_user(v_admin);
+  SELECT count(*) INTO v_rpc
+  FROM public.export_equipment_ledger('2000-01-01'::timestamptz, now() + interval '1 day');
+  PERFORM pg_temp.as_postgres();
+  SELECT count(*) INTO v_tbl
+  FROM public.equipment_ledger
+  WHERE organization_id = v_org AND occurred_at >= '2000-01-01'::timestamptz;
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3d', 'export row count matches the Org A ledger for the period',
+          v_rpc = v_tbl AND v_rpc > 0, format('rpc %s ledger %s', v_rpc, v_tbl));
+EXCEPTION WHEN others THEN
+  PERFORM pg_temp.as_postgres();
+  INSERT INTO g7_results (matrix_row, test, ok, detail)
+  VALUES ('P3d', 'export row count matches the Org A ledger for the period', false, SQLERRM);
+END
+$p3d_export$;
 SELECT pg_temp.check('P3d', 'Org A hash chain still verifies',
   pg_temp.id('a_admin'), 'true', format('SELECT public.verify_equipment_ledger(%L) IS NULL', pg_temp.id('org_a')));
 SELECT pg_temp.expect_error('P3d', 'patroller cannot read equipment_client_events',
