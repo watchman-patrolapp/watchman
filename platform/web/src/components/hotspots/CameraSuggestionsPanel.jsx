@@ -33,7 +33,7 @@ export default function CameraSuggestionsPanel({
   if (!suggestions.length) {
     return (
       <div className="mt-3 rounded-lg bg-gray-50 dark:bg-gray-900/60 p-3 text-sm text-gray-600 dark:text-gray-400">
-        No cameras close enough to suggest. Add camera spots to get a time window to request footage.
+        No cameras from your neighbourhood are close enough to suggest. Cameras from other neighbourhoods are private to them.
       </div>
     );
   }

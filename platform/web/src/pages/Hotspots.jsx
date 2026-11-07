@@ -98,7 +98,11 @@ export default function Hotspots() {
   const load = useCallback(async () => {
     const gen = ++loadGen.current;
     try {
-      const [ev, cam] = await Promise.all([fetchHotspotEvents(), fetchCameraSpots()]);
+      const camPromise = fetchCameraSpots().catch((err) => {
+        console.warn('Could not load camera spots', err);
+        return [];
+      });
+      const [ev, cam] = await Promise.all([fetchHotspotEvents(), camPromise]);
       if (gen !== loadGen.current) return;
       setEvents(ev);
       setCameras(cam);
@@ -279,10 +283,15 @@ export default function Hotspots() {
             <input type="checkbox" checked={showPath} onChange={(e) => setShowPath(e.target.checked)} />
             Travel thread
           </label>
-          <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-            <input type="checkbox" checked={showCameras} onChange={(e) => setShowCameras(e.target.checked)} />
-            Cameras
-          </label>
+          <div className="flex flex-col gap-0.5">
+            <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+              <input type="checkbox" checked={showCameras} onChange={(e) => setShowCameras(e.target.checked)} />
+              Cameras
+            </label>
+            <p className="text-xs text-gray-400 dark:text-gray-500 pl-6">
+              Only your neighbourhood's cameras are shown.
+            </p>
+          </div>
           <span className="text-xs text-gray-400">
             {visibleEvents.length} pin{visibleEvents.length === 1 ? '' : 's'} · {zones.length} hot zone
             {zones.length === 1 ? '' : 's'} · {cameras.length} camera{cameras.length === 1 ? '' : 's'}
