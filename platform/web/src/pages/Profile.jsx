@@ -10,8 +10,7 @@ import AppNotificationBell from '../components/layout/AppNotificationBell';
 import { TbWifi, TbWifiOff } from 'react-icons/tb';
 import { getUserReduceMobileData, setUserReduceMobileData } from '../utils/dataSaverProfile';
 import { formatAuthErrorMessage } from '../utils/authErrorMessage';
-import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
+import { centerCrop, makeAspectCrop } from 'react-image-crop';
 import SecurityMembershipCard from '../components/security/SecurityMembershipCard';
 import { formatVerifiedBy, getResidentVerificationLog, requestPatrollerRole, withdrawPatrollerRoleRequest } from '../utils/residentVerification';
 import { getMyHouseholdCivic, pingResidentPresence } from '../utils/householdCivic';
@@ -30,6 +29,8 @@ import {
 } from '../utils/securityMembershipActions';
 import HomePinPicker from '../components/profile/HomePinPicker';
 import EmergencyContactSection from '../components/profile/EmergencyContactSection';
+import DeleteAccountSection from '../components/profile/DeleteAccountSection';
+import AvatarCropModal from '../components/profile/AvatarCropModal';
 import NotificationPrefs from '../components/profile/NotificationPrefs';
 import MyCapabilities from '../components/profile/MyCapabilities';
 import { hasHomePin, setMyHomePin } from '../utils/homePin';
@@ -211,29 +212,6 @@ export default function Profile() {
 
   const [reduceMobileData, setReduceMobileData] = useState(() => getUserReduceMobileData());
 
-  const privacyContactEmail = (import.meta.env.VITE_PRIVACY_CONTACT_EMAIL || '').trim();
-  const [authIdentities, setAuthIdentities] = useState(null);
-  const [deletePassword, setDeletePassword] = useState('');
-  const [deleteAccountAck, setDeleteAccountAck] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-
-  useEffect(() => {
-    if (!user?.id) {
-      setAuthIdentities(null);
-      return;
-    }
-    let cancelled = false;
-    void supabase.auth.getUser().then(({ data }) => {
-      if (cancelled) return;
-      setAuthIdentities(data.user?.identities ?? []);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
-
-  const canDeleteWithPassword =
-    Array.isArray(authIdentities) && authIdentities.some((i) => i.provider === 'email');
   useEffect(() => {
     const sync = () => setReduceMobileData(getUserReduceMobileData());
     window.addEventListener('watchman-reduce-mobile-data-changed', sync);
@@ -426,67 +404,6 @@ export default function Profile() {
         setUploadingAvatar(false);
       }
     }, 'image/jpeg', 0.9);
-  };
-
-  const handleDeleteMyAccount = async () => {
-    if (deleteBusy) return;
-    const email = user?.email?.trim();
-    if (!email) {
-      toast.error('No email on this account.');
-      return;
-    }
-    if (!deleteAccountAck) {
-      toast.error('Confirm that you understand your account will be permanently deleted.');
-      return;
-    }
-    if (!deletePassword) {
-      toast.error('Enter your current password to confirm deletion.');
-      return;
-    }
-
-    setDeleteBusy(true);
-    try {
-      const { error: signErr } = await supabase.auth.signInWithPassword({
-        email,
-        password: deletePassword,
-      });
-      if (signErr) {
-        toast.error(formatAuthErrorMessage(signErr) || 'Password is incorrect.');
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke('delete-my-account', {
-        body: { confirm: true },
-      });
-
-      if (error) {
-        let msg = error.message || 'Request failed';
-        try {
-          const ctx = error.context;
-          if (ctx && typeof ctx.json === 'function') {
-            const bodyJson = await ctx.json();
-            if (bodyJson?.error) msg = String(bodyJson.error);
-          }
-        } catch {
-          /* keep msg */
-        }
-        throw new Error(msg);
-      }
-      if (data && typeof data === 'object' && 'error' in data && data.error) {
-        throw new Error(String(data.error));
-      }
-
-      setDeletePassword('');
-      setDeleteAccountAck(false);
-      toast.success('Your account has been deleted.');
-      await signOut();
-      navigate('/login', { replace: true });
-    } catch (err) {
-      console.error('delete-my-account:', err);
-      toast.error(err.message || 'Could not delete account. Deploy the delete-my-account Edge Function if this persists.');
-    } finally {
-      setDeleteBusy(false);
-    }
   };
 
   const saveHomePin = async (next) => {
@@ -899,48 +816,22 @@ export default function Profile() {
 
         {/* Crop Modal – fixed for vertical images */}
         {showCropModal && imagePreviewUrl && (
-          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/75 p-4">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-              <h2 className="text-xl font-bold mb-4 dark:text-white">Crop Image</h2>
-              <div className="flex justify-center items-center min-h-[300px]">
-                <ReactCrop
-                  crop={crop}
-                  onChange={(_, percentCrop) => setCrop(percentCrop)}
-                  onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)}
-                  aspect={1}
-                  circularCrop
-                >
-                  <img
-                    src={imagePreviewUrl}
-                    alt="Crop preview"
-                    onLoad={onImageLoad}
-                    className="max-w-full max-h-[60vh] w-auto h-auto object-contain"
-                  />
-                </ReactCrop>
-              </div>
-              <div className="flex justify-end gap-3 mt-4 sticky bottom-0 bg-white dark:bg-gray-800 pt-2">
-                <button
-                  onClick={() => {
-                    setShowCropModal(false);
-                    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-                    setImagePreviewUrl(null);
-                    setCompletedCrop(null);
-                  }}
-                  disabled={uploadingAvatar}
-                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCropConfirm}
-                  disabled={!completedCrop || uploadingAvatar}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {uploadingAvatar ? 'Uploading…' : 'Upload'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <AvatarCropModal
+            imagePreviewUrl={imagePreviewUrl}
+            crop={crop}
+            setCrop={setCrop}
+            setCompletedCrop={setCompletedCrop}
+            completedCrop={completedCrop}
+            onImageLoad={onImageLoad}
+            uploadingAvatar={uploadingAvatar}
+            onConfirm={handleCropConfirm}
+            onCancel={() => {
+              setShowCropModal(false);
+              if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+              setImagePreviewUrl(null);
+              setCompletedCrop(null);
+            }}
+          />
         )}
 
         {/* Profile fields */}
@@ -1261,79 +1152,7 @@ export default function Profile() {
           </button>
         </div>
 
-        <div className="mt-10 pt-6 border-t border-red-200 dark:border-red-900/50 rounded-lg border border-red-100 dark:border-red-900/40 bg-red-50/80 dark:bg-red-950/20 p-4 space-y-3">
-          <h2 className="text-lg font-semibold text-red-800 dark:text-red-300 flex items-center gap-2">
-            <FaExclamationTriangle className="shrink-0" aria-hidden />
-            Delete account
-          </h2>
-          <p className="text-sm text-red-900/90 dark:text-red-200/90 leading-relaxed">
-            Permanently delete your login, profile, patrol sign-ups, vehicles on file, chat messages you
-            sent, and criminal-intelligence profiles you created. Incident reports you submitted may
-            stay in the system with the submitter field cleared where the database allows. This cannot be
-            undone.
-          </p>
-          {authIdentities === null ? (
-            <p className="text-sm text-gray-600 dark:text-gray-400">Checking account type…</p>
-          ) : canDeleteWithPassword ? (
-            <>
-              <label className="flex items-start gap-2 text-sm text-red-900 dark:text-red-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={deleteAccountAck}
-                  onChange={(e) => setDeleteAccountAck(e.target.checked)}
-                  className="mt-1 w-4 h-4 shrink-0"
-                />
-                <span>I understand my account and the data above will be permanently deleted.</span>
-              </label>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-red-900 dark:text-red-200">
-                  Current password
-                </label>
-                <input
-                  type="password"
-                  value={deletePassword}
-                  onChange={(e) => setDeletePassword(e.target.value)}
-                  autoComplete="current-password"
-                  className="w-full border border-red-200 dark:border-red-800 rounded px-3 py-2 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                  placeholder="Required to confirm it’s you"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleDeleteMyAccount()}
-                disabled={deleteBusy || !deleteAccountAck || !deletePassword}
-                className="bg-red-700 text-white px-4 py-2 rounded hover:bg-red-800 transition disabled:opacity-50 text-sm font-medium"
-              >
-                {deleteBusy ? 'Deleting…' : 'Delete my account permanently'}
-              </button>
-            </>
-          ) : (
-            <div className="text-sm text-red-900 dark:text-red-200 space-y-2">
-              <p>
-                This account signs in with a provider that does not use a password. To delete your data,
-                send a request from your registered email
-                {privacyContactEmail ? (
-                  <>
-                    {' '}
-                    to{' '}
-                    <a
-                      href={`mailto:${privacyContactEmail}?subject=${encodeURIComponent('Account deletion request')}&body=${encodeURIComponent(`Please delete my Neighbourhood Watch account.\n\nRegistered email: ${user?.email || ''}\nUser ID: ${user?.id || ''}\n`)}`}
-                      className="font-medium underline underline-offset-2"
-                    >
-                      {privacyContactEmail}
-                    </a>
-                  </>
-                ) : (
-                  <>
-                    {' '}
-                    (set <code className="text-xs bg-red-100 dark:bg-red-900/50 px-1 rounded">VITE_PRIVACY_CONTACT_EMAIL</code>{' '}
-                    in your app environment for a mailto link).
-                  </>
-                )}
-              </p>
-            </div>
-          )}
-        </div>
+        <DeleteAccountSection user={user} signOut={signOut} navigate={navigate} />
       </div>
     </div>
   );
