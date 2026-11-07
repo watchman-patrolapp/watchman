@@ -3,7 +3,7 @@ import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
 import { fetchInChunks } from "../utils/fetchInChunks";
-import { FaArrowLeft, FaCamera, FaExclamationTriangle, FaCheckCircle, FaTimes, FaCar, FaTools, FaFileAlt, FaEye, FaUserSecret, FaSearch, FaLink } from "react-icons/fa";
+import { FaArrowLeft, FaSearch } from "react-icons/fa";
 import toast from "../utils/notify";
 import EvidenceSection from "../components/evidence/EvidenceSection";
 import {
@@ -14,276 +14,29 @@ import {
 import MatchSuggestionPanel from "../components/intelligence/MatchSuggestionPanel";
 import ProfileLinkingSection from "../components/intelligence/ProfileLinkingSection";
 import WitnessMemberPicker from "../components/intelligence/WitnessMemberPicker";
-import { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceList";
 import ThemeToggle from "../components/ThemeToggle";
 import Button from "../components/ui/Button";
 import ErrorState from "../components/ui/ErrorState";
-import FormField from "../components/ui/FormField";
 import Skeleton from "../components/ui/Skeleton";
 import { canStaffManageIncidents } from "../auth/staffRoles";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
-import { watchDayStamp, parsePatrolTime } from "../utils/watchTime";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const INCIDENT_TYPES = [
-  "Suspicious Activity",
-  "Theft",
-  "Vandalism",
-  "Noise Complaint",
-  "Suspicious Vehicle",
-  "Other"
-];
-
-const INCIDENT_DRAFT_STORAGE_KEY = "nwp_incident_report_draft_v1";
-
-const EMPTY_EVIDENCE = () => ({
-  scene_photos: [],
-  suspects: [],
-  vehicles: [],
-  physical_evidence: [],
-  documentation: [],
-  contextual_intel: [],
-});
-
-function incidentDateInputValue(raw) {
-  if (!raw) return watchDayStamp();
-  const s = String(raw).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  const d = parsePatrolTime(s);
-  return d ? watchDayStamp(d) : watchDayStamp();
-}
-
-/** Rebuild form evidence state from incident_evidence rows (admin edit / hydration). */
-function mapDbEvidenceToFormState(rows) {
-  const next = EMPTY_EVIDENCE();
-  if (!rows?.length) return next;
-
-  const idSeen = new Set();
-  const candidates = [];
-  for (const row of rows) {
-    if (!row) continue;
-    if (row.id != null) {
-      if (idSeen.has(row.id)) continue;
-      idSeen.add(row.id);
-    }
-    const cat = row.category;
-    if (!Object.prototype.hasOwnProperty.call(next, cat)) continue;
-    candidates.push(row);
-  }
-
-  const logical = new Map();
-  for (const row of candidates) {
-    const cat = row.category;
-    const fid = row.metadata?._formEntryId;
-    const key =
-      fid != null && String(fid).length > 0
-        ? `${cat}::${String(fid)}`
-        : row.id != null
-          ? `id::${row.id}`
-          : null;
-    if (key == null) continue;
-    const prev = logical.get(key);
-    if (!prev) {
-      logical.set(key, row);
-      continue;
-    }
-    const tRow = parsePatrolTime(row.created_at)?.getTime() || 0;
-    const tPrev = parsePatrolTime(prev.created_at)?.getTime() || 0;
-    const primary = tRow >= tPrev ? row : prev;
-    const secondary = tRow >= tPrev ? prev : row;
-    const mergedUrls = [
-      ...new Set([
-        ...normalizeMediaUrls(primary.media_urls),
-        ...normalizeMediaUrls(secondary.media_urls),
-      ]),
-    ];
-    logical.set(key, {
-      ...primary,
-      media_urls: mergedUrls.length > 0 ? mergedUrls : primary.media_urls,
-      description:
-        primary.description?.trim() || secondary.description?.trim() || '',
-    });
-  }
-
-  const collapsed = [...logical.values()].sort(
-    (a, b) => (parsePatrolTime(a.created_at)?.getTime() || 0) - (parsePatrolTime(b.created_at)?.getTime() || 0)
-  );
-
-  for (const row of collapsed) {
-    const cat = row.category;
-    const meta = { ...(row.metadata || {}) };
-    delete meta._formEntryId;
-    const formId = row.metadata?._formEntryId || `db_${row.id}`;
-    const linked_profile_id = meta.linked_profile_id || null;
-    const linked_profile_name = meta.linked_profile_name || null;
-    const linked_profile_risk = meta.linked_profile_risk || null;
-    const linked_connection_type = meta.linked_connection_type || null;
-    const linked_confidence_score =
-      meta.linked_confidence_score != null && meta.linked_confidence_score !== ''
-        ? Math.max(1, Math.min(100, Number(meta.linked_confidence_score)))
-        : null;
-    if (cat === 'suspects') {
-      delete meta.linked_profile_id;
-      delete meta.linked_profile_name;
-      delete meta.linked_profile_risk;
-      delete meta.linked_connection_type;
-      delete meta.linked_confidence_score;
-    }
-    next[cat].push({
-      id: formId,
-      category: cat,
-      description: row.description || "",
-      metadata: meta,
-      files: [],
-      media_urls: normalizeMediaUrls(row.media_urls),
-      ...(cat === 'suspects' && linked_profile_id
-        ? {
-            linked_profile_id,
-            linked_profile_name,
-            linked_profile_risk,
-            ...(linked_connection_type ? { linked_connection_type } : {}),
-            ...(linked_confidence_score != null && Number.isFinite(linked_confidence_score)
-              ? { linked_confidence_score }
-              : {}),
-          }
-        : {}),
-    });
-  }
-  return next;
-}
-
-/** Serializable evidence (File objects cannot be stored). */
-function evidenceForStorage(evidence) {
-  const out = {};
-  for (const key of Object.keys(evidence)) {
-    out[key] = (evidence[key] || []).map((entry) => ({
-      ...entry,
-      files: [],
-    }));
-  }
-  return out;
-}
-
-const EVIDENCE_CATEGORIES = [
-  {id: 'scene_photos', label: 'Scene Evidence', description: 'General photos of incident location, damage, or environment', icon: FaCamera, allowMultipleEntries: false},
-  {id: 'suspects', label: 'Suspect Profiles', description: 'Photos and descriptions of identified or suspicious persons', icon: FaUserSecret, allowMultipleEntries: true},
-  {id: 'vehicles', label: 'Vehicle Evidence', description: 'Suspicious vehicles, license plates, or vehicle damage', icon: FaCar, allowMultipleEntries: true},
-  {id: 'physical_evidence', label: 'Physical Evidence', description: 'Tools, footprints, damage, stolen items left behind', icon: FaTools, allowMultipleEntries: false},
-  {id: 'documentation', label: 'Documentation', description: 'SAPS forms, insurance docs, receipts, serial numbers', icon: FaFileAlt, allowMultipleEntries: false},
-  {id: 'contextual_intel', label: 'Contextual Intelligence', description: 'Suspicious activity nearby (e.g., 2am walkers near cable theft)', icon: FaEye, allowMultipleEntries: true}
-];
-
-const INITIAL_FORM = {
-  incidentDate: watchDayStamp(),
-  location: "",
-  type: "",
-  description: "",
-  suspectName: "",
-  suspectDescription: "",
-  vehicleInfo: "",
-  sapsCaseNumber: "",
-  witnessPresent: false,
-  witnessName: "",
-  witnessUserId: null,
-  witnessAvatarUrl: null,
-};
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function SectionCard({ title, children }) {
-  return (
-    <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function FormInput({ label, name, type = "text", required, hint, ...props }) {
-  const id = props.id || `incident-${name}`;
-  return (
-    <FormField id={id} label={label} required={required} hint={hint}>
-      <input
-        id={id}
-        type={type}
-        name={name}
-        required={required}
-        className="input border w-full"
-        {...props}
-      />
-    </FormField>
-  );
-}
-
-function FormTextarea({ label, name, required, rows = 4, hint, ...props }) {
-  const id = props.id || `incident-${name}`;
-  return (
-    <FormField id={id} label={label} required={required} hint={hint}>
-      <textarea
-        id={id}
-        name={name}
-        required={required}
-        rows={rows}
-        className="input border w-full resize-y"
-        {...props}
-      />
-    </FormField>
-  );
-}
-
-function FormSelect({ label, name, required, options, hint, ...props }) {
-  const id = props.id || `incident-${name}`;
-  return (
-    <FormField id={id} label={label} required={required} hint={hint}>
-      <select
-        id={id}
-        name={name}
-        required={required}
-        className="input border w-full"
-        {...props}
-      >
-        <option value="">Select {String(label || "an option").toLowerCase()}</option>
-        {options.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
-    </FormField>
-  );
-}
-
-function AlertBox({ message }) {
-  return (
-    <div className="bg-danger-light border border-danger rounded-xl p-4 mb-6 flex items-start gap-3" role="alert">
-      <FaExclamationTriangle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" aria-hidden />
-      <p className="text-sm text-danger-foreground">{message}</p>
-    </div>
-  );
-}
-
-function UploadProgress({ current, total, progress }) {
-  return (
-    <div className="mt-3 bg-teal-50 dark:bg-teal-900/20 rounded-xl p-3">
-      <div className="flex justify-between text-sm mb-2 text-teal-700 dark:text-teal-300">
-        <span className="flex items-center gap-2">
-          <FaCamera className="w-4 h-4" />
-          Uploading {current} of {total}
-        </span>
-        <span className="font-semibold">{progress}%</span>
-      </div>
-      <div className="w-full bg-teal-200 dark:bg-teal-800 rounded-full h-2">
-        <div
-          className="bg-teal-600 h-2 rounded-full transition-all duration-300"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-    </div>
-  );
-}
+import {
+  INCIDENT_TYPES,
+  INCIDENT_DRAFT_STORAGE_KEY,
+  EMPTY_EVIDENCE,
+  incidentDateInputValue,
+  mapDbEvidenceToFormState,
+  evidenceForStorage,
+  EVIDENCE_CATEGORIES,
+  INITIAL_FORM,
+} from "../components/incident/form/incidentFormConfig.js";
+import {
+  SectionCard,
+  FormInput,
+  FormTextarea,
+  FormSelect,
+  AlertBox,
+} from "../components/incident/form/FormFields.jsx";
 
 // ---------------------------------------------------------------------------
 // Main component
