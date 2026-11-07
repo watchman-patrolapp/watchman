@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/client';
-import { format } from 'date-fns';
 import { 
-  FaArrowLeft, FaUserSecret, FaFileAlt, FaExclamationTriangle, FaCar, FaTrash, FaEdit,
+  FaArrowLeft, FaUserSecret, FaFileAlt, FaCar, FaTrash, FaEdit,
   FaPrint, FaFilePdf, FaHistory, FaUser, FaShareAlt
 } from 'react-icons/fa';
-import CriminalProfileCard from '../components/intelligence/CriminalProfileCard';
 import { SeenByChip } from '../components/intelligence/SightingsLogEditor';
-import { totalProfileLocationCardCount } from '../utils/profileLocationCount';
 import { collectUserIdsFromProfiles, fetchUserLabelMap } from '../utils/profileUserLabels';
 import StructuredEvidenceList, {
   EVIDENCE_CATEGORY_ORDER,
@@ -28,205 +25,19 @@ import toast from '../utils/notify';
 import BrandedLoader from '../components/layout/BrandedLoader';
 import { useAuth } from '../auth/useAuth';
 import ThemeToggle from '../components/ThemeToggle';
-import { parsePatrolTime } from '../utils/watchTime';
-
-function formatIncidentWhen(value, pattern = 'MMM dd, yyyy HH:mm') {
-  const d = parsePatrolTime(value);
-  if (!d) {
-    const s = String(value || '').trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-      try {
-        return format(new Date(`${s}T12:00:00+02:00`), pattern.includes('HH') ? 'MMM dd, yyyy' : pattern);
-      } catch {
-        return s;
-      }
-    }
-    return '—';
-  }
-  try {
-    return format(d, pattern);
-  } catch {
-    return '—';
-  }
-}
 import { deleteIncidentFully } from '../utils/deleteIncident';
 import {
-  connectionTypeBadgeClasses,
-  connectionTypeLabel,
-  PROFILE_INCIDENT_CONFIDENCE_NOT_SET_HINT,
-} from '../data/profileIncidentLinkTaxonomy';
+  formatIncidentWhen,
+  confidenceScoreFromSuspectEvidence,
+  mergeIncidentSuspectsIntoEvidence,
+} from '../components/incident/detail/incidentDetailHelpers';
+import LinkedProfileLinkCard from '../components/incident/detail/LinkedProfileLinkCard';
+import EmptyOriginal from '../components/incident/detail/EmptyOriginal';
+import { EvidenceTab, IntelligenceTab } from '../components/incident/detail/IncidentDetailTabs';
 import { canStaffManageIncidents } from '../auth/staffRoles';
 import { canPublishCityHub } from '../auth/roleMatrix';
 import { belongsToActiveOrganization, useScopedOrganization } from '../utils/organizationScope';
 import { fetchCityHubShareForIncident } from '../utils/cityHubShare';
-
-/**
- * `incident_suspects` is populated for every structured suspect submit; `incident_evidence` rows can be
- * missing (older flows, failed insert, or evidence_id mismatch). Merge so the report still shows suspect entries.
- */
-/** Normalize profile_incidents.confidence_score (DB may return number or string). */
-function parseStoredLinkConfidence(raw) {
-  if (raw == null || raw === "") return null;
-  const n = typeof raw === "number" ? raw : Number(raw);
-  if (!Number.isFinite(n)) return null;
-  return Math.max(1, Math.min(100, Math.round(n)));
-}
-
-/**
- * When profile_incidents.confidence_score is null, use suspect evidence metadata.
- * Prefer the most recently created row with a score (not MAX), so lowering confidence to 90 is not beaten by an older 100.
- */
-function confidenceScoreFromSuspectEvidence(evidenceRows, profileId) {
-  if (profileId == null) return null;
-  const want = String(profileId);
-  let best = null;
-  let bestT = -Infinity;
-  for (const row of evidenceRows || []) {
-    if (row?.category !== "suspects") continue;
-    const lid = row.metadata?.linked_profile_id;
-    if (lid == null || String(lid) !== want) continue;
-    const raw = row.metadata?.linked_confidence_score;
-    if (raw == null || raw === "") continue;
-    const n = Number(raw);
-    if (!Number.isFinite(n)) continue;
-    const clamped = Math.max(1, Math.min(100, Math.round(n)));
-    const t = parsePatrolTime(row.updated_at || row.created_at)?.getTime() || 0;
-    if (best == null || t >= bestT) {
-      best = clamped;
-      bestT = t;
-    }
-  }
-  return best;
-}
-
-function mergeIncidentSuspectsIntoEvidence(evidenceRows, suspectRows) {
-  const list = [...(evidenceRows || [])];
-  const evidenceIds = new Set(list.map((r) => r?.id).filter(Boolean));
-  for (const s of suspectRows || []) {
-    if (s.evidence_id != null && evidenceIds.has(s.evidence_id)) continue;
-    const meta = {};
-    if (s.estimated_age != null && s.estimated_age !== '') meta.age = s.estimated_age;
-    if (s.clothing_description) meta.clothing = s.clothing_description;
-    if (s.direction_last_seen) meta.direction = s.direction_last_seen;
-    if (s.time_observed) meta.timeObserved = s.time_observed;
-    list.push({
-      id: `__incident_suspect__${s.id}`,
-      incident_id: s.incident_id,
-      category: 'suspects',
-      description: s.description?.trim() || '',
-      metadata: meta,
-      media_urls: s.photo_urls,
-      submitted_by: null,
-      created_at: s.created_at,
-    });
-  }
-  return list;
-}
-
-function LinkedProfileLinkCard({ link, navigate, userLabelById = {} }) {
-  const fromProfileRow = parseStoredLinkConfidence(link.confidence_score);
-  const displayConfidence =
-    fromProfileRow != null
-      ? fromProfileRow
-      : link._effective_confidence_score != null
-        ? link._effective_confidence_score
-        : null;
-  const confidenceFromEvidenceOnly =
-    displayConfidence != null && fromProfileRow == null;
-
-  return (
-    <div className="rounded-xl border-2 border-gray-300 bg-white p-6 shadow-sm dark:border-gray-600 dark:bg-gray-800">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <span
-            className={`inline-block px-2 py-1 rounded text-xs font-bold mb-2 ${connectionTypeBadgeClasses(
-              link.connection_type
-            )}`}
-          >
-            {connectionTypeLabel(link.connection_type)}
-          </span>
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Link confidence:</span>
-              {displayConfidence != null ? (
-                <>
-                  <div className="w-24 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${
-                        displayConfidence > 80
-                          ? 'bg-green-500'
-                          : displayConfidence > 50
-                            ? 'bg-yellow-500'
-                            : 'bg-red-500'
-                      }`}
-                      style={{
-                        width: `${Math.min(100, Math.max(0, displayConfidence))}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                    {displayConfidence}%
-                  </span>
-                  {confidenceFromEvidenceOnly && (
-                    <span
-                      className="text-[10px] text-gray-500 dark:text-gray-400"
-                      title="From suspect evidence (latest row). Re-save the report to copy this into the profile–incident link row."
-                    >
-                      (from evidence)
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span className="text-sm text-gray-500 dark:text-gray-400">Not set</span>
-              )}
-            </div>
-            {displayConfidence == null && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xl">
-                {PROFILE_INCIDENT_CONFIDENCE_NOT_SET_HINT}
-              </p>
-            )}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate(`/intelligence/profiles/${link.profile_id}`)}
-          className="px-4 py-2 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded-lg text-sm font-medium hover:bg-teal-200 transition"
-        >
-          View Full Profile
-        </button>
-      </div>
-
-      {link.profile && (
-        <CriminalProfileCard
-          profile={link.profile}
-          userLabelById={userLabelById}
-          stats={{
-            incidentCount:
-              link.profile.profile_incidents?.[0]?.count ??
-              link.profile.incident_count ??
-              0,
-            associateCount: (() => {
-              const p = link.profile;
-              const o = p?.associate_out?.[0]?.count;
-              const i = p?.associate_in?.[0]?.count;
-              const no = typeof o === 'number' ? o : Number(o) || 0;
-              const ni = typeof i === 'number' ? i : Number(i) || 0;
-              if (no || ni) return no + ni;
-              return p?.associate_count ?? 0;
-            })(),
-            locationCount: totalProfileLocationCardCount(link.profile, link.profile.profile_geography),
-          }}
-        />
-      )}
-
-      {link.verification_notes && (
-        <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-sm text-gray-600 dark:text-gray-400">
-          <strong>Analyst Notes:</strong> {link.verification_notes}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function IncidentDetail() {
   const { id } = useParams();
@@ -938,103 +749,26 @@ export default function IncidentDetail() {
         )}
 
         {activeTab === 'evidence' && (
-          <div className="space-y-8 rounded-xl border-2 border-gray-300 bg-white p-6 shadow-sm dark:border-gray-600 dark:bg-gray-800">
-            {EVIDENCE_CATEGORY_ORDER.map((categoryId) => {
-              const sectionKey = evidenceCategoryToSectionKey(categoryId);
-              const label = INCIDENT_SECTION_LABELS[sectionKey];
-              const emptyFallback = categoryId === 'scene_photos' ? legacyUrlsForScene : [];
-              const allSectionUpdates = updatesBySection[sectionKey] || [];
-              const sectionWideUpdates = allSectionUpdates.filter((u) => !u.target_evidence_id);
-              return (
-                <IncidentSectionPanel
-                  key={sectionKey}
-                  label={label}
-                  originalChildren={
-                    <StructuredEvidenceList
-                      items={displayEvidence}
-                      emptyFallbackUrls={emptyFallback}
-                      categoryFilter={categoryId}
-                      suppressCategoryHeading
-                      onOpenLinkedProfile={(profileId) =>
-                        navigate(`/intelligence/profiles/${profileId}`)
-                      }
-                      incidentSectionUpdates={allSectionUpdates}
-                      canAddEntryUpdates={canAddUpdates}
-                      onAddEntryUpdate={
-                        canAddUpdates
-                          ? (evidenceId, entryLabel) =>
-                              setUpdateModal({
-                                key: sectionKey,
-                                label,
-                                targetEvidenceId: evidenceId,
-                                entryHint: entryLabel,
-                              })
-                          : undefined
-                      }
-                      onMigrateLegacyPhotos={
-                        canAddUpdates ? handleMigrateLegacyScenePhotos : undefined
-                      }
-                      migrateLegacyBusy={migrateLegacyBusy}
-                    />
-                  }
-                  updates={sectionWideUpdates}
-                  canAdd={canAddUpdates}
-                  onAddClick={() =>
-                    setUpdateModal({
-                      key: sectionKey,
-                      label,
-                      targetEvidenceId: undefined,
-                      entryHint: undefined,
-                    })
-                  }
-                />
-              );
-            })}
-          </div>
+          <EvidenceTab
+            displayEvidence={displayEvidence}
+            legacyUrlsForScene={legacyUrlsForScene}
+            updatesBySection={updatesBySection}
+            canAddUpdates={canAddUpdates}
+            navigate={navigate}
+            setUpdateModal={setUpdateModal}
+            handleMigrateLegacyScenePhotos={handleMigrateLegacyScenePhotos}
+            migrateLegacyBusy={migrateLegacyBusy}
+          />
         )}
 
         {activeTab === 'intelligence' && (
-          <div className="space-y-6">
-            {linkedProfiles.length === 0 ? (
-              <div className="text-center py-12">
-                <FaUserSecret className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  No Linked Profiles
-                </h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-4">
-                  This incident is not linked to any criminal profiles yet.
-                </p>
-                <button 
-                  onClick={() => navigate(`/incident/${id}/edit`)}
-                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition"
-                >
-                  Link Suspect to Profile
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
-                  <h3 className="font-semibold text-amber-800 dark:text-amber-200 flex items-center gap-2">
-                    <FaExclamationTriangle />
-                    Intelligence Summary
-                  </h3>
-                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                    {linkedProfiles.length} suspect(s) linked to this incident with varying confidence levels.
-                    Review profiles for modus operandi patterns and associate networks.
-                  </p>
-                </div>
-
-                {linkedProfilesForDisplay.map((link) => (
-                  <LinkedProfileLinkCard
-                    key={link.id}
-                    link={link}
-                    navigate={navigate}
-                    userLabelById={profileUserLabelById}
-                  />
-                ))}
-              </>
-            )}
-          </div>
+          <IntelligenceTab
+            linkedProfiles={linkedProfiles}
+            linkedProfilesForDisplay={linkedProfilesForDisplay}
+            navigate={navigate}
+            id={id}
+            profileUserLabelById={profileUserLabelById}
+          />
         )}
       </main>
 
@@ -1061,13 +795,5 @@ export default function IncidentDetail() {
         onShared={(post) => setCityHubShare(post || { id: true })}
       />
     </div>
-  );
-}
-
-function EmptyOriginal() {
-  return (
-    <p className="italic text-gray-500 dark:text-gray-400">
-      No information in the original submission.
-    </p>
   );
 }
