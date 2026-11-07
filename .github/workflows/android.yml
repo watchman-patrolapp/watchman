@@ -1,0 +1,72 @@
+name: Android debug build
+
+# Catches Gradle, manifest-merge and Capacitor sync breakage. Runs only when the
+# native project or the files that feed it change, or when started by hand.
+# Debug build only: release signing keys are never available to CI.
+
+on:
+  pull_request:
+    paths:
+      - platform/android/**
+      - platform/web/capacitor.config.json
+      - platform/web/package.json
+      - platform/web/package-lock.json
+      - platform/web/scripts/patch-background-geolocation.mjs
+      - .github/workflows/android.yml
+  push:
+    branches:
+      - main
+    paths:
+      - platform/android/**
+      - platform/web/capacitor.config.json
+      - platform/web/package.json
+      - platform/web/package-lock.json
+      - platform/web/scripts/patch-background-geolocation.mjs
+      - .github/workflows/android.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assemble-debug:
+    name: assembleDebug
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: platform/web/.nvmrc
+          cache: npm
+          cache-dependency-path: platform/web/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install web dependencies
+        working-directory: platform/web
+        run: npm ci
+
+      - name: Build web bundle and sync Capacitor
+        working-directory: platform/web
+        run: npm run android:sync
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: dummy-anon-key
+
+      - name: Assemble debug APK
+        working-directory: platform/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --stacktrace

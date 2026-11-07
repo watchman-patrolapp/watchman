@@ -117,7 +117,7 @@ const VoiceRecorder = React.memo(function VoiceRecorder({ onSend, onCancel, maxD
           analyserRef.current = audioContextRef.current.createAnalyser();
           analyserRef.current.fftSize = 256;
           source.connect(analyserRef.current);
-        } catch { console.log('Audio analysis not available'); }
+        } catch { devLog('Audio analysis not available'); }
         
         const mimeType = ['audio/wav', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
           .find(type => MediaRecorder.isTypeSupported(type)) || 'audio/wav';
@@ -141,7 +141,7 @@ const VoiceRecorder = React.memo(function VoiceRecorder({ onSend, onCancel, maxD
           const blob = new Blob(validChunks, { type: mimeType });
           const url = URL.createObjectURL(blob);
           
-          console.log('Recording complete:', { size: blob.size, type: blob.type, url });
+          devLog('Recording complete:', { size: blob.size, type: blob.type });
           
           setAudioBlob(blob);
           setAudioUrl(url);

@@ -37,9 +37,15 @@ node_modules
 # IDE / OS
 .cursor/
 
-# Supabase CLI cache (canonical + nested under web)
+# Supabase CLI cache (also created at the repo root when the CLI runs from there)
+supabase/.temp/
 platform/supabase/.temp/
-platform/web/supabase/.temp/
+
+# Deno lockfile written when edge functions are checked from the repo root
+/deno.lock
+
+# Local-only offline roadmap tool, not part of the platform
+/progress-tracker/
 
 # Android (Capacitor native project next to platform/web)
 platform/android/app/build/

@@ -30,7 +30,7 @@ export default function CriminalProfileDetail() {
         <h2 className="mb-4 text-2xl font-bold text-gray-800 dark:text-white">Profile Not Found</h2>
         <button
           onClick={() => detail.navigate(detail.backTarget)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+          className="rounded-lg bg-primary-700 px-4 py-2 text-white hover:bg-primary-800"
         >
           {detail.backLabel}
         </button>

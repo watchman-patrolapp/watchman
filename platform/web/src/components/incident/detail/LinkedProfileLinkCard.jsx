@@ -74,7 +74,7 @@ export default function LinkedProfileLinkCard({ link, navigate, userLabelById = 
         <button
           type="button"
           onClick={() => navigate(`/intelligence/profiles/${link.profile_id}`)}
-          className="px-4 py-2 bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 rounded-lg text-sm font-medium hover:bg-teal-200 transition"
+          className="px-4 py-2 bg-primary-100 dark:bg-teal-900/50 text-primary-700 dark:text-teal-300 rounded-lg text-sm font-medium hover:bg-teal-200 transition"
         >
           View Full Profile
         </button>

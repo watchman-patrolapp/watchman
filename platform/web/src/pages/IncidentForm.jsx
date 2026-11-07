@@ -31,12 +31,12 @@ import {
   INITIAL_FORM,
 } from "../components/incident/form/incidentFormConfig.js";
 import {
-  SectionCard,
   FormInput,
   FormTextarea,
   FormSelect,
   AlertBox,
 } from "../components/incident/form/FormFields.jsx";
+import SectionCard from "../components/ui/SectionCard";
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -739,7 +739,7 @@ export default function IncidentForm() {
               onChange={handleChange}
             />
 
-            <SectionCard title="Suspect Information (optional)">
+            <SectionCard as="h3" title="Suspect Information (optional)">
               <div className="space-y-3">
                 <FormInput
                   label="Suspect name"
@@ -766,7 +766,7 @@ export default function IncidentForm() {
               </div>
             </SectionCard>
 
-            <SectionCard title="SAPS Information (optional)">
+            <SectionCard as="h3" title="SAPS Information (optional)">
               <FormInput
                 label="SAPS case number"
                 name="sapsCaseNumber"
@@ -776,7 +776,7 @@ export default function IncidentForm() {
               />
             </SectionCard>
 
-            <SectionCard title="Witness Information">
+            <SectionCard as="h3" title="Witness Information">
               <label className="flex items-center space-x-3 text-gray-700 dark:text-gray-300 cursor-pointer">
                 <input
                   type="checkbox"
@@ -808,7 +808,7 @@ export default function IncidentForm() {
               )}
             </SectionCard>
 
-            <SectionCard title="Structured Evidence">
+            <SectionCard as="h3" title="Structured Evidence">
               <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                 <p className="text-sm text-blue-700 dark:text-blue-300">
                   <strong>Pro Tip:</strong> Add contextual intelligence (suspicious people/vehicles nearby) even if not directly involved. This helps police connect patterns across multiple incidents.

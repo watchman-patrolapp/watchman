@@ -30,7 +30,7 @@ import {
   sanitizeSightingsLogForDb,
   syncLegacyLastSeenFromSightings,
 } from '../../utils/criminalProfileSightings';
-import SectionCard from '../../components/intelligence/createProfile/SectionCard';
+import SectionCard from '../../components/ui/SectionCard';
 import {
   formInput,
   formInputSm,
@@ -100,7 +100,7 @@ export default function CreateProfile() {
   const [moSignature, setMoSignature] = useState({ methods: [], patterns: '', notes: '' });
   
   // Photos - file upload only (stored in criminal-photos bucket)
-  const [photos, setPhotos] = useState([]); // Array of { file: File, preview: string, url: string, uploading: boolean }
+  const [photos, setPhotos] = useState([]); // Array of { id: string, file: File, preview: string, url: string, uploading: boolean }
 
   // Helper functions for array fields
   const addArrayField = (setter, current) => setter([...current, '']);
@@ -263,7 +263,10 @@ export default function CreateProfile() {
     });
 
     // Create preview entries
+    // Each entry gets its own id. Indexes shift when another batch is added or a
+    // failed upload is removed, so updates below look the entry up by id.
     const newPhotos = validFiles.map(file => ({
+      id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
       file,
       preview: URL.createObjectURL(file),
       url: '',
@@ -275,8 +278,7 @@ export default function CreateProfile() {
     // Upload each file
     for (let i = 0; i < newPhotos.length; i++) {
       const photo = newPhotos[i];
-      const photoIndex = photos.length + i;
-      
+
       try {
         const fileExt = photo.file.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -297,15 +299,9 @@ export default function CreateProfile() {
           .getPublicUrl(filePath);
 
         // Update photo with URL
-        setPhotos(prev => {
-          const updated = [...prev];
-          updated[photoIndex] = {
-            ...updated[photoIndex],
-            url: publicUrl,
-            uploading: false
-          };
-          return updated;
-        });
+        setPhotos(prev =>
+          prev.map(p => (p.id === photo.id ? { ...p, url: publicUrl, uploading: false } : p))
+        );
 
         toast.success(`${photo.file.name} uploaded successfully`);
       } catch (err) {
@@ -313,7 +309,7 @@ export default function CreateProfile() {
         toast.error(`Failed to upload ${photo.file.name}: ${err.message}`);
         
         // Remove failed upload from list
-        setPhotos(prev => prev.filter((_, idx) => idx !== photoIndex));
+        setPhotos(prev => prev.filter(p => p.id !== photo.id));
       }
     }
   };

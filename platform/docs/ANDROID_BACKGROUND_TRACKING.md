@@ -25,7 +25,7 @@ Shipping a fix means a native location source, a persistent notification, a flus
 | While the screen is off or the app is backgrounded | WebView is paused. Fixes stop until the activity resumes |
 | On return to the app | An already-active watch is not restarted. A watch that Android dropped stays dropped until the next `startTracking()` |
 
-Permissions on the app manifest are unchanged by the release-hardening work. See the permission table at the end of this doc.
+This section describes the manifest before background tracking shipped. The manifest now also declares the background-location, foreground-service and battery-exemption permissions. See the permission table at the end of this doc.
 
 ## Options
 
@@ -83,17 +83,18 @@ Engineering size: **large**. Everything in option A, plus the disclosure flow, t
 
 ## Permissions
 
-Unchanged in the release-hardening change. Option A would add only the two foreground-service permissions.
+"Now" matches `platform/android/app/src/main/AndroidManifest.xml`. "Option A" is the lower-risk design described above, kept for comparison.
 
-| Permission | Now | Option A |
+| Permission | Now (shipped) | Option A |
 | --- | --- | --- |
 | `INTERNET` | yes | yes |
 | `POST_NOTIFICATIONS` | yes | yes |
 | `ACCESS_COARSE_LOCATION` | yes | yes |
 | `ACCESS_FINE_LOCATION` | yes | yes |
-| `ACCESS_BACKGROUND_LOCATION` | no | no |
-| `FOREGROUND_SERVICE` | no | yes |
-| `FOREGROUND_SERVICE_LOCATION` | no | yes |
+| `ACCESS_BACKGROUND_LOCATION` | yes | no |
+| `FOREGROUND_SERVICE` | yes | yes |
+| `FOREGROUND_SERVICE_LOCATION` | yes | yes |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | yes | no |
 | `CAMERA`, `RECORD_AUDIO`, media reads, legacy external storage | yes | yes |
 
 `applicationId` stays `com.watchman.app`.

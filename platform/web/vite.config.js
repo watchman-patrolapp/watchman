@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-/** Same document Vercel serves from public/ (plugin is off when VERCEL=1). */
+/** Same manifest document that is served from public/, so the plugin output and the static file agree. */
 const webManifest = JSON.parse(
   fs.readFileSync(new URL('./public/manifest.webmanifest', import.meta.url), 'utf8'),
 );
@@ -83,6 +83,22 @@ export default defineConfig(({ mode }) => {
             // OSM tiles stay on the browser HTTP cache. Opaque cross-origin tile
             // responses break CacheFirst.
             globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webp}'],
+            // Export-only libraries (about 2 MB together) are loaded with dynamic
+            // import() when an admin exports. Keep them out of the install download
+            // and cache them on first use instead (runtimeCaching below).
+            globIgnores: ['**/exceljs*.js', '**/html2pdf*.js'],
+            runtimeCaching: [
+              {
+                // Same-origin, content-hashed files, so a cached copy never goes stale.
+                urlPattern: ({ sameOrigin, url }) =>
+                  sameOrigin && /\/assets\/(exceljs|html2pdf)[^/]*\.js$/.test(url.pathname),
+                handler: 'CacheFirst',
+                options: {
+                  cacheName: 'export-libs',
+                  expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 30 },
+                },
+              },
+            ],
             maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
             cleanupOutdatedCaches: true,
             skipWaiting: true,

@@ -95,7 +95,7 @@ export function IntelligenceTab({
           </p>
           <button 
             onClick={() => navigate(`/incident/${id}/edit`)}
-            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition"
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
           >
             Link Suspect to Profile
           </button>
