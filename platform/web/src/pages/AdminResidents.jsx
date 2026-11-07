@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { normalizeAppRole, canAccessAdminPanel } from "../auth/staffRoles";
 import { isGlobalAppRole, isResidentAppRole, canStaffVerifyResident, canReviewPatrollerRequests, canManageCapabilities } from "../auth/roleMatrix";
-import CapabilityBadge from "../components/community/CapabilityBadge";
 import ResidentCapabilityDialog from "../components/admin/ResidentCapabilityDialog";
+import ResidentCard from "../components/admin/residents/ResidentCard";
 import ResidentCapabilityList from "../components/admin/ResidentCapabilityList";
 import { listCapabilityBadges } from "../utils/orgCapabilities";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
@@ -14,143 +14,22 @@ import { fetchInChunks } from "../utils/fetchInChunks";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import { setUserRole } from "../utils/setUserRole";
 import {
-  RESIDENT_VOUCH_THRESHOLD,
   fetchResidentVouchers,
   verifyResidentAsStaff,
   assignResidentToNeighborhood,
-  vouchSummaryForResident,
-  verificationLabel,
   listResidentVerificationLogs,
   groupVerificationLogs,
-  formatVerifiedBy,
   listResidentNeighbours,
   reviewPatrollerRoleRequest,
 } from "../utils/residentVerification";
-import {
-  formatAwayRange,
-  listHouseholdsAway,
-} from "../utils/residentAway";
+import { listHouseholdsAway } from "../utils/residentAway";
 import toast from "../utils/notify";
-import { FaEnvelope, FaPhone, FaSearch, FaSms, FaTrash } from "react-icons/fa";
+import { FaSearch } from "react-icons/fa";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { listNeighborhoodNextOfKin, resolveEmergencyContacts } from "../utils/emergencyContact";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
-import { formatWatchDate, parsePatrolTime } from "../utils/watchTime";
-
-function InlineConfirm({ label, onConfirm, onCancel, disabled }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
-      <button
-        type="button"
-        onClick={onConfirm}
-        disabled={disabled}
-        className="px-2 py-1 text-white text-xs rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50"
-      >
-        Yes
-      </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        disabled={disabled}
-        className="px-2 py-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-xs rounded-lg"
-      >
-        No
-      </button>
-    </div>
-  );
-}
-
-function KinBlock({ title, kin }) {
-  if (!kin?.label) return null;
-  return (
-    <span className="block">
-      <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-        {title}
-      </span>
-      <span className="block font-medium text-gray-900 dark:text-white">{kin.name || "—"}</span>
-      {kin.relationshipLabel ? (
-        <span className="mt-0.5 block text-xs text-gray-600 dark:text-gray-300">{kin.relationshipLabel}</span>
-      ) : null}
-      {kin.phone ? (
-        <a
-          href={`tel:${kin.phone.replace(/\s+/g, "")}`}
-          className="mt-0.5 block text-xs text-teal-700 hover:underline dark:text-teal-300"
-        >
-          {kin.phone}
-        </a>
-      ) : (
-        <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">No phone</span>
-      )}
-    </span>
-  );
-}
-
-function formatJoined(iso) {
-  if (!iso) return "—";
-  return formatWatchDate(iso) || "—";
-}
-
-function telHref(phone) {
-  const digits = String(phone || "").replace(/\D/g, "");
-  if (digits.length < 10) return "";
-  if (digits.startsWith("0") && digits.length === 10) return `tel:+27${digits.slice(1)}`;
-  if (digits.startsWith("27") && digits.length >= 11) return `tel:+${digits}`;
-  return `tel:${digits}`;
-}
-
-function smsHref(phone) {
-  const href = telHref(phone);
-  return href ? href.replace(/^tel:/, "sms:") : "";
-}
-
-function StaffContactLinks({ email, phone }) {
-  const mail = String(email || "").trim();
-  const call = telHref(phone);
-  const sms = smsHref(phone);
-  const phoneLabel = String(phone || "").trim();
-  if (!mail && !call) {
-    return <span className="text-xs text-gray-500 dark:text-gray-400">No contact details on file</span>;
-  }
-  return (
-    <div className="space-y-1.5">
-      {mail ? (
-        <a
-          href={`mailto:${mail}`}
-          className="flex items-center gap-1.5 text-sm text-teal-700 hover:underline dark:text-teal-300"
-        >
-          <FaEnvelope className="h-3 w-3 shrink-0" aria-hidden />
-          {mail}
-        </a>
-      ) : (
-        <p className="text-xs text-gray-500 dark:text-gray-400">No email</p>
-      )}
-      {call ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <a
-            href={call}
-            className="inline-flex items-center gap-1.5 text-sm text-teal-700 hover:underline dark:text-teal-300"
-          >
-            <FaPhone className="h-3 w-3 shrink-0" aria-hidden />
-            {phoneLabel}
-          </a>
-          {sms ? (
-            <a
-              href={sms}
-              className="inline-flex items-center gap-1 text-xs font-medium text-teal-800 hover:underline dark:text-teal-200"
-            >
-              <FaSms className="h-3 w-3 shrink-0" aria-hidden />
-              SMS
-            </a>
-          ) : null}
-        </div>
-      ) : (
-        <p className="text-xs text-gray-500 dark:text-gray-400">No phone</p>
-      )}
-    </div>
-  );
-}
+import { parsePatrolTime } from "../utils/watchTime";
 
 export default function AdminResidents() {
   const navigate = useNavigate();
@@ -762,296 +641,40 @@ export default function AdminResidents() {
                 </td>
               </tr>
             ) : null}
-            {sortedResidents.map((u) => {
-              const profile = profilesByUser[u.uid];
-              const address = (profile?.home_address || u.address || "").trim();
-              const linkedToArea =
-                u.organizationId === activeOrganizationId || memberUserIds.has(u.uid);
-              const { primary, backup } = resolveEmergencyContacts(u, usersById);
-              const verified = Boolean(profile?.verification_date) || Boolean(u.verified);
-              const statusProfile = {
-                ...(profile || {}),
-                verification_date: profile?.verification_date || (u.verified ? u.createdAt || true : null),
-                verification_method:
-                  profile?.verification_method ||
-                  (u.verificationMethod && u.verificationMethod !== "pending" ? u.verificationMethod : "staff"),
-              };
-              const vouchInfo = vouchSummaryForResident(vouchers, u.uid, currentUser?.id);
-              return (
-                <tr key={u.uid} className="border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-700">
-                  <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">
-                    <p>{u.fullName || "—"}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Joined {formatJoined(u.createdAt)}</p>
-                    {(badgesByUser.get(u.uid) || []).length ? (
-                      <p className="mt-1 flex flex-wrap gap-1">
-                        {badgesByUser.get(u.uid).map((b) => (
-                          <CapabilityBadge key={b.capability} capability={b.capability} title={b.title} />
-                        ))}
-                      </p>
-                    ) : null}
-                    {canManageCaps && linkedToArea && verified ? (
-                      <button
-                        type="button"
-                        onClick={() => setCapTarget(u)}
-                        className="mt-1 text-xs font-medium text-teal-700 hover:underline dark:text-teal-400"
-                      >
-                        Resident roles
-                      </button>
-                    ) : null}
-                    {!linkedToArea ? (
-                      <div className="mt-2 space-y-1.5">
-                        <p className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
-                          Not linked to this neighborhood
-                        </p>
-                        {canVerify ? (
-                          <>
-                            {isGlobalOperator && organizations.length > 1 ? (
-                              <select
-                                value={assignTargetByUid[u.uid] || activeOrganizationId || ""}
-                                onChange={(event) =>
-                                  setAssignTargetByUid((prev) => ({
-                                    ...prev,
-                                    [u.uid]: event.target.value,
-                                  }))
-                                }
-                                className="w-full max-w-[14rem] rounded border px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                aria-label={`Suburb for ${u.fullName || "resident"}`}
-                              >
-                                {organizations.map((org) => (
-                                  <option key={org.id} value={org.id}>
-                                    {displayWatchAreaName(org.name)}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void handleAssignToNeighborhood(
-                                  u.uid,
-                                  assignTargetByUid[u.uid] || activeOrganizationId
-                                )
-                              }
-                              disabled={
-                                busyUid === u.uid ||
-                                !(assignTargetByUid[u.uid] || activeOrganizationId)
-                              }
-                              className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
-                            >
-                              {busyUid === u.uid
-                                ? "Assigning…"
-                                : `Assign to ${
-                                    displayWatchAreaName(
-                                      organizations.find(
-                                        (org) =>
-                                          org.id ===
-                                          (assignTargetByUid[u.uid] || activeOrganizationId)
-                                      )?.name
-                                    ) || "suburb"
-                                  }`}
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
-                    ) : isGlobalOperator && organizations.length > 1 ? (
-                      <div className="mt-2 space-y-1.5">
-                        <select
-                          value={assignTargetByUid[u.uid] || ""}
-                          onChange={(event) =>
-                            setAssignTargetByUid((prev) => ({
-                              ...prev,
-                              [u.uid]: event.target.value,
-                            }))
-                          }
-                          className="w-full max-w-[14rem] rounded border px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                          aria-label={`Move ${u.fullName || "resident"} to suburb`}
-                        >
-                          <option value="">Move to suburb…</option>
-                          {organizations.map((org) => (
-                            <option key={org.id} value={org.id}>
-                              {displayWatchAreaName(org.name)}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => void handleAssignToNeighborhood(u.uid, assignTargetByUid[u.uid])}
-                          disabled={
-                            busyUid === u.uid ||
-                            !assignTargetByUid[u.uid] ||
-                            assignTargetByUid[u.uid] === u.organizationId
-                          }
-                          className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
-                        >
-                          {busyUid === u.uid
-                            ? "Saving…"
-                            : `Move to ${
-                                displayWatchAreaName(
-                                  organizations.find((org) => org.id === assignTargetByUid[u.uid])?.name
-                                ) || "suburb"
-                              }`}
-                        </button>
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300">
-                    <StaffContactLinks email={u.email} phone={u.phone} />
-                  </td>
-                  <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300 text-sm">
-                    {address || "—"}
-                  </td>
-                  <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300 text-sm">
-                    {primary.label || backup.label ? (
-                      <div className="space-y-2">
-                        <KinBlock title="Primary" kin={primary} />
-                        <KinBlock title="Backup" kin={backup} />
-                      </div>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-4 py-2 border dark:border-gray-600 dark:text-gray-300 text-sm">
-                    {awayByUser[u.uid] ? (
-                      <span>
-                        {formatAwayRange(awayByUser[u.uid])}
-                        {awayByUser[u.uid].note ? (
-                          <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-                            {awayByUser[u.uid].note}
-                          </span>
-                        ) : null}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className="px-4 py-2 border dark:border-gray-600">
-                    <span
-                      className={`px-2 py-1 rounded text-sm ${
-                        verified
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-                      }`}
-                    >
-                      {verified ? verificationLabel(statusProfile) : "Pending"}
-                    </span>
-                    {profile?.patroller_request_status === "pending" ? (
-                      <p className="mt-1 text-xs font-medium text-cyan-800 dark:text-cyan-200">
-                        Wants to become a patroller
-                      </p>
-                    ) : profile?.patroller_request_status === "rejected" ? (
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Patroller request declined
-                      </p>
-                    ) : null}
-                    {verified && verificationLogs[u.uid]?.length ? (
-                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
-                        {formatVerifiedBy(verificationLogs[u.uid])}
-                      </p>
-                    ) : null}
-                    {!verified ? (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {vouchInfo.count}/{RESIDENT_VOUCH_THRESHOLD} neighbour vouches
-                        {verificationLogs[u.uid]?.length
-                          ? ` · ${verificationLogs[u.uid]
-                              .filter((row) => row.kind === "vouch")
-                              .map((row) => row.actor_name)
-                              .join(", ")}`
-                          : ""}
-                      </p>
-                    ) : null}
-                  </td>
-                  {canVerify ? (
-                    <td className="px-4 py-2 border dark:border-gray-600">
-                      {verified ? (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleVerify(u.uid)}
-                          disabled={busyUid === u.uid}
-                          className="px-3 py-1 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                        >
-                          {busyUid === u.uid ? "Verifying…" : "Verify"}
-                        </button>
-                      )}
-                    </td>
-                  ) : null}
-                  {canPromote ? (
-                    <td className="px-4 py-2 border dark:border-gray-600">
-                    {canReviewPatroller && profile?.patroller_request_status === "pending" ? (
-                      <div className="mb-2 flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => void handleReviewPatroller(u.uid, true)}
-                          disabled={busyUid === u.uid}
-                          className="rounded-lg bg-cyan-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-800 disabled:opacity-50"
-                        >
-                          {busyUid === u.uid ? "Saving…" : "Approve"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleReviewPatroller(u.uid, false)}
-                          disabled={busyUid === u.uid}
-                          className="rounded-lg bg-gray-200 px-2.5 py-1 text-xs font-medium text-gray-800 hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-600 dark:text-gray-100 dark:hover:bg-gray-500"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    ) : null}
-                    <select
-                      value="resident"
-                      onChange={(e) => handleRoleChange(u.uid, e.target.value)}
-                      className="border rounded px-2 py-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      disabled={busyUid === u.uid || u.uid === currentUser?.id}
-                    >
-                      <option value="resident" className="dark:bg-gray-700">
-                        Keep as resident
-                      </option>
-                      <option value="volunteer" className="dark:bg-gray-700">
-                        Volunteer
-                      </option>
-                      <option value="patroller" className="dark:bg-gray-700">
-                        Patroller
-                      </option>
-                      <option value="investigator" className="dark:bg-gray-700">
-                        Investigator
-                      </option>
-                      <option value="committee" className="dark:bg-gray-700">
-                        Committee
-                      </option>
-                      <option value="nw_admin" className="dark:bg-gray-700">
-                        NW Admin
-                      </option>
-                    </select>
-                    </td>
-                  ) : null}
-                  {canDeleteUsers && (
-                    <td className="px-4 py-2 border dark:border-gray-600 align-top">
-                      {u.uid === currentUser?.id ? (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
-                      ) : pendingDeleteUid === u.uid ? (
-                        <InlineConfirm
-                          label="Delete this resident?"
-                          disabled={deleteLoading}
-                          onConfirm={() => handleDeleteUser(u.uid)}
-                          onCancel={() => setPendingDeleteUid(null)}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setPendingDeleteUid(u.uid)}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
-                          title="Remove account (auth + profile)"
-                        >
-                          <FaTrash className="text-[10px]" />
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
+            {sortedResidents.map((u) => (
+              <ResidentCard
+                key={u.uid}
+                u={u}
+                profilesByUser={profilesByUser}
+                activeOrganizationId={activeOrganizationId}
+                memberUserIds={memberUserIds}
+                usersById={usersById}
+                vouchers={vouchers}
+                currentUser={currentUser}
+                badgesByUser={badgesByUser}
+                canManageCaps={canManageCaps}
+                setCapTarget={setCapTarget}
+                isGlobalOperator={isGlobalOperator}
+                organizations={organizations}
+                assignTargetByUid={assignTargetByUid}
+                setAssignTargetByUid={setAssignTargetByUid}
+                handleAssignToNeighborhood={handleAssignToNeighborhood}
+                busyUid={busyUid}
+                awayByUser={awayByUser}
+                verificationLogs={verificationLogs}
+                canVerify={canVerify}
+                canPromote={canPromote}
+                handleVerify={handleVerify}
+                canReviewPatroller={canReviewPatroller}
+                handleReviewPatroller={handleReviewPatroller}
+                handleRoleChange={handleRoleChange}
+                canDeleteUsers={canDeleteUsers}
+                pendingDeleteUid={pendingDeleteUid}
+                setPendingDeleteUid={setPendingDeleteUid}
+                deleteLoading={deleteLoading}
+                handleDeleteUser={handleDeleteUser}
+              />
+            ))}
           </tbody>
         </table>
       </div>
