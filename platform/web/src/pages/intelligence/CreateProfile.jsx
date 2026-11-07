@@ -7,7 +7,6 @@ import { combineWatchDateTime } from '../../utils/watchTime';
 import { supabase } from '../../supabase/client';
 import { safeInternalReturnPath } from '../../utils/safeReturnPath';
 import MoTemplatePicker from '../../components/intelligence/MoTemplatePicker';
-import WatchlistTemplatePicker from '../../components/intelligence/WatchlistTemplatePicker';
 import {
   IntelligenceFieldGuideTopic,
   FieldGuideExplainerLink,
@@ -31,28 +30,22 @@ import {
   sanitizeSightingsLogForDb,
   syncLegacyLastSeenFromSightings,
 } from '../../utils/criminalProfileSightings';
-
-/** Same field shell as `IncidentForm` (Report an Incident) */
-const formInput =
-  'w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition';
-const formInputSm =
-  'w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:border-transparent transition';
-const formFlexInputSm = `flex-1 ${formInputSm}`;
-const formSelectSm =
-  'w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent transition';
-const formTextarea = `${formInputSm} resize-y`;
-const formLabel = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
-const formLabelBlock = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
-const formLabelXs = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
-
-function SectionCard({ title, children }) {
-  return (
-    <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{title}</h2>
-      {children}
-    </div>
-  );
-}
+import SectionCard from '../../components/intelligence/createProfile/SectionCard';
+import {
+  formInput,
+  formInputSm,
+  formFlexInputSm,
+  formSelectSm,
+  formTextarea,
+  formLabel,
+  formLabelBlock,
+  formLabelXs,
+} from '../../components/intelligence/createProfile/formStyles';
+import {
+  AliasesSection,
+  WatchlistFlagsSection,
+  DistinguishingMarksSection,
+} from '../../components/intelligence/createProfile/ProfileFormSections';
 
 export default function CreateProfile() {
   const navigate = useNavigate();
@@ -610,36 +603,13 @@ export default function CreateProfile() {
           </div>
 
           {/* Known Aliases */}
-          <div className="mt-4">
-            <label className={formLabelBlock}>Known Aliases</label>
-            {knownAliases.map((alias, index) => (
-              <div key={index} className="flex gap-2 mb-2">
-                <input 
-                  type="text" 
-                  value={alias}
-                  onChange={(e) => updateArrayField(setKnownAliases, knownAliases, index, e.target.value)}
-                  className={formFlexInputSm}
-                  placeholder={`Alias ${index + 1}`}
-                />
-                {knownAliases.length > 1 && (
-                  <button 
-                    type="button"
-                    onClick={() => removeArrayField(setKnownAliases, knownAliases, index)}
-                    className="px-3 py-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/60"
-                  >
-                    <FaTimes />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button 
-              type="button"
-              onClick={() => addArrayField(setKnownAliases, knownAliases)}
-              className="text-sm font-medium text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300 flex items-center gap-1"
-            >
-              <FaPlus size={12} /> Add Alias
-            </button>
-          </div>
+          <AliasesSection
+            knownAliases={knownAliases}
+            setKnownAliases={setKnownAliases}
+            addArrayField={addArrayField}
+            updateArrayField={updateArrayField}
+            removeArrayField={removeArrayField}
+          />
             <SectionCard title="Risk Assessment">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -683,42 +653,14 @@ export default function CreateProfile() {
           </div>
 
           {/* Watchlist Flags */}
-          <div className="mt-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Watchlist Flags</label>
-              <FieldGuideExplainerLink topic="watchlist" onOpen={setFieldGuideTopic}>
-                Explain watchlist flags
-              </FieldGuideExplainerLink>
-            </div>
-            <WatchlistTemplatePicker watchlistFlags={watchlistFlags} setWatchlistFlags={setWatchlistFlags} />
-            {watchlistFlags.map((flag, index) => (
-              <div key={index} className="flex gap-2 mb-2">
-                <input 
-                  type="text" 
-                  value={flag}
-                  onChange={(e) => updateArrayField(setWatchlistFlags, watchlistFlags, index, e.target.value)}
-                  className={formFlexInputSm}
-                  placeholder="e.g., Violent, Armed, Flight Risk"
-                />
-                {watchlistFlags.length > 1 && (
-                  <button 
-                    type="button"
-                    onClick={() => removeArrayField(setWatchlistFlags, watchlistFlags, index)}
-                    className="px-3 py-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/60"
-                  >
-                    <FaTimes />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button 
-              type="button"
-              onClick={() => addArrayField(setWatchlistFlags, watchlistFlags)}
-              className="text-sm font-medium text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300 flex items-center gap-1"
-            >
-              <FaPlus size={12} /> Add Flag
-            </button>
-          </div>
+          <WatchlistFlagsSection
+            watchlistFlags={watchlistFlags}
+            setWatchlistFlags={setWatchlistFlags}
+            setFieldGuideTopic={setFieldGuideTopic}
+            addArrayField={addArrayField}
+            updateArrayField={updateArrayField}
+            removeArrayField={removeArrayField}
+          />
             </SectionCard>
 
             <SectionCard title="Physical Description">
@@ -796,36 +738,13 @@ export default function CreateProfile() {
           </div>
 
           {/* Distinguishing Marks */}
-          <div className="mt-4">
-            <label className={formLabelBlock}>Distinguishing Marks</label>
-            {distinguishingMarks.map((mark, index) => (
-              <div key={index} className="flex gap-2 mb-2">
-                <input 
-                  type="text" 
-                  value={mark}
-                  onChange={(e) => updateArrayField(setDistinguishingMarks, distinguishingMarks, index, e.target.value)}
-                  className={formFlexInputSm}
-                  placeholder="Tattoo, scar, birthmark description"
-                />
-                {distinguishingMarks.length > 1 && (
-                  <button 
-                    type="button"
-                    onClick={() => removeArrayField(setDistinguishingMarks, distinguishingMarks, index)}
-                    className="px-3 py-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/60"
-                  >
-                    <FaTimes />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button 
-              type="button"
-              onClick={() => addArrayField(setDistinguishingMarks, distinguishingMarks)}
-              className="text-sm font-medium text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300 flex items-center gap-1"
-            >
-              <FaPlus size={12} /> Add Mark
-            </button>
-          </div>
+          <DistinguishingMarksSection
+            distinguishingMarks={distinguishingMarks}
+            setDistinguishingMarks={setDistinguishingMarks}
+            addArrayField={addArrayField}
+            updateArrayField={updateArrayField}
+            removeArrayField={removeArrayField}
+          />
             </SectionCard>
 
             <SectionCard title="Identity Documents">
