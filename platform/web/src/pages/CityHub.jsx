@@ -453,7 +453,7 @@ export default function CityHub() {
                 accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
                 multiple
                 onChange={handlePhotoChange}
-                className="mt-2 block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-teal-700 dark:text-gray-300"
+                className="mt-2 block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-primary-700 dark:text-gray-300"
               />
               {photoFiles.length > 0 ? (
                 <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">

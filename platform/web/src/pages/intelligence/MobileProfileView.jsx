@@ -185,8 +185,7 @@ const MobileProfileView = () => {
           label="Report Sighting" 
           color="bg-red-600"
           onClick={() => {
-            // Report sighting functionality
-            console.log('Report sighting clicked');
+            // Report sighting is not built yet; the button does nothing for now.
           }}
         />
       </div>

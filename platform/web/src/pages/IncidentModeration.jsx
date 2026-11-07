@@ -17,6 +17,7 @@ import {
   FaSpinner
 } from "react-icons/fa";
 import toast from "../utils/notify";
+import { devLog } from "../utils/devLog";
 import StructuredEvidenceList, { normalizeMediaUrls } from "../components/evidence/StructuredEvidenceList";
 import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
@@ -396,7 +397,7 @@ export default function IncidentModeration() {
           filter: 'status=eq.pending'
         },
         (payload) => {
-          console.log('Realtime update:', payload);
+          devLog('Realtime update:', payload);
           
           switch (payload.eventType) {
             case 'DELETE':
@@ -447,7 +448,7 @@ export default function IncidentModeration() {
       )
       .subscribe((status) => {
         if (cancelled) return;
-        console.log('Realtime subscription status:', status);
+        devLog('Realtime subscription status:', status);
         if (status === 'SUBSCRIBED') {
           subscribed = true;
           attempt = 0;

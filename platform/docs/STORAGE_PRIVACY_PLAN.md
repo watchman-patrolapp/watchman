@@ -1,6 +1,16 @@
 # Storage privacy plan
 
-Incident photos and community media stay public in this change. Flipping either bucket requires the app to sign URLs first. `20261105120000_storage_policies_consolidated.sql` restates `storage.objects` policies and does not update `storage.buckets.public`.
+Status: **implemented** (November 2026). The incident, community and City Hub buckets are now private and the app signs URLs at display time. Apply the migrations in this order:
+
+1. `20261106210000_private_media_read_policies_and_copy_registry.sql` (read policies and the City Hub copy registry).
+2. `20261106215000_private_media_store_paths.sql` (rewrite stored public URLs to object paths), then `20261107020000_private_media_keep_unparsed_entries.sql` (keeps entries the parser cannot convert instead of dropping them).
+3. `20261106220000_flip_incident_community_city_hub_buckets_private.sql` (sets `public = false`; refuses to run if the earlier steps are missing).
+
+The rest of this file is the original analysis and call-site inventory. It is kept as a record of why the work was ordered this way and describes the state **before** the change. See [`PRIVATE_MEDIA_COPY_ON_SHARE.md`](PRIVATE_MEDIA_COPY_ON_SHARE.md) for how City Hub shares copy media.
+
+---
+
+Original plan, written before the change: incident photos and community media stayed public in that step. Flipping either bucket requires the app to sign URLs first. `20261105120000_storage_policies_consolidated.sql` restates `storage.objects` policies and does not update `storage.buckets.public`.
 
 Inventory is every `getPublicUrl` and `createSignedUrl` under `platform/web/src` at commit `5537497` plus this branch (no new call sites).
 
@@ -93,7 +103,9 @@ That is one new module, a change to the evidence/moderation/print image path, an
 
 `community-private` is already signed. No bucket change there. Its SELECT policy only covers `{org}/equipment/...`, so a needs receipt placed in that bucket would not be readable until the policy grows a prefix for it. That is why the recommendation is to sign `community-media` itself rather than to split receipts across buckets in a hurry.
 
-## Out of scope here
+## Out of scope in the original plan
+
+These were out of scope for the planning step only. The flip and the app changes have since shipped (see the status at the top).
 
 - No `UPDATE storage.buckets SET public = false` for `incident-photos` or `community-media`.
 - No app changes to URL helpers.

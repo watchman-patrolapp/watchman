@@ -5,15 +5,6 @@ import FormField from "../../ui/FormField";
 // Sub-components
 // ---------------------------------------------------------------------------
 
-export function SectionCard({ title, children }) {
-  return (
-    <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
-      {children}
-    </div>
-  );
-}
-
 export function FormInput({ label, name, type = "text", required, hint, ...props }) {
   const id = props.id || `incident-${name}`;
   return (
@@ -87,7 +78,7 @@ export function UploadProgress({ current, total, progress }) {
       </div>
       <div className="w-full bg-teal-200 dark:bg-teal-800 rounded-full h-2">
         <div
-          className="bg-teal-600 h-2 rounded-full transition-all duration-300"
+          className="bg-primary-600 h-2 rounded-full transition-all duration-300"
           style={{ width: `${progress}%` }}
         />
       </div>

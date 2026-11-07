@@ -160,5 +160,5 @@ If deployment issues occur:
 | `platform/supabase` | Migrations + Edge Functions. Run CLI from this folder. |
 | `platform/android` | Capacitor Android shell. |
 
-Vercel **Root Directory** must be `platform/web`. Do not treat `platform/web/supabase` as canonical (deprecated pointer only).
+Vercel **Root Directory** must be `platform/web`. Migrations and Edge Functions live only in `platform/supabase`; there is no `platform/web/supabase`.
 

@@ -30,7 +30,7 @@ npm run build
 
 On Vercel, set all `VITE_FIREBASE_*` variables listed in `.env.example` so the build generates `dist/firebase-messaging-sw.js` for web push.
 
-**Production on Vercel** intentionally skips `vite-plugin-pwa` (no Workbox precache / generated manifest there). The app is **online-first**; FCM uses `/firebase-messaging-sw.js` only. Non-Vercel production builds (e.g. `npm run build && npm run preview`) still enable the PWA plugin locally.
+**Production builds, including Vercel, run `vite-plugin-pwa`** (Workbox precache of the app shell, served as `/sw.js`). Only `vite build --mode capacitor` (the Android bundle) turns it off. The shell opens with no signal; see [`../docs/OFFLINE_SHELL.md`](../docs/OFFLINE_SHELL.md). The two export libraries (`exceljs`, `html2pdf`) are not precached; they are cached the first time an export runs. FCM uses `/firebase-messaging-sw.js` separately. Test the PWA locally with `npm run build && npm run preview`.
 
 ## Deploy
 
