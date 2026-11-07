@@ -26,6 +26,17 @@ import {
 import { OFFLINE_SCREENS, userFacingReadError, userFacingWriteError } from '../../offline/policy';
 import { patchScreenSnapshot, readScreenSnapshot } from '../../offline/snapshots';
 
+const FETCH_ALL_TIMEOUT_MS = 15000;
+const CACHE_READ_TIMEOUT_MS = 4000;
+
+function withTimeout(promise, ms, message) {
+  let timer = 0;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+}
+
 export function usePatrolLifecycle({
   user,
   scope,
@@ -69,15 +80,17 @@ export function usePatrolLifecycle({
 
   const fetchAll = useCallback(async () => {
     const runId = ++fetchAllGenRef.current;
-    setFetchAllLoading(prev => {
-      if (prevPatrolsRef.current === null) return true;
-      return prev;
-    });
+    if (prevPatrolsRef.current === null) setFetchAllLoading(true);
     try {
-      const { data, error } = await scope(supabase.from('active_patrols').select('*'));
-      if (runId !== fetchAllGenRef.current) return;
-      if (error) throw error;
-      const incoming = await enrichPatrolRowsWithAvatars(supabase, data || []);
+      const incoming = await withTimeout(
+        (async () => {
+          const { data, error } = await scope(supabase.from('active_patrols').select('*'));
+          if (error) throw error;
+          return enrichPatrolRowsWithAvatars(supabase, data || []);
+        })(),
+        FETCH_ALL_TIMEOUT_MS,
+        'Loading active patrols timed out.'
+      );
       if (runId !== fetchAllGenRef.current) return;
       incoming.forEach((p) => {
         patrolAvatarUrlByUserIdRef.current[p.user_id] = p.patrol_avatar_url;
@@ -86,8 +99,10 @@ export function usePatrolLifecycle({
       prevPatrolsRef.current = incoming;
       setFetchAllError(null);
       setAllFromCache(false);
+      // Data is live: drop the loading state now. Persisting the offline copy must never hold it up.
+      setFetchAllLoading(false);
       if (user?.id) {
-        const saved = await patchScreenSnapshot(
+        void patchScreenSnapshot(
           { userId: user.id, organizationId: activeOrganizationId, screen: OFFLINE_SCREENS.patrolStatus },
           (current) => ({
             ...(current || {}),
@@ -95,18 +110,25 @@ export function usePatrolLifecycle({
             allKnown: true,
             allSavedAt: new Date().toISOString(),
           })
-        );
-        if (runId !== fetchAllGenRef.current) return;
-        setAllSavedAt(saved?.data?.allSavedAt || saved?.savedAt || null);
+        )
+          .then((saved) => {
+            if (runId !== fetchAllGenRef.current) return;
+            setAllSavedAt(saved?.data?.allSavedAt || saved?.savedAt || null);
+          })
+          .catch(() => {});
       }
     } catch (err) {
       if (runId !== fetchAllGenRef.current) return;
       const cached = user?.id
-        ? await readScreenSnapshot({
-          userId: user.id,
-          organizationId: activeOrganizationId,
-          screen: OFFLINE_SCREENS.patrolStatus,
-        })
+        ? await withTimeout(
+          readScreenSnapshot({
+            userId: user.id,
+            organizationId: activeOrganizationId,
+            screen: OFFLINE_SCREENS.patrolStatus,
+          }),
+          CACHE_READ_TIMEOUT_MS,
+          'Offline cache read timed out.'
+        ).catch(() => null)
         : null;
       if (runId !== fetchAllGenRef.current) return;
       if (cached?.data?.allKnown && Array.isArray(cached.data.all)) {
@@ -490,9 +512,11 @@ export function usePatrolLifecycle({
     let cancelled = false;
     const fetchInitial = async () => {
       try {
-        const { data, error } = await scope(
-          supabase.from('active_patrols').select('*')
-        ).eq('user_id', user.id).maybeSingle();
+        const { data, error } = await withTimeout(
+          scope(supabase.from('active_patrols').select('*')).eq('user_id', user.id).maybeSingle(),
+          FETCH_ALL_TIMEOUT_MS,
+          'Loading your patrol timed out.'
+        );
         if (cancelled) return;
         if (error) throw error;
         if (data) {
@@ -502,8 +526,10 @@ export function usePatrolLifecycle({
         else setActivePatrol(null);
         setFetchError(null);
         setMineFromCache(false);
+        // Live data is in: release the loading state before touching the offline cache.
+        setLoadingPatrol(false);
         if (user?.id) {
-          const saved = await patchScreenSnapshot(
+          void patchScreenSnapshot(
             { userId: user.id, organizationId: activeOrganizationId, screen: OFFLINE_SCREENS.patrolStatus },
             (current) => ({
               ...(current || {}),
@@ -511,18 +537,25 @@ export function usePatrolLifecycle({
               mineKnown: true,
               mineSavedAt: new Date().toISOString(),
             })
-          );
-          if (cancelled) return;
-          setMineSavedAt(saved?.data?.mineSavedAt || saved?.savedAt || null);
+          )
+            .then((saved) => {
+              if (cancelled) return;
+              setMineSavedAt(saved?.data?.mineSavedAt || saved?.savedAt || null);
+            })
+            .catch(() => {});
         }
       } catch (err) {
         if (cancelled) return;
         const cached = user?.id
-          ? await readScreenSnapshot({
-            userId: user.id,
-            organizationId: activeOrganizationId,
-            screen: OFFLINE_SCREENS.patrolStatus,
-          })
+          ? await withTimeout(
+            readScreenSnapshot({
+              userId: user.id,
+              organizationId: activeOrganizationId,
+              screen: OFFLINE_SCREENS.patrolStatus,
+            }),
+            CACHE_READ_TIMEOUT_MS,
+            'Offline cache read timed out.'
+          ).catch(() => null)
           : null;
         if (cancelled) return;
         if (cached?.data?.mineKnown) {
