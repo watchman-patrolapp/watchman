@@ -3,13 +3,12 @@ package com.watchman.app.car
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import androidx.car.app.CarAppService
-import androidx.car.app.CarContext
 import androidx.car.app.Screen
+import androidx.car.app.ScreenManager
 import androidx.car.app.Session
-import androidx.car.app.model.Action
-import androidx.car.app.model.MessageTemplate
-import androidx.car.app.model.Template
 import androidx.car.app.validation.HostValidator
+import com.watchman.app.car.screens.PatrolMapScreen
+import com.watchman.app.car.screens.SosAlertScreen
 
 class WatchmanCarAppService : CarAppService() {
 
@@ -28,22 +27,23 @@ class WatchmanCarAppService : CarAppService() {
 }
 
 class WatchmanCarSession : Session() {
-    override fun onCreateScreen(intent: Intent): Screen = WatchmanCarStubScreen(carContext)
-}
 
-class WatchmanCarStubScreen(carContext: CarContext) : Screen(carContext) {
-
-    override fun onGetTemplate(): Template {
-        val session = CarSessionStore.read(carContext)
-        val label = session?.displayLabel().orEmpty()
-        val message = when {
-            session == null -> "Open Watchman on your phone and sign in"
-            label.isNotBlank() -> "Signed in as $label"
-            else -> "Signed in"
+    override fun onCreateScreen(intent: Intent): Screen {
+        // Cold start from the "SOS nearby" notification: the screen returned here ends up on top,
+        // so push the map first and return the alert.
+        val sosId = CarSosNotifier.sosIdFrom(intent.data)
+        if (sosId != null) {
+            carContext.getCarService(ScreenManager::class.java).push(PatrolMapScreen(carContext))
+            return SosAlertScreen(carContext, sosId, null)
         }
-        return MessageTemplate.Builder(message)
-            .setTitle("Watchman")
-            .setHeaderAction(Action.APP_ICON)
-            .build()
+        return PatrolMapScreen(carContext)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        val sosId = CarSosNotifier.sosIdFrom(intent.data) ?: return
+        val screenManager = carContext.getCarService(ScreenManager::class.java)
+        val top = screenManager.top
+        if (top is SosAlertScreen && top.sosId == sosId) return
+        screenManager.push(SosAlertScreen(carContext, sosId, null))
     }
 }

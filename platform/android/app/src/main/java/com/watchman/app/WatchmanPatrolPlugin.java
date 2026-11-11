@@ -17,8 +17,16 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import com.watchman.app.car.CarEvents;
+import com.watchman.app.car.CarLogic;
+import com.watchman.app.car.CarPatrolStateStore;
 import com.watchman.app.car.CarSession;
 import com.watchman.app.car.CarSessionStore;
+import com.watchman.app.car.NativeRefresh;
+import com.watchman.app.car.PatrolSnapshot;
+
+import kotlin.Unit;
+import kotlin.jvm.functions.Function1;
 
 /**
  * Runtime location, notification, and battery-exemption prompts for a signed-on patrol.
@@ -146,10 +154,117 @@ public class WatchmanPatrolPlugin extends Plugin {
     public void clearSession(PluginCall call) {
         try {
             CarSessionStore.clear(getContext());
+            CarPatrolStateStore.clear(getContext());
             call.resolve();
         } catch (Exception failed) {
             call.reject("SESSION_STORE_FAILED", "SESSION_STORE_FAILED");
         }
+    }
+
+    /**
+     * Hands the phone's current patrol (and the freshest GPS fix, even one not yet uploaded) to the
+     * car. active=false clears it. Reject messages are codes only.
+     */
+    @PluginMethod
+    public void syncPatrolState(PluginCall call) {
+        try {
+            JSObject data = call.getData();
+            if (!data.optBoolean("active", false)) {
+                CarPatrolStateStore.clear(getContext());
+                call.resolve();
+                return;
+            }
+            String userId = trimmedOrEmpty(call.getString("userId"));
+            long startMs = readMillis(data.opt("startTime"));
+            if (userId.isEmpty() || startMs <= 0L) {
+                call.reject("INVALID_PATROL_STATE", "INVALID_PATROL_STATE");
+                return;
+            }
+            double km = data.optDouble("sessionDistanceKm", 0d);
+            if (Double.isNaN(km) || km < 0d) km = 0d;
+            CarPatrolStateStore.save(
+                    getContext(),
+                    new PatrolSnapshot(
+                            true,
+                            startMs,
+                            km,
+                            readDouble(data, "latitude"),
+                            readDouble(data, "longitude"),
+                            readDouble(data, "accuracy"),
+                            Math.max(0L, readMillis(data.opt("recordedAt"))),
+                            userId,
+                            System.currentTimeMillis()
+                    )
+            );
+            call.resolve();
+        } catch (Exception failed) {
+            call.reject("PATROL_STATE_FAILED", "PATROL_STATE_FAILED");
+        }
+    }
+
+    /**
+     * Returns the tokens the car refreshed on its own, so the WebView can adopt them instead of
+     * spending an already-rotated refresh token. {present:false} unless the car refreshed.
+     */
+    @PluginMethod
+    public void readNativeSession(PluginCall call) {
+        try {
+            NativeRefresh refreshed = CarSessionStore.readNativeRefresh(getContext());
+            JSObject result = new JSObject();
+            if (refreshed == null) {
+                result.put("present", false);
+            } else {
+                result.put("present", true);
+                result.put("accessToken", refreshed.getAccessToken());
+                result.put("refreshToken", refreshed.getRefreshToken());
+                result.put("expiresAt", refreshed.getExpiresAt());
+                result.put("userId", refreshed.getUserId());
+            }
+            call.resolve(result);
+        } catch (Exception failed) {
+            call.reject("SESSION_STORE_FAILED", "SESSION_STORE_FAILED");
+        }
+    }
+
+    @Override
+    public void load() {
+        carListener = reason -> {
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                JSObject data = new JSObject();
+                data.put("reason", reason);
+                notifyListeners("carStateChanged", data);
+            });
+            return Unit.INSTANCE;
+        };
+        CarEvents.setListener(carListener);
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (CarEvents.getListener() == carListener) {
+            CarEvents.setListener(null);
+        }
+        carListener = null;
+    }
+
+    private Function1<String, Unit> carListener;
+
+    /** Epoch ms from a JS number, or from an ISO timestamp string; 0 when unreadable. */
+    private static long readMillis(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            Long parsed = CarLogic.INSTANCE.parseIsoMs((String) value);
+            return parsed == null ? 0L : parsed;
+        }
+        return 0L;
+    }
+
+    private static Double readDouble(JSObject data, String key) {
+        if (!data.has(key) || data.isNull(key)) return null;
+        double value = data.optDouble(key, Double.NaN);
+        return Double.isNaN(value) ? null : value;
     }
 
     private static String trimmedOrEmpty(String value) {

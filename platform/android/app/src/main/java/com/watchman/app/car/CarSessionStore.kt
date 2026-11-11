@@ -34,6 +34,16 @@ data class CarSession(
     override fun toString(): String = "CarSession(userId=$userId)"
 }
 
+/** Tokens the car refreshed itself. Never log any field. */
+data class NativeRefresh(
+    val accessToken: String,
+    val refreshToken: String,
+    val expiresAt: Long,
+    val userId: String,
+) {
+    override fun toString(): String = "NativeRefresh(userId=$userId)"
+}
+
 /**
  * Encrypted hand-off store. The Capacitor plugin writes it; the Android Auto session reads it,
  * even when the WebView is not running. Every failure degrades to "no session"; nothing throws.
@@ -51,6 +61,9 @@ object CarSessionStore {
     private const val KEY_EMAIL = "email"
     private const val KEY_USER_NAME = "userName"
     private const val KEY_ORGANIZATION_ID = "organizationId"
+
+    /** Epoch ms of the last car-side token refresh; save() clears it, so a JS sync resets it. */
+    private const val KEY_NATIVE_REFRESHED_AT = "nativeRefreshedAt"
 
     private val lock = Any()
 
@@ -94,6 +107,42 @@ object CarSessionStore {
             } else {
                 null
             }
+        } catch (ignored: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Rewrites only the three token keys after the car process refreshed the session, and stamps
+     * KEY_NATIVE_REFRESHED_AT. Does nothing when the store has no signed-in user (so a sign-out
+     * is never undone by a late refresh). Returns whether it wrote.
+     */
+    @JvmStatic
+    fun updateTokens(context: Context, accessToken: String, refreshToken: String, expiresAt: Long): Boolean =
+        synchronized(lock) {
+            val prefs = openPrefs(context) ?: return@synchronized false
+            if (prefs.getString(KEY_USER_ID, null).isNullOrBlank()) return@synchronized false
+            prefs.edit()
+                .putString(KEY_ACCESS_TOKEN, accessToken)
+                .putString(KEY_REFRESH_TOKEN, refreshToken)
+                .putLong(KEY_EXPIRES_AT, expiresAt)
+                .putLong(KEY_NATIVE_REFRESHED_AT, System.currentTimeMillis())
+                .commit()
+        }
+
+    /** Tokens the car refreshed on its own, or null when the phone's own sync is still current. */
+    @JvmStatic
+    fun readNativeRefresh(context: Context): NativeRefresh? = synchronized(lock) {
+        try {
+            val prefs = openPrefs(context) ?: return@synchronized null
+            if (prefs.getLong(KEY_NATIVE_REFRESHED_AT, 0L) <= 0L) return@synchronized null
+            val refresh = NativeRefresh(
+                accessToken = prefs.getString(KEY_ACCESS_TOKEN, null).orEmpty(),
+                refreshToken = prefs.getString(KEY_REFRESH_TOKEN, null).orEmpty(),
+                expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0L),
+                userId = prefs.getString(KEY_USER_ID, null).orEmpty(),
+            )
+            if (refresh.accessToken.isBlank() || refresh.refreshToken.isBlank() || refresh.userId.isBlank()) null else refresh
         } catch (ignored: Exception) {
             null
         }

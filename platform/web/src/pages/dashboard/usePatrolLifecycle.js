@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../supabase/client';
+import {
+  buildCarPatrolPayload,
+  createDistanceAccumulator,
+  listenForCarChanges,
+  syncCarPatrolState,
+} from '../../geo/carPatrolSync';
 import toast from '../../utils/notify';
 import { normalizeVehicleType } from '../../components/VehicleIcon';
 import {
@@ -237,6 +243,7 @@ export function usePatrolLifecycle({
     isTracking,
     totalDistance,
     routePoints,
+    currentLocation,
     startTracking,
     stopTracking,
   } = useGPSTracking({
@@ -249,6 +256,110 @@ export function usePatrolLifecycle({
       startTracking();
     }
   }, [activePatrol?.user_id, user?.id, isTracking, startTracking]);
+
+  // Android Auto: tell the car about this patrol (start time, session km, latest fix). The
+  // accumulator is uncapped, unlike totalDistance, which only covers the last 50 points.
+  const carDistanceRef = useRef(null);
+  const carStartKeyRef = useRef(null);
+  useEffect(() => {
+    if (!user?.id || loadingPatrol) return;
+    if (!carDistanceRef.current) carDistanceRef.current = createDistanceAccumulator();
+    const accumulator = carDistanceRef.current;
+    const startKey = activePatrol && startTime ? startTime.getTime() : null;
+    if (carStartKeyRef.current !== startKey) {
+      carStartKeyRef.current = startKey;
+      accumulator.reset(startKey);
+    }
+    if (startKey !== null && currentLocation) {
+      accumulator.add(
+        currentLocation.lat,
+        currentLocation.lng,
+        currentLocation.accuracy,
+        Date.parse(currentLocation.timestamp)
+      );
+    }
+    void syncCarPatrolState(
+      buildCarPatrolPayload({
+        activePatrol,
+        startTime,
+        location: currentLocation,
+        distanceKm: accumulator.km,
+        userId: user.id,
+      })
+    );
+  }, [user?.id, loadingPatrol, activePatrol, startTime, currentLocation]);
+
+  // Patrol started or ended from the car (Android Auto): mirror it here.
+  const activePatrolRef = useRef(null);
+  useEffect(() => {
+    activePatrolRef.current = activePatrol;
+  }, [activePatrol]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+
+    const patrolEndedFromCar = async () => {
+      if (cancelled || isEndingRef.current || !activePatrolRef.current) return;
+      activePatrolRef.current = null; // The realtime event and the car event can both arrive.
+      await stopTracking();
+      setAllActivePatrols((prev) => prev.filter((p) => p.user_id !== user.id));
+      setActivePatrol(null);
+      setStartTime(null);
+      setShowWarning(false);
+      setAutoCloseAt(null);
+      warningTriggeredRef.current = false;
+      toast.success('Patrol ended from the car.');
+    };
+
+    const reloadMine = async () => {
+      try {
+        const { data, error } = await scope(supabase.from('active_patrols').select('*'))
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (cancelled || error) return;
+        if (data) {
+          setActivePatrol(data);
+          setStartTime(parsePatrolTime(data.start_time));
+        } else {
+          await patrolEndedFromCar();
+        }
+      } catch {
+        // The next poll or realtime event catches up.
+      }
+    };
+
+    const channel = supabase
+      .channel(`car-own-patrol-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'active_patrols', filter: `user_id=eq.${user.id}` },
+        async () => {
+          await patrolEndedFromCar();
+          refreshData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'active_patrols', filter: `user_id=eq.${user.id}` },
+        async () => {
+          await reloadMine();
+          refreshData();
+        }
+      )
+      .subscribe();
+
+    const stopListening = listenForCarChanges(async () => {
+      await reloadMine();
+      refreshData();
+    });
+
+    return () => {
+      cancelled = true;
+      stopListening();
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, scope, stopTracking, refreshData]);
 
   const patrolSyncUserId = activePatrol?.user_id;
   const patrolSyncVehicleId = activePatrol?.vehicle_id;
