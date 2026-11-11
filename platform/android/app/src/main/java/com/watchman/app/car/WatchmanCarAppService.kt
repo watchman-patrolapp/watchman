@@ -33,11 +33,17 @@ class WatchmanCarSession : Session() {
 
 class WatchmanCarStubScreen(carContext: CarContext) : Screen(carContext) {
 
-    override fun onGetTemplate(): Template =
-        MessageTemplate.Builder(
-            "Watchman is connected. The live patrol map is coming soon; use the phone app for now."
-        )
+    override fun onGetTemplate(): Template {
+        val session = CarSessionStore.read(carContext)
+        val label = session?.displayLabel().orEmpty()
+        val message = when {
+            session == null -> "Open Watchman on your phone and sign in"
+            label.isNotBlank() -> "Signed in as $label"
+            else -> "Signed in"
+        }
+        return MessageTemplate.Builder(message)
             .setTitle("Watchman")
             .setHeaderAction(Action.APP_ICON)
             .build()
+    }
 }

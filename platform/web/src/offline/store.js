@@ -30,19 +30,49 @@ function localKeys() {
   return out;
 }
 
-async function preferencesApi() {
+/**
+ * Resolves to `{ plugin }` (never the bare plugin) or null. Capacitor plugins are Proxies that
+ * answer `.then`, so returning one from an async function (or awaiting one) never settles on Android.
+ */
+async function loadNativePreferences() {
+  const { Capacitor } = await import("@capacitor/core");
+  if (!Capacitor.isNativePlatform()) return null;
+  const { Preferences } = await import("@capacitor/preferences");
+  return { plugin: Preferences };
+}
+
+async function wrapPreferences(loadPreferences) {
   try {
-    const { Capacitor } = await import("@capacitor/core");
-    if (!Capacitor.isNativePlatform()) return null;
-    const { Preferences } = await import("@capacitor/preferences");
-    return Preferences;
+    const loaded = await loadPreferences();
+    const plugin = loaded?.plugin;
+    if (!plugin) return null;
+    // Plain object, so the proxy is never resolved through a promise.
+    return {
+      get: (o) => plugin.get(o),
+      set: (o) => plugin.set(o),
+      remove: (o) => plugin.remove(o),
+      keys: () => plugin.keys(),
+    };
   } catch {
     return null;
   }
 }
 
+let defaultPreferencesPromise = null;
+
 /** Web uses localStorage. Android also mirrors into Preferences so a WebView wipe is not the only copy. */
-export function browserStore() {
+export function browserStore(options = {}) {
+  const { loadPreferences } = options;
+  let customPreferencesPromise = null;
+  const preferencesApi = () => {
+    if (loadPreferences) {
+      customPreferencesPromise ??= wrapPreferences(loadPreferences);
+      return customPreferencesPromise;
+    }
+    defaultPreferencesPromise ??= wrapPreferences(loadNativePreferences);
+    return defaultPreferencesPromise;
+  };
+
   return {
     async get(key) {
       const prefs = await preferencesApi();

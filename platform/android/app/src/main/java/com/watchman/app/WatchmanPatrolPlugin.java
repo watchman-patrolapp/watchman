@@ -17,6 +17,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import com.watchman.app.car.CarSession;
+import com.watchman.app.car.CarSessionStore;
 
 /**
  * Runtime location, notification, and battery-exemption prompts for a signed-on patrol.
@@ -101,6 +103,62 @@ public class WatchmanPatrolPlugin extends Plugin {
                 call.reject("Could not open battery settings", "BATTERY_PROMPT_FAILED");
             }
         }
+    }
+
+    /**
+     * Hands the phone's Supabase session to the Android Auto process. Reject messages are
+     * codes only; never put a token in a message or a log line.
+     */
+    @PluginMethod
+    public void syncSession(PluginCall call) {
+        String accessToken = trimmedOrEmpty(call.getString("accessToken"));
+        String userId = trimmedOrEmpty(call.getString("userId"));
+        String supabaseUrl = trimmedOrEmpty(call.getString("supabaseUrl"));
+        String anonKey = trimmedOrEmpty(call.getString("anonKey"));
+        if (accessToken.isEmpty() || userId.isEmpty() || supabaseUrl.isEmpty() || anonKey.isEmpty()) {
+            call.reject("INVALID_SESSION", "INVALID_SESSION");
+            return;
+        }
+        try {
+            // org.json coerces Integer / Long / Double, so a JS number always lands here.
+            long expiresAt = call.getData().optLong("expiresAt", 0L);
+            CarSessionStore.save(
+                    getContext(),
+                    new CarSession(
+                            accessToken,
+                            trimmedOrEmpty(call.getString("refreshToken")),
+                            expiresAt,
+                            userId,
+                            supabaseUrl,
+                            anonKey,
+                            nullIfBlank(call.getString("email")),
+                            nullIfBlank(call.getString("userName")),
+                            nullIfBlank(call.getString("organizationId"))
+                    )
+            );
+            call.resolve();
+        } catch (Exception failed) {
+            call.reject("SESSION_STORE_FAILED", "SESSION_STORE_FAILED");
+        }
+    }
+
+    @PluginMethod
+    public void clearSession(PluginCall call) {
+        try {
+            CarSessionStore.clear(getContext());
+            call.resolve();
+        } catch (Exception failed) {
+            call.reject("SESSION_STORE_FAILED", "SESSION_STORE_FAILED");
+        }
+    }
+
+    private static String trimmedOrEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String nullIfBlank(String value) {
+        String trimmed = trimmedOrEmpty(value);
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void startPrompt(Intent intent) {
