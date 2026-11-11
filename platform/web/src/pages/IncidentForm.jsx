@@ -5,6 +5,8 @@ import { supabase } from "../supabase/client";
 import { fetchInChunks } from "../utils/fetchInChunks";
 import { FaArrowLeft, FaSearch } from "react-icons/fa";
 import toast from "../utils/notify";
+import { readCurrentPosition } from "../utils/residentSos";
+import { coordsColumns, isMissingCoordColumnError } from "../utils/incidentCoords";
 import EvidenceSection from "../components/evidence/EvidenceSection";
 import {
   analyzeEvidenceForMatches,
@@ -57,6 +59,10 @@ export default function IncidentForm() {
   const [editLoading, setEditLoading] = useState(isEditMode);
   const [editLoadError, setEditLoadError] = useState(null);
   const [editAttempt, setEditAttempt] = useState(0);
+  // A GPS pin the user placed with the button. Deliberately not part of `form`, so it is never
+  // saved into a draft and a report written later at home cannot inherit an old pin.
+  const [pinnedCoords, setPinnedCoords] = useState(null);
+  const [pinningGps, setPinningGps] = useState(false);
   const lastCreatedProfileToastId = useRef(null);
   const submitLockRef = useRef(false);
 
@@ -194,6 +200,22 @@ export default function IncidentForm() {
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate]);
 
+  const handlePinGps = async () => {
+    setPinningGps(true);
+    const fix = await readCurrentPosition();
+    setPinningGps(false);
+    if (!fix) {
+      toast.error("Couldn’t get your GPS location. Check that location is allowed and try again.");
+      return;
+    }
+    setPinnedCoords(fix);
+    setForm((prev) =>
+      String(prev.location || "").trim()
+        ? prev
+        : { ...prev, location: `${fix.latitude.toFixed(5)}, ${fix.longitude.toFixed(5)}` }
+    );
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     if (name === "witnessPresent" && type === "checkbox" && !checked) {
@@ -290,22 +312,28 @@ export default function IncidentForm() {
       let oldEvidenceIds = [];
       let oldSuspectIds = [];
       if (isEditMode) {
-        const { error: uErr } = await supabase
+        const updateRow = {
+          incident_date: form.incidentDate,
+          location: form.location,
+          type: form.type,
+          description: form.description,
+          suspect_name: form.suspectName || null,
+          suspect_description: form.suspectDescription || null,
+          vehicle_info: form.vehicleInfo || null,
+          saps_case_number: form.sapsCaseNumber || null,
+          witness_present: form.witnessPresent,
+          witness_name: form.witnessName?.trim() || null,
+          witness_user_id: form.witnessUserId || null,
+        };
+        // Only a pin the user placed in this session is written; an edit never invents one.
+        const pinCols = coordsColumns(pinnedCoords);
+        let { error: uErr } = await supabase
           .from("incidents")
-          .update({
-            incident_date: form.incidentDate,
-            location: form.location,
-            type: form.type,
-            description: form.description,
-            suspect_name: form.suspectName || null,
-            suspect_description: form.suspectDescription || null,
-            vehicle_info: form.vehicleInfo || null,
-            saps_case_number: form.sapsCaseNumber || null,
-            witness_present: form.witnessPresent,
-            witness_name: form.witnessName?.trim() || null,
-            witness_user_id: form.witnessUserId || null,
-          })
+          .update({ ...updateRow, ...pinCols })
           .eq("id", editIncidentId);
+        if (uErr && Object.keys(pinCols).length > 0 && isMissingCoordColumnError(uErr)) {
+          ({ error: uErr } = await supabase.from("incidents").update(updateRow).eq("id", editIncidentId));
+        }
         if (uErr) throw uErr;
 
         const { data: oldSuspectRows } = await supabase
@@ -355,11 +383,15 @@ export default function IncidentForm() {
           organization_id: orgId,
         };
 
-        const { data: incident, error: insertError } = await supabase
-          .from("incidents")
-          .insert(incidentDataForMatch)
-          .select()
-          .single();
+        const pinCols = coordsColumns(pinnedCoords);
+        const insertIncident = (row) => supabase.from("incidents").insert(row).select().single();
+        let { data: incident, error: insertError } = await insertIncident({
+          ...incidentDataForMatch,
+          ...pinCols,
+        });
+        if (insertError && Object.keys(pinCols).length > 0 && isMissingCoordColumnError(insertError)) {
+          ({ data: incident, error: insertError } = await insertIncident(incidentDataForMatch));
+        }
 
         if (insertError) throw insertError;
         incidentId = incident.id;
@@ -720,6 +752,24 @@ export default function IncidentForm() {
               value={form.location}
               onChange={handleChange}
             />
+            <div className="-mt-2 flex flex-wrap items-center gap-3 text-sm">
+              <Button type="button" variant="secondary" onClick={handlePinGps} loading={pinningGps}>
+                Use my GPS location
+              </Button>
+              {pinnedCoords && (
+                <span className="text-gray-600 dark:text-gray-300">
+                  GPS pinned
+                  {Number.isFinite(pinnedCoords.accuracy) ? ` ±${Math.round(pinnedCoords.accuracy)} m` : ""}{" "}
+                  <button
+                    type="button"
+                    className="underline text-primary-700 dark:text-primary-300"
+                    onClick={() => setPinnedCoords(null)}
+                  >
+                    Remove
+                  </button>
+                </span>
+              )}
+            </div>
 
             <FormSelect
               label="Type"

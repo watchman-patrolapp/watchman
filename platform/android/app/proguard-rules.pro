@@ -45,3 +45,6 @@
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,Exceptions
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# Android Auto car screens are created by the host through reflection-style lookups; keep them intact.
+-keep class com.watchman.app.car.** { *; }

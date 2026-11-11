@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every string the Android Auto screens show. Short on purpose: drivers glance, they don't read. -->
+<resources>
+    <!-- Short labels -->
+    <string name="car_check_in">Check in</string>
+    <string name="car_end_patrol">End patrol</string>
+    <string name="car_sos">SOS</string>
+    <string name="car_report">Report</string>
+    <string name="car_nearby">Nearby</string>
+    <string name="car_navigate">Navigate</string>
+    <string name="car_acknowledge">Acknowledge</string>
+    <string name="car_acknowledged">Acknowledged</string>
+    <string name="car_cancel">Cancel</string>
+    <string name="car_send_sos">Send SOS</string>
+    <string name="car_confirm_sos">Confirm SOS</string>
+    <string name="car_done">Done</string>
+    <string name="car_try_again">Try again</string>
+    <string name="car_start_on_phone">Start on phone</string>
+
+    <!-- Messages -->
+    <string name="car_msg_signed_out">Open Watchman on your phone and sign in</string>
+    <string name="car_msg_not_patroller">Watchman in the car is for patrol members. Use the phone app.</string>
+    <string name="car_msg_no_org">Choose your neighbourhood in the phone app when it\'s safe.</string>
+    <string name="car_msg_offline">Can\'t reach Watchman. Check your connection.</string>
+    <string name="car_msg_server_outdated">Watchman needs an update on the server. Ask your admin.</string>
+    <string name="car_msg_generic">Something went wrong. Try again.</string>
+    <string name="car_toast_nav_failed">Couldn\'t open navigation</string>
+    <string name="car_msg_report_sent">Report sent. Add details on your phone when it\'s safe.</string>
+    <string name="car_msg_report_too_soon">Wait a moment before sending another report.</string>
+    <string name="car_msg_sos_sent">Help is on the way. Your patrol group has been alerted.</string>
+    <string name="car_msg_sos_already">An SOS was already sent a moment ago.</string>
+    <string name="car_msg_gps_phone">Open Watchman on phone for GPS</string>
+    <string name="car_no_incidents">No incidents nearby</string>
+    <string name="car_new_updates">New updates · tap refresh</string>
+    <string name="car_offline_updated">Offline · updated %1$s</string>
+
+    <!-- Map rows -->
+    <string name="car_row_on_patrol">On patrol</string>
+    <string name="car_row_not_on_patrol">Not on patrol</string>
+    <string name="car_sos_row_title">SOS · %1$s</string>
+    <string name="car_live">Live</string>
+    <string name="car_last_gps">Last GPS %1$s</string>
+    <string name="car_online_title">Online patrollers</string>
+    <string name="car_online_count">%1$d on patrol</string>
+    <string name="car_online_none">Nobody on patrol</string>
+    <string name="car_online_screen_title">On patrol</string>
+    <string name="car_you">You</string>
+    <string name="car_you_named">You · %1$s</string>
+    <string name="car_since_elapsed">Since %1$s · %2$s</string>
+    <string name="car_message_row_title">Message from %1$s</string>
+    <string name="car_message_title">Message</string>
+    <string name="car_loading">One moment…</string>
+
+    <!-- Status and summary panes -->
+    <string name="car_status_title">Patrol status</string>
+    <string name="car_summary_title">Patrol summary</string>
+    <string name="car_label_date">Date</string>
+    <string name="car_label_started">Started</string>
+    <string name="car_label_elapsed">Elapsed</string>
+    <string name="car_label_distance">Distance</string>
+    <string name="car_label_vehicle">Vehicle</string>
+    <string name="car_label_logged_in">Logged in</string>
+    <string name="car_label_logged_off">Logged off</string>
+    <string name="car_label_patrol_time">Patrol time</string>
+    <string name="car_label_duration">Duration</string>
+    <string name="car_no_vehicle">None</string>
+    <string name="car_patrol_ended_already">Patrol already ended.</string>
+
+    <!-- Check in, end patrol -->
+    <string name="car_patrol_started">Patrol started at %1$s</string>
+    <string name="car_patrol_already_active">You\'re already on patrol.</string>
+    <string name="car_choose_vehicle">Choose vehicle</string>
+    <string name="car_end_confirm">End your patrol?</string>
+
+    <!-- SOS -->
+    <string name="car_sos_confirm_first">Send SOS to your patrol group?</string>
+    <string name="car_sos_confirm_second">Tap Send SOS again to confirm</string>
+    <string name="car_sos_alert_title">SOS alert</string>
+    <string name="car_label_from">From</string>
+    <string name="car_label_when">When</string>
+    <string name="car_label_where">Where</string>
+    <string name="car_sos_notification_title">SOS nearby</string>
+    <string name="car_sos_notification_channel">SOS alerts</string>
+
+    <!-- Nearby, details, quick report -->
+    <string name="car_nearby_title">Nearby</string>
+    <string name="car_incident_title">Incident</string>
+    <string name="car_patroller_title">Patroller</string>
+    <string name="car_label_incident">Incident</string>
+    <string name="car_label_patroller">Patroller</string>
+    <string name="car_label_status">Status</string>
+    <string name="car_report_title">Report</string>
+    <string name="car_report_suspicious_vehicle">Suspicious vehicle</string>
+    <string name="car_report_suspicious_person">Suspicious person</string>
+    <string name="car_report_theft">Possible theft or break-in</string>
+    <string name="car_report_vandalism">Vandalism</string>
+</resources>

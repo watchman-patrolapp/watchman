@@ -20,6 +20,7 @@ import {
 } from "./sosDelivery";
 import { fetchUserLabelMap } from "./profileUserLabels";
 import { parsePatrolTime } from "./watchTime";
+import { coordsColumns, isMissingCoordColumnError } from "./incidentCoords";
 
 export function formatSosTimestamp(value) {
   const d = parsePatrolTime(value);
@@ -106,22 +107,24 @@ export async function triggerResidentSos({
       ? `${coords.latitude}, ${coords.longitude}`
       : "Location unavailable";
 
-  const { data: incident, error: incidentErr } = await supabase
-    .from("incidents")
-    .insert({
-      type: "SOS",
-      status: "approved",
-      description,
-      submitted_by: user.id,
-      submitted_by_name: card.fullName,
-      location: locationLabel,
-      incident_date: new Date().toISOString(),
-      reporter_id: user.id,
-      organization_id: orgId,
-      title: "Resident SOS",
-    })
-    .select("id")
-    .single();
+  const incidentRow = {
+    type: "SOS",
+    status: "approved",
+    description,
+    submitted_by: user.id,
+    submitted_by_name: card.fullName,
+    location: locationLabel,
+    incident_date: new Date().toISOString(),
+    reporter_id: user.id,
+    organization_id: orgId,
+    title: "Resident SOS",
+  };
+  const insertIncident = (row) => supabase.from("incidents").insert(row).select("id").single();
+  const coordCols = coordsColumns(coords);
+  let { data: incident, error: incidentErr } = await insertIncident({ ...incidentRow, ...coordCols });
+  if (incidentErr && Object.keys(coordCols).length > 0 && isMissingCoordColumnError(incidentErr)) {
+    ({ data: incident, error: incidentErr } = await insertIncident(incidentRow));
+  }
   if (incidentErr) throw incidentErr;
 
   const sosPayload = {

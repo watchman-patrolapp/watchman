@@ -1,8 +1,11 @@
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { hybridAuthStorage } from './authStorage';
+import { isAndroidNativePlatform, readNativeSession } from '../geo/carSessionSync';
+import { mergeNativeSession } from './nativeSessionMerge';
 
 const MIGRATION_FLAG = 'nw_sb_auth_migrated_from_local';
+const AUTH_TOKEN_KEY = /^sb-.*-auth-token$/;
 
 function isNative() {
   try {
@@ -52,6 +55,15 @@ export const appAuthStorage = {
     if (!isNative()) return hybridAuthStorage.getItem(key);
     await ensureMigrated();
     const { value } = await Preferences.get({ key });
+    if (value && isAndroidNativePlatform() && AUTH_TOKEN_KEY.test(key)) {
+      // Adopt tokens the car refreshed (single-use refresh token). Errors fall back to `value`.
+      const native = await readNativeSession();
+      const merged = native ? mergeNativeSession(value, native) : null;
+      if (merged) {
+        await Preferences.set({ key, value: merged });
+        return merged;
+      }
+    }
     return value ?? null;
   },
 

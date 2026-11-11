@@ -421,6 +421,14 @@ if (typeof window !== 'undefined') {
   });
 }
 
+/**
+ * Starts the patrol GPS pipeline without a mounted hook (e.g. a patrol started from the car).
+ * Same path as startTracking(); a second call while tracking is a no-op.
+ */
+export function startPatrolGps({ patrolId, userId }) {
+  globalGPS.start({ patrolId, userId });
+}
+
 export function useGPSTracking(options = {}) {
   const [state, setState] = useState({
     location: globalGPS.location,

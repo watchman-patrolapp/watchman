@@ -92,3 +92,35 @@ export async function syncCarSessionFromAuth(event, session, deps = {}) {
     return 'failed';
   }
 }
+
+/**
+ * Asks the native side for tokens the car refreshed on its own (the car and the phone share one
+ * single-use refresh token, so the WebView must adopt the newer pair). Resolves to a plain
+ * { accessToken, refreshToken, expiresAt, userId } or null; never rejects, never returns the
+ * plugin proxy, and gives up after `timeoutMs`. Never log the result: it contains tokens.
+ */
+export async function readNativeSession(deps = {}) {
+  const isAndroidNative = deps.isAndroidNative ?? isAndroidNativePlatform();
+  if (!isAndroidNative) return null;
+
+  let timer = 0;
+  try {
+    const plugin = deps.plugin ?? defaultPlugin();
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(null), deps.timeoutMs ?? 1500);
+    });
+    const result = await Promise.race([plugin.readNativeSession(), timeout]);
+    if (!result?.present) return null;
+    return {
+      accessToken: String(result.accessToken || ''),
+      refreshToken: String(result.refreshToken || ''),
+      expiresAt: Number(result.expiresAt) || 0,
+      userId: String(result.userId || ''),
+    };
+  } catch (err) {
+    console.debug('readNativeSession:', err);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
