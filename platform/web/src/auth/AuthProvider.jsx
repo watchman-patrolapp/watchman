@@ -12,6 +12,7 @@ import { nextProfileLoadStep, profileLoadAttemptPlan } from './profileLoadRetry'
 import { isOfflineOrNetworkError } from '../offline/policy'
 import { readProfileSnapshot, saveProfileSnapshot } from '../offline/snapshots'
 import { clearOfflineSession } from '../offline/sessionCleanup'
+import { syncCarSessionFromAuth } from '../geo/carSessionSync'
 
 export function useAuth() {
   const context = useContext(AuthContext);
@@ -355,7 +356,7 @@ export const AuthProvider = ({ children }) => {
       if (!failure) return
       console.error('Auth: Error fetching profile:', failure.message)
       if (failure.code === 'offline' || isOfflineOrNetworkError(failure)) {
-        const cached = await readProfileSnapshot(authUser.id)
+        const cached = await withTimeout(readProfileSnapshot(authUser.id), 3000).catch(() => null)
         if (cached?.data?.role && stillCurrent()) {
           const restored = {
             ...(sessionUserForAppState(authUser, { profileLoaded: true }) || {}),
@@ -484,7 +485,7 @@ export const AuthProvider = ({ children }) => {
 
     initAuth()
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const handleAuthEvent = async (_event, session) => {
       devLog('Auth: onAuthStateChange triggered', _event, session?.user?.id)
       if (!mounted.current) return
 
@@ -567,18 +568,16 @@ export const AuthProvider = ({ children }) => {
         // SIGNED_IN fires on every page load, tab focus, and token refresh in some
         // Supabase versions. The dedup check in fetchUserProfile prevents redundant
         // fetches -- if profile is already loaded for this uid, it's a no-op.
-        try {
-          if (session?.user) {
-            await fetchUserProfile(session.user)
-          }
-        } catch (e) {
-          console.error('Auth: SIGNED_IN profile error:', e)
-        } finally {
-          if (mounted.current) setLoading(false)
-          if (!sessionReadyRef.current && mounted.current) {
-            setSessionReady(true)
-            devLog(`${AUTH_BOOT_LABEL}: ready from SIGNED_IN in ${Date.now() - bootstrapStartedAtRef.current}ms`)
-          }
+        // Do not block on the profile: a slow or hung fetch must never hold the UI on "Signing you in…".
+        if (mounted.current) setLoading(false)
+        if (!sessionReadyRef.current && mounted.current) {
+          setSessionReady(true)
+          devLog(`${AUTH_BOOT_LABEL}: ready from SIGNED_IN in ${Date.now() - bootstrapStartedAtRef.current}ms`)
+        }
+        if (session?.user) {
+          void fetchUserProfile(session.user).catch((e) =>
+            console.warn('Auth: SIGNED_IN background profile error:', e)
+          )
         }
         return
       }
@@ -601,17 +600,39 @@ export const AuthProvider = ({ children }) => {
       // does not change public.users, and forcing refetch here raced the profile timeout with updateUser’s
       // lock/notifications in embedded browsers (spurious "Profile fetch timeout" in F12).
       const forceRefetch = _event === 'PASSWORD_RECOVERY'
-      try {
-        if (session?.user) {
-          await fetchUserProfile(session.user, forceRefetch)
-        } else {
-          if (mounted.current) setUser(null)
-        }
-      } catch (error) {
-        console.error('Auth: Error in auth state change:', error)
-      } finally {
-        if (mounted.current) setLoading(false)
+      if (session?.user) {
+        void fetchUserProfile(session.user, forceRefetch).catch((error) =>
+          console.warn('Auth: Error in auth state change:', error)
+        )
+      } else if (mounted.current) {
+        setUser(null)
       }
+      if (mounted.current) setLoading(false)
+    }
+
+    // Must stay synchronous and await nothing: supabase-js holds its auth lock while it calls us,
+    // so any supabase.* call awaited here deadlocks. Real work is deferred to a timer.
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted.current) return
+
+      // Android Auto hand-off. Runs first so TOKEN_REFRESHED is still synced.
+      void syncCarSessionFromAuth(_event, session)
+
+      // Prime a minimal user now so Login's navigate('/dashboard') is not bounced back to /login.
+      if (_event === 'SIGNED_IN' && session?.user && lastFetchedUid.current !== session.user.id) {
+        setUser((prev) =>
+          prev?.uid === session.user.id
+            ? prev
+            : sessionUserForAppState(session.user, {
+                sopVersionAccepted: prev?.sopVersionAccepted ?? null,
+                requiredSopVersion: prev?.requiredSopVersion ?? null,
+              })
+        )
+      }
+
+      setTimeout(() => {
+        void handleAuthEvent(_event, session)
+      }, 0)
     })
 
     return () => {
@@ -649,6 +670,7 @@ export const AuthProvider = ({ children }) => {
             data: { session },
           } = await supabase.auth.getSession()
           if (cancelled || !mounted.current || sessionReadyRef.current) return
+          void syncCarSessionFromAuth('INITIAL_SESSION', session)
           if (!session?.user) {
             if (mounted.current) setUser(null)
             setSessionReady(true)
@@ -704,6 +726,8 @@ export const AuthProvider = ({ children }) => {
             } = await supabase.auth.getSession()
             if (error) console.warn('Auth: resume getSession:', error.message)
             if (!mounted.current) return
+            // A failed read is not "signed out"; only sync a known session state.
+            if (!error) void syncCarSessionFromAuth('INITIAL_SESSION', session)
             if (session?.user) {
               void fetchUserProfile(session.user).catch((e) => console.warn('Auth: resume profile:', e))
             } else {
@@ -760,12 +784,15 @@ export const AuthProvider = ({ children }) => {
         } = await supabase.auth.getSession()
         if (session?.user?.id) {
           userId = session.user.id
-          await supabase.from('user_push_tokens').delete().eq('user_id', session.user.id)
+          await withTimeout(
+            supabase.from('user_push_tokens').delete().eq('user_id', session.user.id),
+            5000
+          )
         }
       } catch (e) {
         console.warn('Push token cleanup:', e)
       }
-      await clearOfflineSession(userId)
+      await withTimeout(clearOfflineSession(userId), 3000).catch(() => {})
       try {
         await supabase.auth.signOut()
       } catch (e) {
