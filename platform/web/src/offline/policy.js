@@ -232,9 +232,14 @@ export function signedUrlExpiryMs(url) {
     if (!token || token.split(".").length < 2) return null;
     const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
     const padded = part.padEnd(part.length + ((4 - (part.length % 4)) % 4), "=");
-    const json = typeof atob === "function"
-      ? atob(padded)
-      : Buffer.from(padded, "base64").toString("utf8");
+    let json;
+    if (typeof atob === "function") {
+      json = atob(padded);
+    } else if (typeof globalThis.Buffer === "function") {
+      json = globalThis.Buffer.from(padded, "base64").toString("utf8");
+    } else {
+      return null;
+    }
     const payload = JSON.parse(json);
     const exp = Number(payload?.exp);
     if (!Number.isFinite(exp)) return null;

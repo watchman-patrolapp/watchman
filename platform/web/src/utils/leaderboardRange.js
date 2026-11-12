@@ -45,3 +45,11 @@ export function rangeLabel(range) {
   if (range.from && range.to) return `${range.from} – ${range.to}`;
   return "Custom range";
 }
+
+/** Map a leaderboard range preset to a PatrolFuelCard period id. */
+export function fuelDefaultPeriodFromPreset(preset) {
+  if (preset === "month") return "month";
+  if (preset === "all") return "all";
+  if (preset === "week" || preset === "90d" || preset === "custom") return "week";
+  return "all";
+}

@@ -1,4 +1,5 @@
 import React from 'react';
+import * as Sentry from '@sentry/react';
 import { isChunkLoadError, reloadOnceForChunkError } from '../utils/chunkLoadRecovery';
 
 const isDev = import.meta.env.DEV;
@@ -25,8 +26,12 @@ class ErrorBoundary extends React.Component {
     if (this.state.reloading) return;
     console.error('ErrorBoundary caught:', error, errorInfo);
 
-    // Hook for external error reporting (e.g. Sentry) — add when ready:
-    // reportError(error, errorInfo);
+    try {
+      // No-op when Sentry was not initialised (no DSN).
+      Sentry.captureException(error, { extra: { componentStack: errorInfo?.componentStack } });
+    } catch {
+      // Reporting must never throw from the boundary.
+    }
   }
 
   handleReset() {
@@ -44,6 +49,27 @@ class ErrorBoundary extends React.Component {
     }
 
     const { error, errorInfo } = this.state;
+
+    if (this.props.variant === 'inline') {
+      return (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center dark:border-amber-800 dark:bg-amber-900/20"
+        >
+          <p className="text-sm text-amber-900 dark:text-amber-100">
+            {this.props.message ||
+              "Couldn't load this section. Try again, or close and open it again."}
+          </p>
+          <button
+            type="button"
+            onClick={this.handleReset}
+            className="mt-3 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-teal-700"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900">

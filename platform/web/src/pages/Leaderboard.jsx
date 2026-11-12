@@ -23,7 +23,7 @@ import { buildLeaderboardFunFacts } from "../utils/leaderboardFunFacts";
 import { evaluateLeaderboardBadges } from "../utils/leaderboardBadges";
 import { buildVolunteerStats } from "../utils/volunteerStats";
 import { watchDayStamp, addCalendarDays, parsePatrolTime, durationMinutesFromLog, periodStartDate } from "../utils/watchTime";
-import { boundsForRange, last90DayRange, rangeForPreset, rangeLabel } from "../utils/leaderboardRange";
+import { boundsForRange, fuelDefaultPeriodFromPreset, last90DayRange, rangeForPreset, rangeLabel } from "../utils/leaderboardRange";
 import {
   fetchLeaderboardStats,
   fetchSelfPatrolBundle,
@@ -852,7 +852,7 @@ export default function Leaderboard() {
                   locationPoints={locationPoints}
                   priceZarPerLitre={petrol.price}
                   onPriceChange={petrol.setPrice}
-                  defaultPeriod={preset === "month" ? "month" : preset === "all" ? "all" : "week"}
+                  defaultPeriod={fuelDefaultPeriodFromPreset(preset)}
                   onSaveArea={async () => {
                     const result = await petrol.saveArea();
                     if (result?.ok) toast.success("Neighbourhood petrol price saved");
@@ -979,6 +979,7 @@ export default function Leaderboard() {
           rangeFrom={bounds.from}
           rangeTo={bounds.to}
           periodLabel={periodLabel}
+          periodId={preset}
           showRangeSummary={!isAllTime}
           allTimeRank={selectedAllTimeRank}
           avatarUrl={avatarByUserId[selectedVolunteer.userId]}
