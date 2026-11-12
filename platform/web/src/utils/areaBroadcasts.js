@@ -1,6 +1,7 @@
 import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "./isRpcNotFound";
 import { parsePatrolTime } from "./watchTime";
+import { refreshWidgets } from "../geo/widgetBridge";
 
 export const NOTICE_PIN_MS = 12 * 60 * 60 * 1000;
 export const NOTICE_LIFE_MS = 24 * 60 * 60 * 1000;
@@ -121,6 +122,7 @@ export async function postAreaBroadcast({ headline, body }) {
     p_headline: headline,
     p_body: body,
   });
+  if (!error) void refreshWidgets();
   return { data, error };
 }
 

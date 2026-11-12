@@ -24,6 +24,9 @@ import com.watchman.app.car.CarSession;
 import com.watchman.app.car.CarSessionStore;
 import com.watchman.app.car.NativeRefresh;
 import com.watchman.app.car.PatrolSnapshot;
+import com.watchman.app.widget.WidgetLinks;
+import com.watchman.app.widget.WidgetBridge;
+import com.watchman.app.widget.WidgetUpdater;
 
 import kotlin.Unit;
 import kotlin.jvm.functions.Function1;
@@ -127,6 +130,7 @@ public class WatchmanPatrolPlugin extends Plugin {
             call.reject("INVALID_SESSION", "INVALID_SESSION");
             return;
         }
+        CarSession previous = CarSessionStore.read(getContext());
         try {
             // org.json coerces Integer / Long / Double, so a JS number always lands here.
             long expiresAt = call.getData().optLong("expiresAt", 0L);
@@ -144,6 +148,7 @@ public class WatchmanPatrolPlugin extends Plugin {
                             nullIfBlank(call.getString("organizationId"))
                     )
             );
+            notifyWidgetSession(previous, userId);
             call.resolve();
         } catch (Exception failed) {
             call.reject("SESSION_STORE_FAILED", "SESSION_STORE_FAILED");
@@ -155,6 +160,8 @@ public class WatchmanPatrolPlugin extends Plugin {
         try {
             CarSessionStore.clear(getContext());
             CarPatrolStateStore.clear(getContext());
+            // Drops cached names, avatars, alert text and the org name, and redraws both widgets.
+            WidgetUpdater.INSTANCE.clearAsync(getContext());
             call.resolve();
         } catch (Exception failed) {
             call.reject("SESSION_STORE_FAILED", "SESSION_STORE_FAILED");
@@ -169,8 +176,11 @@ public class WatchmanPatrolPlugin extends Plugin {
     public void syncPatrolState(PluginCall call) {
         try {
             JSObject data = call.getData();
+            PatrolSnapshot before = CarPatrolStateStore.read(getContext());
+            boolean wasActive = before != null && before.getActive();
             if (!data.optBoolean("active", false)) {
                 CarPatrolStateStore.clear(getContext());
+                WidgetBridge.patrolEnded(getContext(), wasActive);
                 call.resolve();
                 return;
             }
@@ -196,12 +206,76 @@ public class WatchmanPatrolPlugin extends Plugin {
                             System.currentTimeMillis()
                     )
             );
+            WidgetBridge.patrolSynced(getContext(), wasActive);
             call.resolve();
         } catch (Exception failed) {
             call.reject("PATROL_STATE_FAILED", "PATROL_STATE_FAILED");
         }
     }
 
+    /** Redraws both home-screen widgets from cache and fetches fresh data. No payload, no errors shown. */
+    @PluginMethod
+    public void refreshWidgets(PluginCall call) {
+        try {
+            WidgetUpdater.INSTANCE.refreshAsync(getContext());
+            call.resolve();
+        } catch (Exception failed) {
+            call.reject("WIDGET_REFRESH_FAILED", "WIDGET_REFRESH_FAILED");
+        }
+    }
+
+    /** Returns the widget route that opened the app ({path:null} when none) and clears it. */
+    @PluginMethod
+    public void consumeWidgetLink(PluginCall call) {
+        JSObject result = new JSObject();
+        String path = WidgetLinks.consume();
+        result.put("path", path == null ? JSObject.NULL : path);
+        call.resolve(result);
+    }
+
+    /**
+     * Non-token profile fields for the widgets (first name, can-patrol, org name), read in JS from
+     * public.users and the working organisation. Cached in app-private prefs, never in the session store.
+     */
+    @PluginMethod
+    public void syncWidgetProfile(PluginCall call) {
+        try {
+            CarSession stored = CarSessionStore.read(getContext());
+            String storedId = stored == null ? null : stored.getUserId();
+            String userId = trimmedOrEmpty(call.getString("userId"));
+            if (userId.isEmpty() && storedId != null) userId = storedId;
+            if (userId.isEmpty()) {
+                call.resolve();
+                return;
+            }
+            Boolean canPatrol = call.getData().has("canPatrol") && !call.getData().isNull("canPatrol")
+                    ? Boolean.valueOf(call.getData().optBoolean("canPatrol", false))
+                    : null;
+            WidgetBridge.profileSynced(
+                    getContext(),
+                    storedId,
+                    userId,
+                    call.getString("firstName"),
+                    canPatrol,
+                    call.getString("orgName")
+            );
+            call.resolve();
+        } catch (Exception failed) {
+            call.reject("WIDGET_PROFILE_FAILED", "WIDGET_PROFILE_FAILED");
+        }
+    }
+
+    /** A new session for a different user than before wipes the previous user's widget cache. */
+    private void notifyWidgetSession(CarSession previous, String userId) {
+        WidgetBridge.profileSynced(
+                getContext(),
+                previous == null ? null : previous.getUserId(),
+                userId,
+                null,
+                null,
+                null
+        );
+    }
     /**
      * Returns the tokens the car refreshed on its own, so the WebView can adopt them instead of
      * spending an already-rotated refresh token. {present:false} unless the car refreshed.
@@ -228,6 +302,7 @@ public class WatchmanPatrolPlugin extends Plugin {
 
     @Override
     public void load() {
+        CarEvents.bindAppContext(getContext());
         carListener = reason -> {
             new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
                 JSObject data = new JSObject();
@@ -237,6 +312,10 @@ public class WatchmanPatrolPlugin extends Plugin {
             return Unit.INSTANCE;
         };
         CarEvents.setListener(carListener);
+        WidgetLinks.setListener(() -> {
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> notifyListeners("widgetLink", new JSObject()));
+            return Unit.INSTANCE;
+        });
     }
 
     @Override
@@ -245,6 +324,7 @@ public class WatchmanPatrolPlugin extends Plugin {
             CarEvents.setListener(null);
         }
         carListener = null;
+        WidgetLinks.setListener(null);
     }
 
     private Function1<String, Unit> carListener;

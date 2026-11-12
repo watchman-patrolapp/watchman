@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Anonymous patrol indicator (icon A): walking patroller in a reflective vest holding a torch. No face, no identity. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="@color/wm_grey" android:pathData="M17.5,9a4.5,4.5 0,1 0,9 0a4.5,4.5 0,1 0,-9 0z" />
+    <path android:strokeColor="@color/wm_grey" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M18,16L12,26" />
+    <path android:strokeColor="@color/wm_grey" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M26,16L32,22L36,19" />
+    <path android:strokeColor="@color/wm_grey" android:strokeWidth="3.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M20,29L14,42L11.5,42.5" />
+    <path android:strokeColor="@color/wm_grey" android:strokeWidth="3.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M24,29L30,42L33.5,43" />
+    <path android:fillColor="@color/wm_grey" android:pathData="M16.5,15L27.5,15L28.5,30L15.5,30z" />
+    <path android:fillColor="@color/wm_grey" android:pathData="M16.1,19.5h11.8v2H16.1zM15.8,25h12.4v2H15.8z" />
+    <path android:fillColor="@color/wm_grey" android:pathData="M36,16L40.5,14L42,17.5L37.5,19.5z" />
+    <path android:fillColor="@color/wm_grey" android:fillAlpha="0.0" android:pathData="M42,15.5L47.5,10.5L47.5,23L42,17.5z" />
+</vector>

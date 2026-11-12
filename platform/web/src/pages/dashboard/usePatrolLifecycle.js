@@ -6,6 +6,7 @@ import {
   listenForCarChanges,
   syncCarPatrolState,
 } from '../../geo/carPatrolSync';
+import { refreshWidgets } from '../../geo/widgetBridge';
 import toast from '../../utils/notify';
 import { normalizeVehicleType } from '../../components/VehicleIcon';
 import {
@@ -443,6 +444,7 @@ export function usePatrolLifecycle({
         toast.success("Patrol started!");
         playPatrolStart();
         startTracking();
+        void refreshWidgets();
         if (newPatrol.share_ref) setShareTarget({ kind: 'start', patrol: newPatrol });
         setShareRefreshKey((k) => k + 1);
       }
@@ -492,6 +494,7 @@ export function usePatrolLifecycle({
         toast.success("Patrol started!");
         playPatrolStart();
         startTracking();
+        void refreshWidgets();
         if (newPatrol.share_ref) setShareTarget({ kind: 'start', patrol: newPatrol });
         setShareRefreshKey((k) => k + 1);
       }
@@ -555,6 +558,7 @@ export function usePatrolLifecycle({
         if (autoClosed) playPatrolAutoEnd();
         else playPatrolEnd();
       }
+      void refreshWidgets();
       if (endedShareRef && !autoClosed) {
         fetchPatrolShare(endedShareRef)
           .then((row) => {

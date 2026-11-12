@@ -1,6 +1,3 @@
-/** Seconds the resident can cancel before an SOS is sent. */
-export const SOS_CONFIRM_SECONDS = 5;
-
 /** Chat-queue item type for an SOS that could not be inserted while offline. */
 export const SOS_PENDING_QUEUE_TYPE = "sos_pending";
 
@@ -32,59 +29,35 @@ export function classifySosDelivery({ recorded = false, chatOk = false } = {}) {
 export function initialSosSendState() {
   return {
     phase: "idle",
-    secondsLeft: SOS_CONFIRM_SECONDS,
-    skipped: false,
   };
 }
 
 /**
- * Confirm countdown. A second `arm` while confirming sends immediately.
- * Cancel only applies during the countdown.
+ * Hold confirmation lives on SosHoldButton (10 seconds). Arming here starts the send
+ * immediately — there is no separate tap-to-confirm window.
  */
 export function reduceSosSend(state, action) {
   const current = state || initialSosSendState();
   switch (action?.type) {
     case "arm": {
       if (current.phase === "sending") return current;
-      if (current.phase === "confirming") {
-        return { ...current, phase: "sending", secondsLeft: 0, skipped: true };
-      }
-      return {
-        phase: "confirming",
-        secondsLeft: SOS_CONFIRM_SECONDS,
-        skipped: false,
-      };
+      return { phase: "sending" };
     }
-    case "tick": {
-      if (current.phase !== "confirming") return current;
-      const left = Number(current.secondsLeft) || 0;
-      if (left <= 1) {
-        return { ...current, phase: "sending", secondsLeft: 0, skipped: false };
-      }
-      return { ...current, secondsLeft: left - 1 };
-    }
-    case "cancel": {
-      if (current.phase !== "confirming") return current;
-      return initialSosSendState();
-    }
+    case "cancel":
+      return current.phase === "sending" ? current : initialSosSendState();
     case "success":
-      return { ...current, phase: "success", secondsLeft: 0 };
+      return { ...current, phase: "success" };
     case "chat_failed":
-      return { ...current, phase: "chat_failed", secondsLeft: 0 };
+      return { ...current, phase: "chat_failed" };
     case "failed":
-      return { ...current, phase: "failed", secondsLeft: 0 };
+      return { ...current, phase: "failed" };
     case "offline_queued":
-      return { ...current, phase: "offline_queued", secondsLeft: 0 };
+      return { ...current, phase: "offline_queued" };
     case "reset":
       return initialSosSendState();
     default:
       return current;
   }
-}
-
-export function countdownLabel(secondsLeft) {
-  const n = Math.max(0, Number(secondsLeft) || 0);
-  return `Sending SOS in ${n}…`;
 }
 
 export function isNavigatorOffline(nav) {

@@ -30,7 +30,61 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Widget deep links: za.co.africuz.watchman://widget/<action> -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="@string/custom_url_scheme" android:host="widget" />
+            </intent-filter>
         </activity>
+
+        <!-- Full-screen 10 second hold-to-send SOS, opened from the Watchman Neighbourhood widget. -->
+        <activity
+            android:name=".widget.SosHoldActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.Watchman.Sos" />
+
+        <receiver
+            android:name=".widget.PatrolWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_patrol_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/watchman_patrol_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.NeighbourhoodWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_neighbourhood_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/watchman_neighbourhood_widget_info" />
+        </receiver>
+
+        <!-- Replaces the push-notifications plugin service so a push can refresh the widgets while the
+             WebView is dead. WidgetMessagingService extends it, so token and message handling are unchanged. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".widget.WidgetMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -70,6 +124,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

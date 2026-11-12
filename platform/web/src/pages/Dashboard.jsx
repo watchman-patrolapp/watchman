@@ -1,5 +1,5 @@
 // src/pages/Dashboard.jsx
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
@@ -21,6 +21,7 @@ import PageSkeleton from '../components/layout/PageSkeleton';
 import { canAccessAdminPanel, canReviewFeedback, isStaffForModerationAlerts } from '../auth/staffRoles';
 import { canAccessPatrolSchedule, canAccessSosBoard, canStartOrEndPatrol, canStaffVerifyResident, canUseHouseholdMode, canViewCityHub, canViewIntelligence, homePathForRole, isHouseholdModeRole } from '../auth/roleMatrix';
 import { hasHydratedAppRole } from '../auth/appRole';
+import { peekWidgetAction, subscribeWidgetAction, takeWidgetAction } from '../geo/widgetActions';
 import { useProfileAccessGate } from '../auth/useProfileAccessGate';
 import ProfileLoadRecovery from '../components/ProfileLoadRecovery';
 import { useActiveOrganization } from '../auth/useActiveOrganization';
@@ -306,6 +307,17 @@ export default function Dashboard() {
     canDoPatrolOps,
     refetchUnread,
   });
+
+  // Android home-screen widget: Start / End patrol run through the same check-in / check-out as the
+  // buttons (vehicle picker, GPS service, disclosures). The action is consumed once.
+  const widgetAction = useSyncExternalStore(subscribeWidgetAction, peekWidgetAction, () => null);
+  useEffect(() => {
+    if (!widgetAction || patrol.loadingPatrol || !user?.id || !hasHydratedAppRole(user?.role)) return;
+    const action = takeWidgetAction();
+    if (!action || !canDoPatrolOps) return;
+    if (action === 'start-patrol' && !patrol.activePatrol) void patrol.handleCheckIn();
+    if (action === 'end-patrol' && patrol.activePatrol) void patrol.handleCheckOut();
+  }, [widgetAction, patrol, user?.id, user?.role, canDoPatrolOps]);
 
   if (profileView === "session" || profileView === "pending" || !hasHydratedAppRole(user?.role)) {
     if (profileView === "offline" || profileView === "error") {

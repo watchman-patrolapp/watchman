@@ -1,13 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SOS_CONFIRM_SECONDS,
   SOS_PENDING_QUEUE_TYPE,
   shapeBroadcastResult,
   classifySosDelivery,
   initialSosSendState,
   reduceSosSend,
-  countdownLabel,
   isNavigatorOffline,
   canUseOfflineSosQueue,
   buildSosChatText,
@@ -42,59 +40,28 @@ test("classifySosDelivery has three outcomes and recorded-false wins", () => {
   assert.equal(classifySosDelivery({}), "failed");
 });
 
-test("countdown starts at 5, ticks down, and sends on the last second", () => {
-  let state = reduceSosSend(initialSosSendState(), { type: "arm" });
-  assert.equal(state.phase, "confirming");
-  assert.equal(state.secondsLeft, SOS_CONFIRM_SECONDS);
-  assert.equal(countdownLabel(state.secondsLeft), "Sending SOS in 5…");
-
-  for (let left = 4; left >= 1; left -= 1) {
-    state = reduceSosSend(state, { type: "tick" });
-    assert.equal(state.phase, "confirming");
-    assert.equal(state.secondsLeft, left);
-  }
-  state = reduceSosSend(state, { type: "tick" });
+test("arm starts sending immediately with no confirm window", () => {
+  const state = reduceSosSend(initialSosSendState(), { type: "arm" });
   assert.equal(state.phase, "sending");
-  assert.equal(state.secondsLeft, 0);
-  assert.equal(state.skipped, false);
-});
-
-test("cancel during the countdown returns to idle and does not send", () => {
-  let state = reduceSosSend(initialSosSendState(), { type: "arm" });
-  state = reduceSosSend(state, { type: "tick" });
-  assert.equal(state.secondsLeft, 4);
-  state = reduceSosSend(state, { type: "cancel" });
-  assert.deepEqual(state, initialSosSendState());
-  state = reduceSosSend(state, { type: "cancel" });
-  assert.equal(state.phase, "idle");
-  state = reduceSosSend({ phase: "sending", secondsLeft: 0, skipped: true }, { type: "cancel" });
-  assert.equal(state.phase, "sending");
-});
-
-test("a second arm during the countdown skips the wait", () => {
-  let state = reduceSosSend(initialSosSendState(), { type: "arm" });
-  state = reduceSosSend(state, { type: "tick" });
-  state = reduceSosSend(state, { type: "arm" });
-  assert.equal(state.phase, "sending");
-  assert.equal(state.secondsLeft, 0);
-  assert.equal(state.skipped, true);
   const again = reduceSosSend(state, { type: "arm" });
   assert.equal(again, state);
 });
 
-test("delivery actions set the three UI phases", () => {
-  const confirming = reduceSosSend(initialSosSendState(), { type: "arm" });
-  assert.equal(reduceSosSend(confirming, { type: "success" }).phase, "success");
-  assert.equal(reduceSosSend(confirming, { type: "chat_failed" }).phase, "chat_failed");
-  assert.equal(reduceSosSend(confirming, { type: "failed" }).phase, "failed");
-  assert.equal(reduceSosSend(confirming, { type: "offline_queued" }).phase, "offline_queued");
-  assert.equal(reduceSosSend(confirming, { type: "reset" }).phase, "idle");
-  assert.equal(reduceSosSend(confirming, { type: "unknown" }), confirming);
+test("cancel does not interrupt an in-flight send", () => {
+  const sending = reduceSosSend(initialSosSendState(), { type: "arm" });
+  assert.equal(sending.phase, "sending");
+  assert.equal(reduceSosSend(sending, { type: "cancel" }).phase, "sending");
+  assert.deepEqual(reduceSosSend(initialSosSendState(), { type: "cancel" }), initialSosSendState());
 });
 
-test("ticks outside the countdown do nothing", () => {
-  const idle = initialSosSendState();
-  assert.equal(reduceSosSend(idle, { type: "tick" }), idle);
+test("delivery actions set the three UI phases", () => {
+  const sending = reduceSosSend(initialSosSendState(), { type: "arm" });
+  assert.equal(reduceSosSend(sending, { type: "success" }).phase, "success");
+  assert.equal(reduceSosSend(sending, { type: "chat_failed" }).phase, "chat_failed");
+  assert.equal(reduceSosSend(sending, { type: "failed" }).phase, "failed");
+  assert.equal(reduceSosSend(sending, { type: "offline_queued" }).phase, "offline_queued");
+  assert.equal(reduceSosSend(sending, { type: "reset" }).phase, "idle");
+  assert.equal(reduceSosSend(sending, { type: "unknown" }), sending);
 });
 
 test("offline helpers", () => {

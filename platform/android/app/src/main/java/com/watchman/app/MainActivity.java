@@ -1,5 +1,6 @@
 package com.watchman.app;
 
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.os.Bundle;
 import android.view.View;
@@ -9,6 +10,8 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
+import com.watchman.app.widget.SosHoldActivity;
+import com.watchman.app.widget.WidgetLinks;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -31,6 +34,33 @@ public class MainActivity extends BridgeActivity {
             return windowInsets;
         });
         ViewCompat.requestApplyInsets(decor);
+        if (savedInstanceState == null) {
+            captureWidgetLink(getIntent());
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        captureWidgetLink(intent);
+        super.onNewIntent(intent);
+    }
+
+    /**
+     * Widget taps arrive as za.co.africuz.watchman://widget/<path>. Keep the route for the WebView to
+     * consume once, then strip the data so neither a resume nor Capacitor's launch-URL replay acts on
+     * it again. The SOS route opens the native hold screen and never reaches the WebView.
+     */
+    private void captureWidgetLink(Intent intent) {
+        if (intent == null) return;
+        if ((intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return;
+        String path = WidgetLinks.parse(getString(R.string.custom_url_scheme), intent.getData());
+        if (path == null) return;
+        intent.setData(null);
+        if ("sos".equals(path)) {
+            startActivity(new Intent(this, SosHoldActivity.class));
+        } else {
+            WidgetLinks.offer(path);
+        }
     }
 
     @Override

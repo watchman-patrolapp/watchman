@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
+import { refreshWidgets } from "../geo/widgetBridge";
 import { fetchInChunks } from "../utils/fetchInChunks";
 import { FaArrowLeft, FaSearch } from "react-icons/fa";
 import toast from "../utils/notify";
@@ -663,6 +664,7 @@ export default function IncidentForm() {
           /* ignore */
         }
         toast.success("Incident reported successfully with structured evidence!");
+        void refreshWidgets();
         navigate("/dashboard");
       }
     } catch (err) {

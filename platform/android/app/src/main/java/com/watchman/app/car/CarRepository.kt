@@ -97,6 +97,7 @@ class CarRepository private constructor(context: Context) {
             }
             main.post {
                 if (result is CarResult.Ok && reason != null) {
+                    // CarEvents.emit also refreshes home widgets via the app-context hook.
                     reason(result.value)?.let { CarEvents.emit(it) }
                 }
                 callback(result)

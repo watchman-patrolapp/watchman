@@ -12,6 +12,12 @@ import com.watchman.app.car.screens.SosAlertScreen
 
 class WatchmanCarAppService : CarAppService() {
 
+    override fun onCreate() {
+        super.onCreate()
+        // So home widgets refresh after an Android Auto write even when the WebView never loaded.
+        CarEvents.bindAppContext(this)
+    }
+
     override fun createHostValidator(): HostValidator {
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         return if (debuggable) {

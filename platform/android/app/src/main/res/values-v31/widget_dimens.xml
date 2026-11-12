@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: match the launcher's widget corner radius; inner padding is fixed (the system padding dimen is not public). -->
+    <dimen name="wm_radius">@android:dimen/system_app_widget_background_radius</dimen>
+    <dimen name="wm_padding">16dp</dimen>
+</resources>

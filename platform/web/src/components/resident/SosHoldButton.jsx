@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const HOLD_MS = 2000;
+/** Hold duration shared with the native SosHoldActivity. Release cancels; nothing is sent early. */
+export const HOLD_MS = 10_000;
+const HOLD_SECONDS = HOLD_MS / 1000;
 
 /**
- * Hold-to-activate SOS control. A tap is ignored; keyboard users can hold Space or Enter.
+ * Hold-to-activate SOS control. A tap is ignored; the user must hold for the full 10 seconds.
+ * Keyboard users hold Space or Enter. There is no separate confirm window.
  */
-export default function SosHoldButton({
-  onTrigger,
-  busy = false,
-  disabled = false,
-  confirming = false,
-}) {
+export default function SosHoldButton({ onTrigger, busy = false, disabled = false }) {
   const [holding, setHolding] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const startRef = useRef(0);
   const frameRef = useRef(0);
   const firedRef = useRef(false);
@@ -22,6 +21,7 @@ export default function SosHoldButton({
     cancelAnimationFrame(frameRef.current);
     setHolding(false);
     setProgress(fired ? 100 : 0);
+    setSecondsLeft(HOLD_SECONDS);
     startRef.current = 0;
   }, []);
 
@@ -30,6 +30,8 @@ export default function SosHoldButton({
       const elapsed = Date.now() - startRef.current;
       const next = Math.min(100, (elapsed / HOLD_MS) * 100);
       setProgress(next);
+      const left = Math.max(1, Math.ceil(HOLD_SECONDS * (1 - elapsed / HOLD_MS)));
+      setSecondsLeft(left);
       if (elapsed >= HOLD_MS) {
         if (!firedRef.current) {
           firedRef.current = true;
@@ -47,11 +49,6 @@ export default function SosHoldButton({
   const beginHold = useCallback(
     (event) => {
       if (disabled || busy) return;
-      if (confirming) {
-        event?.preventDefault?.();
-        void onTrigger?.();
-        return;
-      }
       if (firedRef.current) return;
       if (event?.pointerType === "mouse" && event.button !== 0) return;
       event?.preventDefault?.();
@@ -64,11 +61,12 @@ export default function SosHoldButton({
       startRef.current = Date.now();
       setHolding(true);
       setProgress(0);
+      setSecondsLeft(HOLD_SECONDS);
       frameRef.current = requestAnimationFrame(() => {
         tickRef.current();
       });
     },
-    [busy, confirming, disabled, onTrigger]
+    [busy, disabled]
   );
 
   const cancelHold = useCallback(() => {
@@ -82,17 +80,9 @@ export default function SosHoldButton({
     if (!busy) {
       firedRef.current = false;
       setProgress(0);
+      setSecondsLeft(HOLD_SECONDS);
     }
   }, [busy]);
-
-  useEffect(() => {
-    if (!confirming) return undefined;
-    firedRef.current = false;
-    cancelAnimationFrame(frameRef.current);
-    setHolding(false);
-    setProgress(0);
-    return undefined;
-  }, [confirming]);
 
   const handleKeyDown = (event) => {
     if (event.repeat) return;
@@ -109,21 +99,47 @@ export default function SosHoldButton({
     }
   };
 
-  const label = busy ? "SENDING" : confirming ? "SEND" : holding ? "HOLD…" : "SOS";
+  const circumference = 2 * Math.PI * 54;
+  const dashOffset = circumference * (1 - progress / 100);
+  const label = busy ? "SENDING" : holding ? String(secondsLeft) : "SOS";
   const hint = busy
     ? "Sending your location to patrol…"
-    : confirming
-      ? "Press again to send now"
-      : holding
-        ? "Keep holding…"
-        : "Press and hold 2 seconds to alert patrol";
+    : holding
+      ? `Keep holding… ${secondsLeft}`
+      : "Press and hold 10 seconds to alert patrol";
 
   return (
     <div className="flex flex-col items-center">
-      <div className="resident-sos-beacon relative flex h-40 w-40 items-center justify-center">
+      <div className="resident-sos-beacon relative flex h-44 w-44 items-center justify-center">
         <span className="resident-sos-ring resident-sos-ring-1" aria-hidden />
         <span className="resident-sos-ring resident-sos-ring-2" aria-hidden />
         <span className="resident-sos-ring resident-sos-ring-3" aria-hidden />
+        <svg
+          className="pointer-events-none absolute inset-0 z-[1] h-full w-full -rotate-90"
+          viewBox="0 0 128 128"
+          aria-hidden
+        >
+          <circle
+            cx="64"
+            cy="64"
+            r="54"
+            fill="none"
+            stroke="rgba(248,113,113,0.22)"
+            strokeWidth="6"
+          />
+          <circle
+            cx="64"
+            cy="64"
+            r="54"
+            fill="none"
+            stroke={holding || busy ? "#f87171" : "transparent"}
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            style={{ transition: holding ? "none" : "stroke-dashoffset 160ms ease-out" }}
+          />
+        </svg>
         <button
           type="button"
           disabled={disabled || busy}
@@ -134,7 +150,10 @@ export default function SosHoldButton({
           onContextMenu={(event) => event.preventDefault()}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
-          aria-label={confirming ? "Send SOS now" : "Hold two seconds to send SOS"}
+          aria-label="Hold ten seconds to send SOS"
+          aria-valuemin={0}
+          aria-valuemax={HOLD_SECONDS}
+          aria-valuenow={holding ? HOLD_SECONDS - secondsLeft : 0}
           aria-describedby="resident-sos-hint"
           className="relative z-[2] flex h-[7.25rem] w-[7.25rem] select-none touch-none flex-col items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_0_0_6px_rgba(239,68,68,0.18),0_14px_34px_-10px_rgba(185,28,28,0.55)] motion-safe:transition-transform motion-safe:active:scale-95 disabled:opacity-60"
           style={{
