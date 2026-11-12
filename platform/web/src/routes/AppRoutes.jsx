@@ -80,6 +80,9 @@ import {
   SecuritySosBoard,
   SecurityBranding,
   EmergencyContacts,
+  ServiceListingForm,
+  ServiceListingDetail,
+  MyServiceListings,
   ResidentGuide,
   AreaBroadcast,
   ResidentModeration,
@@ -502,6 +505,47 @@ export default function AppRoutes() {
             <NeighborhoodRoute>
               <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
                 <EmergencyContacts />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+
+        <Route
+          path="/resident/services/new"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ServiceListingForm />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/resident/services/mine"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <MyServiceListings />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/resident/services/:id/edit"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ServiceListingForm />
+              </RequireRole>
+            </NeighborhoodRoute>
+          }
+        />
+        <Route
+          path="/resident/services/:id"
+          element={
+            <NeighborhoodRoute>
+              <RequireRole allowedRoles={RESIDENT_HOME_ROLES}>
+                <ServiceListingDetail />
               </RequireRole>
             </NeighborhoodRoute>
           }

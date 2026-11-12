@@ -2211,6 +2211,88 @@ BEGIN
 END
 $anon_media$;
 
+-- -----------------------------------------------------------------------------
+-- P4a: local services search + neighbouring suburbs (one hop, opt-in)
+--   Orgs: SA, SB (linked to SA), SC (linked to SB only, never to SA = two hops).
+--   Viewer: a resident in SA. Listings are inserted as postgres (fixtures).
+-- -----------------------------------------------------------------------------
+DO $svc_fx$
+DECLARE
+  sfx text := left(replace(gen_random_uuid()::text, '-', ''), 10);
+  r record;
+BEGIN
+  INSERT INTO g7_ids VALUES
+    ('svc_org_a', gen_random_uuid()), ('svc_org_b', gen_random_uuid()), ('svc_org_c', gen_random_uuid()),
+    ('svc_a_res', gen_random_uuid()), ('svc_b_res', gen_random_uuid()), ('svc_c_res', gen_random_uuid());
+
+  INSERT INTO public.organizations (id, name, type, status)
+  VALUES (pg_temp.id('svc_org_a'), 'g7-isolation-svcA-' || sfx, 'nw_group', 'active'),
+         (pg_temp.id('svc_org_b'), 'g7-isolation-svcB-' || sfx, 'nw_group', 'active'),
+         (pg_temp.id('svc_org_c'), 'g7-isolation-svcC-' || sfx, 'nw_group', 'active');
+
+  FOR r IN SELECT * FROM (VALUES
+      ('svc_a_res', 'svc_org_a'), ('svc_b_res', 'svc_org_b'), ('svc_c_res', 'svc_org_c')) t(k, org)
+  LOOP
+    INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at)
+    VALUES (pg_temp.id(r.k), '00000000-0000-0000-0000-000000000000', 'authenticated',
+            'authenticated', 'g7-' || r.k || '-' || sfx || '@example.invalid', now(), now());
+    EXECUTE format(
+      'INSERT INTO public.users (id, email, full_name, role, organization_id, verified, status)
+       VALUES (%L, %L, %L, %L, %L, true, %L)
+       ON CONFLICT (id) DO UPDATE
+         SET role = EXCLUDED.role, organization_id = EXCLUDED.organization_id,
+             full_name = EXCLUDED.full_name, verified = true, status = %L',
+      pg_temp.id(r.k), 'g7-' || r.k || '-' || sfx || '@example.invalid',
+      'G7 ' || r.k, 'resident', pg_temp.id(r.org), 'active', 'active');
+    INSERT INTO public.organization_members (organization_id, user_id, member_role, status)
+    VALUES (pg_temp.id(r.org), pg_temp.id(r.k), 'resident', 'active')
+    ON CONFLICT (organization_id, user_id) DO NOTHING;
+  END LOOP;
+
+  -- Adjacency is stored in both directions: A<->B and B<->C. A and C are NOT adjacent.
+  INSERT INTO public.org_neighbours (org_id, neighbour_org_id) VALUES
+    (pg_temp.id('svc_org_a'), pg_temp.id('svc_org_b')), (pg_temp.id('svc_org_b'), pg_temp.id('svc_org_a')),
+    (pg_temp.id('svc_org_b'), pg_temp.id('svc_org_c')), (pg_temp.id('svc_org_c'), pg_temp.id('svc_org_b'));
+
+  INSERT INTO public.local_service_listings
+    (organization_id, owner_user_id, title, description, category_slug, phone,
+     status, show_to_neighbours, consent_publish_contact)
+  VALUES
+    (pg_temp.id('svc_org_a'), pg_temp.id('svc_a_res'), 'g7-svc-a-own', 'G7 fixture listing in A', 'plumbing', '0821234567', 'published', false, true),
+    (pg_temp.id('svc_org_b'), pg_temp.id('svc_b_res'), 'g7-svc-b-private', 'G7 fixture listing in B, not opted in', 'plumbing', '0821234567', 'published', false, true),
+    (pg_temp.id('svc_org_b'), pg_temp.id('svc_b_res'), 'g7-svc-b-optin', 'G7 fixture listing in B, opted in', 'plumbing', '0821234567', 'published', true, true),
+    (pg_temp.id('svc_org_c'), pg_temp.id('svc_c_res'), 'g7-svc-c-optin', 'G7 fixture listing in C, opted in', 'plumbing', '0821234567', 'published', true, true);
+END
+$svc_fx$;
+
+-- 1. A member always sees A's published listing, with or without p_include_neighbours.
+SELECT pg_temp.expect_rows('P4a', 'A member sees A own listing (neighbours off)', pg_temp.id('svc_a_res'),
+  $q$SELECT 1 FROM public.search_local_services('', NULL, 50, 0, false) WHERE title = 'g7-svc-a-own'$q$, 1);
+SELECT pg_temp.expect_rows('P4a', 'A member sees A own listing (neighbours on)', pg_temp.id('svc_a_res'),
+  $q$SELECT 1 FROM public.search_local_services('', NULL, 50, 0, true) WHERE title = 'g7-svc-a-own'$q$, 1);
+
+-- 2. B listing without show_to_neighbours is never visible to A, even with the flag on.
+SELECT pg_temp.expect_rows('P4a', 'A member cannot see B listing that did not opt in (neighbours on)', pg_temp.id('svc_a_res'),
+  $q$SELECT 1 FROM public.search_local_services('', NULL, 50, 0, true) WHERE title = 'g7-svc-b-private'$q$, 0);
+
+-- 3. B opted-in listing: visible only when p_include_neighbours is true.
+SELECT pg_temp.expect_rows('P4a', 'A member sees B opted-in listing (neighbours on)', pg_temp.id('svc_a_res'),
+  $q$SELECT 1 FROM public.search_local_services('', NULL, 50, 0, true) WHERE title = 'g7-svc-b-optin'$q$, 1);
+SELECT pg_temp.expect_rows('P4a', 'A member does not see B opted-in listing (neighbours off)', pg_temp.id('svc_a_res'),
+  $q$SELECT 1 FROM public.search_local_services('', NULL, 50, 0, false) WHERE title = 'g7-svc-b-optin'$q$, 0);
+
+-- 4. C is never visible to A: no chain through B, even if C opted in and the flag is on.
+SELECT pg_temp.expect_rows('P4a', 'A member never sees C listing (neighbours on, two hops)', pg_temp.id('svc_a_res'),
+  $q$SELECT 1 FROM public.search_local_services('', NULL, 50, 0, true) WHERE title = 'g7-svc-c-optin'$q$, 0);
+SELECT pg_temp.expect_rows('P4a', 'A member never sees C listing (neighbours off)', pg_temp.id('svc_a_res'),
+  $q$SELECT 1 FROM public.search_local_services('', NULL, 50, 0, false) WHERE title = 'g7-svc-c-optin'$q$, 0);
+
+-- Deep links follow the same rule (can_access_service_listing).
+SELECT pg_temp.expect_rows('P4a', 'A member cannot get C listing by id', pg_temp.id('svc_a_res'),
+  format('SELECT 1 FROM public.local_service_listings WHERE title = %L', 'g7-svc-c-optin'), 0);
+SELECT pg_temp.expect_rows('P4a', 'A member can read B opted-in listing by id (deep link)', pg_temp.id('svc_a_res'),
+  format('SELECT 1 FROM public.local_service_listings WHERE title = %L', 'g7-svc-b-optin'), 1);
+
 -- TODO by later phase (rows from NEW_FEATURES_BLUEPRINT section 14)
 --   P0 capabilities: rows 10, 11
 --   P1 broadcasts by street reps (realtime/push fan-out): row 2

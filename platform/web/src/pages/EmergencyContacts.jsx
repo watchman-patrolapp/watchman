@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import toast from "../utils/notify";
 import {
   FaAmbulance,
@@ -30,9 +30,12 @@ import {
   uploadEmergencyDirectoryImage,
 } from "../utils/emergencyDirectory";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
-import { canManageEmergencyDirectory, homeBackNav, isGlobalOperatorUser } from "../auth/roleMatrix";
+import { canManageCapabilities, canManageEmergencyDirectory, homeBackNav, isGlobalOperatorUser } from "../auth/roleMatrix";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import { useAuth } from "../auth/useAuth";
+import ContactsTabs from "../components/services/ContactsTabs";
+import LocalServicesTab from "../components/services/LocalServicesTab";
+import { SERVICES_TAB, parseContactsTab } from "../utils/localServices";
 
 export const DIRECTORY_KINDS = [
   { value: "police", label: "Police" },
@@ -413,6 +416,8 @@ function ContactForm({ form, saving, uploading, canChooseCityScope, onChange, on
 
 export default function EmergencyContacts() {
   const { pathname } = useLocation();
+  const [searchParams] = useSearchParams();
+  const servicesTab = parseContactsTab(searchParams.toString()) === SERVICES_TAB;
   const { user } = useAuth();
   const { activeOrganizationId } = useActiveOrganization();
   const canManage = canManageEmergencyDirectory(user?.role, user?.platformRole);
@@ -552,7 +557,7 @@ export default function EmergencyContacts() {
           backLabel={backLabel}
           rightSlot={
             <div className="flex items-center gap-2">
-              {canManage ? (
+              {canManage && !servicesTab ? (
                 <button
                   type="button"
                   onClick={() => setForm({ ...EMPTY_FORM })}
@@ -567,7 +572,16 @@ export default function EmergencyContacts() {
           }
         />
 
-        {form ? (
+        <ContactsTabs />
+
+        {servicesTab ? (
+          <LocalServicesTab
+            canAdd={residentView}
+            canManageNeighbours={Boolean(activeOrganizationId) && canManageCapabilities(user?.role, user?.platformRole)}
+          />
+        ) : null}
+
+        {!servicesTab && form ? (
           <ContactForm
             form={form}
             saving={saving}
@@ -580,7 +594,7 @@ export default function EmergencyContacts() {
           />
         ) : null}
 
-        {loading ? (
+        {servicesTab ? null : loading ? (
           <p className="text-sm text-gray-500">Loading contacts…</p>
         ) : (
           <>

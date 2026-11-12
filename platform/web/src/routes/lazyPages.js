@@ -58,6 +58,9 @@ export const SecurityCompanyDashboard = lazy(() => import("../pages/SecurityComp
 export const SecuritySosBoard = lazy(() => import("../pages/SecuritySosBoard"));
 export const SecurityBranding = lazy(() => import("../pages/SecurityBranding"));
 export const EmergencyContacts = lazy(() => import("../pages/EmergencyContacts"));
+export const ServiceListingForm = lazy(() => import("../pages/services/ServiceListingForm"));
+export const ServiceListingDetail = lazy(() => import("../pages/services/ServiceListingDetail"));
+export const MyServiceListings = lazy(() => import("../pages/services/MyServiceListings"));
 export const ResidentGuide = lazy(() => import("../pages/ResidentGuide"));
 export const AreaBroadcast = lazy(() => import("../pages/AreaBroadcast"));
 export const ResidentModeration = lazy(() => import("../pages/ResidentModeration"));
