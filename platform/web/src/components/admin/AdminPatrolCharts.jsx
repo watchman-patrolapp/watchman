@@ -10,6 +10,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
+import { horizontalGridCoordinates, verticalGridCoordinates } from "../charts/gridCoordinates";
 
 const tooltipStyle = {
   backgroundColor: "#ffffff",
@@ -23,7 +24,13 @@ export function AdminVolunteerHoursChart({ data }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.5} />
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="#94a3b8"
+          opacity={0.5}
+          horizontalCoordinatesGenerator={horizontalGridCoordinates}
+          verticalCoordinatesGenerator={verticalGridCoordinates}
+        />
         <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
         <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit="h" />
         <Tooltip
@@ -43,7 +50,13 @@ export function AdminLast7Chart({ data }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={data} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.5} />
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="#94a3b8"
+          opacity={0.5}
+          horizontalCoordinatesGenerator={horizontalGridCoordinates}
+          verticalCoordinatesGenerator={verticalGridCoordinates}
+        />
         <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#64748b" }} />
         <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
         <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#111827", fontWeight: 600 }} />

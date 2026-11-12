@@ -1,4 +1,5 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { horizontalGridCoordinates, verticalGridCoordinates } from "../charts/gridCoordinates";
 import { unitsByStatusChart } from "../../utils/equipmentReportingMeta";
 
 const INITIAL = { width: 640, height: 220 };
@@ -11,7 +12,12 @@ export default function EquipmentStatusChart({ unitsByStatus }) {
     <div className="h-56 w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220} initialDimension={INITIAL}>
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="#e5e7eb"
+            horizontalCoordinatesGenerator={horizontalGridCoordinates}
+            verticalCoordinatesGenerator={verticalGridCoordinates}
+          />
           <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={60} />
           <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={32} />
           <Tooltip contentStyle={{ borderRadius: 8 }} />
