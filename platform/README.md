@@ -14,7 +14,7 @@ This folder holds everything that ships as the product:
 
 **Android debug APK:** from `platform/web`, run `npm run android:sync` then `npm run android:apk:debug` (or open `platform/android` in Android Studio). On macOS or Linux the Gradle wrapper is `npm run android:apk:debug:unix`.
 
-`applicationId` is `com.watchman.app`. Do not change it. `versionCode` / `versionName` default to **6** / **1.0.5** from [`android/version.properties`](android/version.properties). Override for one build with `-Pwatchman.versionCode` / `-Pwatchman.versionName` or `WATCHMAN_VERSION_CODE` / `WATCHMAN_VERSION_NAME` (flags, then env, then the file). Bump the file with:
+`applicationId` is `za.co.africuz.watchman` (Play package, permanent). The Java/Kotlin `namespace` stays `com.watchman.app`. `versionCode` / `versionName` default to **6** / **1.0.5** from [`android/version.properties`](android/version.properties). Override for one build with `-Pwatchman.versionCode` / `-Pwatchman.versionName` or `WATCHMAN_VERSION_CODE` / `WATCHMAN_VERSION_NAME` (flags, then env, then the file). Bump the file with:
 
 ```bash
 node platform/android/scripts/bump-version.mjs --bump-code --name 1.0.6
@@ -48,7 +48,7 @@ Release builds are minified (`minifyEnabled`, `shrinkResources`) and must be sig
 
    Windows: `gradlew.bat bundleRelease`. From `platform/web`: `npm run android:bundle:release:unix` (or `android:bundle:release` on Windows). The AAB is `platform/android/app/build/outputs/bundle/release/app-release.aab`. `assembleRelease` / `bundleRelease` fail immediately, naming the missing key, when signing is not configured.
 
-`google-services.json` stays gitignored. Copy [`android/app/google-services.json.example`](android/app/google-services.json.example) (`package_name` `com.watchman.app`) only on a machine that should receive FCM. Without that file the Google Services plugin is not applied.
+`google-services.json` stays gitignored. Copy [`android/app/google-services.json.example`](android/app/google-services.json.example) (`package_name` `za.co.africuz.watchman`) only on a machine that should receive FCM. Without that file the Google Services plugin is not applied.
 
 Cleartext HTTP is off (`usesCleartextTraffic` and `network_security_config`). `allowBackup` is false, so Auto Backup does not export shared preferences or WebView storage. WebView remote debugging is on only when the build is debuggable. `cap sync` writes `res/xml/config.xml` with no Cordova `<access origin="*">` (`cordova.accessOrigins` is `[]` in `web/capacitor.config.json`). Nothing in this app reads that whitelist; Capacitor does not use it for the WebView.
 

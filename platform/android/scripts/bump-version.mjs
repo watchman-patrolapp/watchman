@@ -89,7 +89,7 @@ if (args.name != null) {
   }
 }
 
-const header = `# Android version for com.watchman.app.
+const header = `# Android version for za.co.africuz.watchman.
 # VERSION_CODE must increase by at least 1 for every Play upload.
 # VERSION_NAME is the user-visible version (versionName).
 # Override without editing this file:
