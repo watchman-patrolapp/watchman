@@ -13,6 +13,7 @@ import {
   FaBullhorn,
   FaUserShield,
   FaBoxOpen,
+  FaBriefcase,
 } from "react-icons/fa";
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
@@ -120,6 +121,7 @@ function ActionCard({ icon: Icon, tone, title, subtitle, onClick, className = ""
     sector: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
     help: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
     guide: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+    services: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
   };
   return (
     <button
@@ -507,6 +509,15 @@ export default function ResidentDashboard() {
             className="w-full"
           />
         ) : null}
+
+        <ActionCard
+          icon={FaBriefcase}
+          tone="services"
+          title="Local services"
+          subtitle="Plumbers, tutors, welders & more near you"
+          className="w-full"
+          onClick={() => navigate("/resident/contacts?tab=services")}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <ActionCard
