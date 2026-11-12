@@ -14,6 +14,7 @@ import {
   PolarRadiusAxis,
   Radar,
 } from "recharts";
+import { horizontalGridCoordinates, verticalGridCoordinates } from "../charts/gridCoordinates";
 import { FaClock } from "react-icons/fa";
 import { TIME_RANGES } from "../../utils/volunteerStats";
 
@@ -56,7 +57,12 @@ export function TopVolunteersBarChart({ leaderboard }) {
           }))}
           margin={{ top: 8, right: 20, left: 12, bottom: 56 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="#e5e7eb"
+            horizontalCoordinatesGenerator={horizontalGridCoordinates}
+            verticalCoordinatesGenerator={verticalGridCoordinates}
+          />
           <XAxis
             dataKey="name"
             type="category"
@@ -95,7 +101,12 @@ export function WeeklyTrendChart({ weeklyTrend }) {
         initialDimension={CHART_INITIAL}
       >
         <LineChart data={weeklyTrend || []}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="#e5e7eb"
+            horizontalCoordinatesGenerator={horizontalGridCoordinates}
+            verticalCoordinatesGenerator={verticalGridCoordinates}
+          />
           <XAxis dataKey="week" tick={{ fontSize: 12 }} />
           <YAxis tick={{ fontSize: 12 }} unit="h" />
           <Tooltip contentStyle={{ borderRadius: 8 }} formatter={(val) => [`${val}h`, "Hours"]} />

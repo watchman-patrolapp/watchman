@@ -109,7 +109,7 @@ function reportStatusMeta(row) {
   };
 }
 
-function ActionCard({ icon: Icon, tone, title, subtitle, onClick }) {
+function ActionCard({ icon: Icon, tone, title, subtitle, onClick, className = "" }) {
   const tones = {
     watch: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
     safe: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
@@ -125,7 +125,7 @@ function ActionCard({ icon: Icon, tone, title, subtitle, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600"
+      className={`rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600 ${className}`.trim()}
     >
       <span className={`mb-3 flex h-8 w-8 items-center justify-center rounded-lg ${tones[tone]}`}>
         <Icon className="h-4 w-4" aria-hidden />
@@ -501,9 +501,10 @@ export default function ResidentDashboard() {
           <ActionCard
             icon={FaBoxOpen}
             tone="safe"
-            title={`Your Neighbourhood Watch Needs (${neededCount})`}
-            subtitle="Equipment your Neighbourhood Watch needs - offer to help"
+            title={`Support your Neighbourhood Watch (${neededCount})`}
+            subtitle="Donate equipment or funds the patrol needs"
             onClick={() => navigate("/resident/needs")}
+            className="w-full"
           />
         ) : null}
 
