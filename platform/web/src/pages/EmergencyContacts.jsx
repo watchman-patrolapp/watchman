@@ -30,7 +30,8 @@ import {
   uploadEmergencyDirectoryImage,
 } from "../utils/emergencyDirectory";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
-import { canManageCapabilities, canManageEmergencyDirectory, homeBackNav, isGlobalOperatorUser } from "../auth/roleMatrix";
+import { canManageCapabilities, canManageEmergencyDirectory, canPostAreaBroadcast, homeBackNav, isGlobalOperatorUser } from "../auth/roleMatrix";
+import ServiceModerationPanel from "../components/services/ServiceModerationPanel";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import { useAuth } from "../auth/useAuth";
 import ContactsTabs from "../components/services/ContactsTabs";
@@ -579,6 +580,10 @@ export default function EmergencyContacts() {
             canAdd={residentView}
             canManageNeighbours={Boolean(activeOrganizationId) && canManageCapabilities(user?.role, user?.platformRole)}
           />
+        ) : null}
+
+        {servicesTab && !residentView && activeOrganizationId && canPostAreaBroadcast(user?.role, user?.platformRole) ? (
+          <ServiceModerationPanel orgId={activeOrganizationId} isStaff />
         ) : null}
 
         {!servicesTab && form ? (

@@ -1,11 +1,25 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PageHeader from "../../components/layout/PageHeader";
 import PrivateMediaImg from "../../components/media/PrivateMediaImg";
 import ServiceContactButtons from "../../components/services/ServiceContactButtons";
 import { COMMUNITY_MEDIA_BUCKET } from "../../utils/communityMedia";
-import { getServiceListing, listMyOrgNeighbours } from "../../utils/localServicesApi";
-import { LOAD_FALLBACK, friendlyServiceError, hoursFromJson } from "../../utils/localServices";
+import ReportContentButton from "../../components/community/ReportContentButton";
+import ReviewForm from "../../components/services/ReviewForm";
+import ReviewList from "../../components/services/ReviewList";
+import StarRating from "../../components/services/StarRating";
+import { getServiceListing, listListingReviews, listMyOrgNeighbours } from "../../utils/localServicesApi";
+import { canPostAreaBroadcast } from "../../auth/roleMatrix";
+import { useOrgCapabilities } from "../../hooks/useOrgCapabilities";
+import {
+  LOAD_FALLBACK,
+  REVIEW_LOAD_FALLBACK,
+  VERIFY_TO_RATE_MESSAGE,
+  friendlyServiceError,
+  hoursFromJson,
+  ratingSummary,
+  reviewViewerState,
+} from "../../utils/localServices";
 import { useAuth } from "../../auth/useAuth";
 
 const BACK = "/resident/contacts?tab=services";
@@ -17,6 +31,32 @@ export default function ServiceListingDetail() {
   const [suburb, setSuburb] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [reviews, setReviews] = useState([]);
+  const [reviewError, setReviewError] = useState("");
+  const { has: hasCap } = useOrgCapabilities();
+
+  const loadReviews = useCallback(async () => {
+    try {
+      setReviews(await listListingReviews(id));
+      setReviewError("");
+    } catch (err) {
+      setReviews([]);
+      setReviewError(friendlyServiceError(err, REVIEW_LOAD_FALLBACK));
+    }
+  }, [id]);
+
+  const reloadListing = useCallback(async () => {
+    try {
+      setRow(await getServiceListing(id));
+    } catch {
+      /* keep the current row */
+    }
+    await loadReviews();
+  }, [id, loadReviews]);
+
+  useEffect(() => {
+    void loadReviews();
+  }, [loadReviews]);
 
   useEffect(() => {
     let alive = true;
@@ -43,6 +83,13 @@ export default function ServiceListingDetail() {
   }, [id, user?.activeOrganizationId, user?.organizationId]);
 
   const hours = row ? hoursFromJson(row.hours_json) : "";
+  const isOwner = Boolean(row) && row.owner_user_id === user?.id;
+  const homeOrgId = user?.activeOrganizationId ?? user?.organizationId ?? null;
+  const isOwnOrgListing = Boolean(row) && Boolean(homeOrgId) && row.organization_id === homeOrgId;
+  const canModerate =
+    isOwnOrgListing && (canPostAreaBroadcast(user?.role, user?.platformRole) || hasCap("resident_moderator"));
+  const viewerState = reviewViewerState({ isVerified: Boolean(user?.isVerifiedResident), isOwner });
+  const myReview = reviews.find((r) => r.is_mine);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 dark:bg-gray-950 sm:p-6">
@@ -76,12 +123,36 @@ export default function ServiceListingDetail() {
               {row.price_note ? <div><dt className="inline font-medium">Price: </dt><dd className="inline">{row.price_note}</dd></div> : null}
             </dl>
             <ServiceContactButtons phone={row.phone} whatsapp={row.whatsapp} email={row.email} website={row.website} />
-            <p className="text-xs text-gray-500">Reviews are coming soon.</p>
-            {row.owner_user_id === user?.id ? (
+            <div className="flex items-center gap-3">
+              <StarRating value={Math.round(Number(row.avg_rating) || 0)} size="text-base" />
+              <span className="text-sm text-gray-600 dark:text-gray-300">{ratingSummary(row)}</span>
+              {row.vouch_count ? (
+                <span className="text-xs text-teal-700 dark:text-teal-300">{row.vouch_count} vouch{row.vouch_count === 1 ? "" : "es"}</span>
+              ) : null}
+            </div>
+            {isOwner ? (
               <Link to={`/resident/services/${row.id}/edit`} className="text-sm font-semibold text-teal-700 hover:underline dark:text-teal-300">
                 Edit this listing
               </Link>
-            ) : null}
+            ) : (
+              <ReportContentButton contentType="service_listing" contentId={row.id} />
+            )}
+
+            <section className="space-y-3 border-t border-gray-100 pt-4 dark:border-gray-700" aria-label="Reviews">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Reviews</h2>
+              {viewerState === "can_review" ? (
+                <ReviewForm key={myReview?.id ?? "new"} listingId={row.id} existing={myReview} onSaved={reloadListing} />
+              ) : viewerState === "needs_verification" ? (
+                <p className="text-sm text-gray-600 dark:text-gray-300">{VERIFY_TO_RATE_MESSAGE}</p>
+              ) : null}
+              {reviewError ? (
+                <p className="text-sm text-red-600" role="alert">
+                  {reviewError}
+                </p>
+              ) : (
+                <ReviewList reviews={reviews} isOwner={isOwner} canModerate={canModerate} onChanged={reloadListing} />
+              )}
+            </section>
           </article>
         ) : null}
       </div>

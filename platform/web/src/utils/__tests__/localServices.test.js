@@ -2,6 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildListingPayload,
+  buildReviewPayload,
+  clampRating,
+  parseModerationFilter,
+  ratingSummary,
+  reviewViewerState,
+  reviewerLabel,
+  validateReviewForm,
   effectiveIncludeNeighbours,
   firstNameOnly,
   friendlyServiceError,
@@ -89,4 +96,42 @@ test("contacts tab defaults to emergency", () => {
 test("neighbour badge only on neighbour rows", () => {
   assert.equal(neighbourBadge({ is_neighbour: false, suburb_name: "X" }), "");
   assert.equal(neighbourBadge({ is_neighbour: true, suburb_name: "Walmer" }), "Walmer");
+});
+
+test("review payload clamps rating and ties vouch to use", () => {
+  const p = buildReviewPayload("L1", { rating: 9, body: "  Great  ", used_service: false, vouch: true });
+  assert.deepEqual(p, { p_listing_id: "L1", p_rating: 5, p_body: "Great", p_used_service: false, p_vouch: false });
+  const q = buildReviewPayload("L1", { rating: 4, body: "", used_service: true, vouch: true });
+  assert.equal(q.p_body, null);
+  assert.equal(q.p_vouch, true);
+  assert.equal(buildReviewPayload("L1", { rating: 2, body: "x".repeat(1200) }).p_body.length, 1000);
+});
+
+test("review validation and rating helpers", () => {
+  assert.equal(clampRating("abc"), 0);
+  assert.equal(clampRating(0), 0);
+  assert.equal(clampRating(3.4), 3);
+  assert.match(validateReviewForm({ rating: 0 }), /rating/i);
+  assert.equal(validateReviewForm({ rating: 4, body: "ok" }), "");
+  assert.equal(ratingSummary({ rating_count: 0 }), "No ratings yet");
+  assert.equal(ratingSummary({ rating_count: 1, avg_rating: "4.00" }), "4.0 (1 rating)");
+});
+
+test("review viewer state and reviewer label", () => {
+  assert.equal(reviewViewerState({ isVerified: true, isOwner: true }), "owner");
+  assert.equal(reviewViewerState({ isVerified: false, isOwner: false }), "needs_verification");
+  assert.equal(reviewViewerState({ isVerified: true, isOwner: false }), "can_review");
+  assert.equal(reviewerLabel({ reviewer_first_name: "Thandi", reviewer_street: "Oak Street" }), "Thandi, Oak Street");
+  assert.equal(reviewerLabel({}), "A neighbour");
+});
+
+test("review errors map to friendly copy", () => {
+  assert.equal(friendlyServiceError(new Error("only verified households can rate services")), "Only verified households can rate services.");
+  assert.equal(friendlyServiceError(new Error("you cannot review your own listing")), "You cannot review your own listing.");
+  assert.equal(friendlyServiceError(new Error("boom stack trace")), "Could not save your listing. Try again.");
+});
+
+test("moderation filter parsing", () => {
+  assert.equal(parseModerationFilter("Hidden"), "hidden");
+  assert.equal(parseModerationFilter("nope"), "pending");
 });
