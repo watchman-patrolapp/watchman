@@ -21,11 +21,11 @@ import {
 import {
   canUseOfflineSosQueue,
   classifySosDelivery,
-  countdownLabel,
   initialSosSendState,
   isNavigatorOffline,
   reduceSosSend,
 } from "../../utils/sosDelivery";
+import { refreshWidgets } from "../../geo/widgetBridge";
 
 function EmergencyCallLink({ prominent = false }) {
   const className = prominent
@@ -36,6 +36,11 @@ function EmergencyCallLink({ prominent = false }) {
       Call {EMERGENCY_CALL_NAME} {EMERGENCY_CALL_NUMBER}
     </a>
   );
+}
+
+/** Friendly copy only — never PostgREST / JWT / stack text. */
+function friendlySosError(fallback = "Couldn’t send the SOS. Try again or call SAPS.") {
+  return fallback;
 }
 
 export default function ResidentSosControl({ user, organizationId, notes = "" }) {
@@ -74,22 +79,6 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
   }, []);
 
   useEffect(() => {
-    if (state.phase !== "confirming") return undefined;
-    const id = window.setInterval(() => dispatch({ type: "tick" }), 1000);
-    const onKey = (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        dispatch({ type: "cancel" });
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [state.phase]);
-
-  useEffect(() => {
     if (state.phase !== "sending") {
       startedRef.current = false;
       return undefined;
@@ -109,7 +98,7 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
       }
       if (isNavigatorOffline()) {
         if (!canUseOfflineSosQueue()) {
-          setErrorMessage("You are offline, and this device cannot queue the SOS.");
+          setErrorMessage(`You’re offline. Call SAPS ${EMERGENCY_CALL_NUMBER}.`);
           dispatch({ type: "failed" });
           return;
         }
@@ -122,9 +111,10 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
         if (queued.ok) {
           setPendingLocalId(queued.localId);
           dispatch({ type: "offline_queued" });
+          void refreshWidgets();
           return;
         }
-        setErrorMessage(queued.error || "You are offline. The SOS was not queued.");
+        setErrorMessage(`You’re offline. Call SAPS ${EMERGENCY_CALL_NUMBER}.`);
         dispatch({ type: "failed" });
         return;
       }
@@ -139,6 +129,7 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
         const delivery = classifySosDelivery({ recorded: true, chatOk: result.chat?.ok === true });
         if (delivery === "success") {
           dispatch({ type: "success" });
+          void refreshWidgets();
           return;
         }
         chatArgsRef.current = {
@@ -152,11 +143,12 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
         };
         setChatLocalId(result.chat?.localId || null);
         setChatQueued(result.chat?.queued === true);
-        setErrorMessage(result.chat?.error || "Patrol chat did not get the SOS.");
+        setErrorMessage("Your SOS is recorded, but patrol chat did not get it.");
         dispatch({ type: "chat_failed" });
-      } catch (err) {
-        console.error(err);
-        setErrorMessage(err?.message || "Could not send the SOS.");
+        void refreshWidgets();
+      } catch {
+        console.debug("residentSos send failed");
+        setErrorMessage(friendlySosError());
         dispatch({ type: "failed" });
       }
     })();
@@ -167,7 +159,10 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
     if (state.phase !== "chat_failed" || !chatQueued || !chatLocalId) return undefined;
     const sync = () => {
       const stillQueued = readChatQueue().some((row) => row.localId === chatLocalId);
-      if (!stillQueued) dispatch({ type: "success" });
+      if (!stillQueued) {
+        dispatch({ type: "success" });
+        void refreshWidgets();
+      }
     };
     sync();
     window.addEventListener(CHAT_QUEUE_CHANGED_EVENT, sync);
@@ -185,12 +180,14 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
       if (!sent) return;
       if (sent.chatOk) {
         dispatch({ type: "success" });
+        void refreshWidgets();
         return;
       }
       setChatLocalId(sent.chatLocalId);
       setChatQueued(Boolean(sent.chatLocalId));
       setErrorMessage("Your SOS is recorded, but patrol chat did not get it.");
       dispatch({ type: "chat_failed" });
+      void refreshWidgets();
     };
     sync();
     window.addEventListener(CHAT_QUEUE_CHANGED_EVENT, sync);
@@ -221,13 +218,14 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
         const result = await retryQueuedItem(chatLocalId);
         if (result.ok || result.missing) {
           dispatch({ type: "success" });
+          void refreshWidgets();
           return;
         }
         if (result.skipped) {
           setRetryNote("Automatic retry is already running.");
           return;
         }
-        setRetryNote(result.error?.message || "Patrol chat still did not get it.");
+        setRetryNote("Patrol chat still did not get it.");
         return;
       }
       if (chatArgsRef.current) {
@@ -236,12 +234,13 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
         setChatLocalId(chat.localId || chatLocalId);
         if (chat.ok) {
           dispatch({ type: "success" });
+          void refreshWidgets();
           return;
         }
-        setRetryNote(chat.error || "Patrol chat still did not get it.");
+        setRetryNote("Patrol chat still did not get it.");
       }
-    } catch (err) {
-      setRetryNote(err?.message || "Patrol chat still did not get it.");
+    } catch {
+      setRetryNote("Patrol chat still did not get it.");
     } finally {
       setRetrying(false);
     }
@@ -270,28 +269,6 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
               </div>
             </>
           )}
-        </div>
-      ) : null}
-
-      {state.phase === "confirming" ? (
-        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-4 text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-50">
-          <p aria-live="assertive" className="text-center text-lg font-bold">
-            {countdownLabel(state.secondsLeft)}
-          </p>
-          <p className="mt-1 text-center text-sm">Press SOS again to send now.</p>
-          {offline ? (
-            <p className="mt-2 text-center text-sm">
-              You are offline. This SOS will send when you reconnect. Call {EMERGENCY_CALL_NUMBER} if
-              you need help now.
-            </p>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => dispatch({ type: "cancel" })}
-            className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-xl bg-gray-900 px-4 text-base font-semibold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900"
-          >
-            Cancel
-          </button>
         </div>
       ) : null}
 
@@ -369,11 +346,7 @@ export default function ResidentSosControl({ user, organizationId, notes = "" })
         </div>
       ) : null}
 
-      <SosHoldButton
-        onTrigger={onArm}
-        busy={state.phase === "sending"}
-        confirming={state.phase === "confirming"}
-      />
+      <SosHoldButton onTrigger={onArm} busy={state.phase === "sending"} />
     </div>
   );
 }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home widgets, light (frosted) palette. values-night/widget_colors.xml has the neon dark one. -->
+<resources>
+    <color name="wm_glass_start">#F2FFFFFF</color>
+    <color name="wm_glass_end">#E6E6F0F7</color>
+    <color name="wm_glass_rim">#9967E8F9</color>
+    <color name="wm_glass_highlight">#99FFFFFF</color>
+    <color name="wm_card_bg">#B3FFFFFF</color>
+    <color name="wm_card_rim">#3394A3B8</color>
+    <color name="wm_text_primary">#0F172A</color>
+    <color name="wm_text_secondary">#475569</color>
+    <color name="wm_green">#15803D</color>
+    <color name="wm_green_fill">#1F22C55E</color>
+    <color name="wm_grey">#64748B</color>
+    <color name="wm_cyan_text">#0E7490</color>
+    <color name="wm_cyan_fill">#1A22D3EE</color>
+    <color name="wm_cyan_rim">#CC0891B2</color>
+    <color name="wm_amber">#D97706</color>
+    <color name="wm_sos_fill">#FFDC2626</color>
+    <color name="wm_sos_rim">#FFB91C1C</color>
+    <color name="wm_sos_text">#FFFFFFFF</color>
+    <color name="wm_end_fill">#1AEF4444</color>
+    <color name="wm_end_rim">#CCDC2626</color>
+    <color name="wm_end_text">#B91C1C</color>
+    <color name="wm_dot_glow">#3322C55E</color>
+    <color name="wm_torch_body">#475569</color>
+    <color name="wm_torch_vest">#16A34A</color>
+    <color name="wm_torch_stripe">#F8FAFC</color>
+    <color name="wm_torch_light">#FBBF24</color>
+</resources>

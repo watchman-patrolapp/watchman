@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import toast from "../utils/notify";
 import { useAuth } from "../auth/useAuth";
 import { supabase } from "../supabase/client";
+import { refreshWidgets } from "../geo/widgetBridge";
 import PageHeader from "../components/layout/PageHeader";
 import { useScopedOrganization } from "../utils/organizationScope";
 
@@ -169,10 +170,11 @@ export default function ResidentActivityReport() {
       }
 
       toast.success("Suspicious activity report submitted.");
+      void refreshWidgets();
       navigate("/resident/activity");
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Could not submit suspicious activity report.");
+      toast.error("Could not submit suspicious activity report. Please try again.");
     } finally {
       setSaving(false);
     }

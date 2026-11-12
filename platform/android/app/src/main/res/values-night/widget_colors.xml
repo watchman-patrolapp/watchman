@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home widgets, dark neon-glass palette (faked glass: translucent gradient, rim, highlight). -->
+<resources>
+    <color name="wm_glass_start">#E6141F2E</color>
+    <color name="wm_glass_end">#E60A1019</color>
+    <color name="wm_glass_rim">#6622D3EE</color>
+    <color name="wm_glass_highlight">#26FFFFFF</color>
+    <color name="wm_card_bg">#59000000</color>
+    <color name="wm_card_rim">#2694A3B8</color>
+    <color name="wm_text_primary">#F1F5F9</color>
+    <color name="wm_text_secondary">#94A3B8</color>
+    <color name="wm_green">#4ADE80</color>
+    <color name="wm_green_fill">#264ADE80</color>
+    <color name="wm_grey">#8793A5</color>
+    <color name="wm_cyan_text">#5EEAD4</color>
+    <color name="wm_cyan_fill">#1A22D3EE</color>
+    <color name="wm_cyan_rim">#CC22D3EE</color>
+    <color name="wm_amber">#FBBF24</color>
+    <color name="wm_sos_fill">#33EF4444</color>
+    <color name="wm_sos_rim">#FFEF4444</color>
+    <color name="wm_sos_text">#FFFCA5A5</color>
+    <color name="wm_end_fill">#26EF4444</color>
+    <color name="wm_end_rim">#CCF87171</color>
+    <color name="wm_end_text">#FCA5A5</color>
+    <color name="wm_dot_glow">#554ADE80</color>
+    <color name="wm_torch_body">#CBD5E1</color>
+    <color name="wm_torch_vest">#4ADE80</color>
+    <color name="wm_torch_stripe">#F8FAFC</color>
+    <color name="wm_torch_light">#FDE68A</color>
+</resources>

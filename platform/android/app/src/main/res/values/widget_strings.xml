@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_patrol_label">Watchman Patrol</string>
+    <string name="widget_patrol_description">Start and end your patrol, see who is online, and file a report.</string>
+    <string name="widget_neighbourhood_label">Watchman Neighbourhood</string>
+    <string name="widget_neighbourhood_description">Patrol status, the latest alert and notice for your area, SOS and quick report.</string>
+
+    <string name="widget_wordmark">WATCHMAN</string>
+    <string name="widget_logo_cd">Watchman logo</string>
+    <string name="widget_sign_in">Sign in to Watchman</string>
+    <string name="widget_sign_in_cd">Sign in to Watchman. Opens the app.</string>
+    <string name="widget_patrollers_only">Patrollers only</string>
+    <string name="widget_patrollers_only_cd">Patrollers only. Opens Watchman.</string>
+    <string name="widget_on_patrol">ON PATROL</string>
+    <string name="widget_not_on_patrol">NOT ON PATROL</string>
+    <string name="widget_start_patrol">Start patrol</string>
+    <string name="widget_start_patrol_cd">Start patrol. Opens Watchman to check in.</string>
+    <string name="widget_end_patrol">End patrol</string>
+    <string name="widget_end_patrol_cd">End patrol. Opens Watchman to check out.</string>
+    <string name="widget_quick_report">Quick report</string>
+    <string name="widget_quick_report_cd">Quick report. Opens the incident form.</string>
+    <string name="widget_timer_cd">Time on patrol</string>
+    <string name="widget_km_format">%1$s km</string>
+    <string name="widget_online_format">%1$d ONLINE</string>
+    <string name="widget_online_cd_format">%1$d patrollers online</string>
+    <string name="widget_no_patrollers">No patrollers online</string>
+    <string name="widget_more_format">+%1$d</string>
+
+    <string name="widget_patrol_active">Patrol active</string>
+    <string name="widget_no_patrol">No patrol right now</string>
+    <string name="widget_patrol_indicator_on_cd">Patrol active in your area</string>
+    <string name="widget_patrol_indicator_off_cd">No patrol right now</string>
+    <string name="widget_no_alerts">No recent alerts</string>
+    <string name="widget_no_notices">No notices right now</string>
+    <string name="widget_alert_cd_format">Latest alert: %1$s. Opens the alert board.</string>
+    <string name="widget_notice_cd_format">Newest notice: %1$s. Opens Watchman.</string>
+    <string name="widget_no_alerts_cd">No recent alerts. Opens the alert board.</string>
+    <string name="widget_no_notices_cd">No notices right now. Opens Watchman.</string>
+    <string name="widget_sos">SOS · Hold</string>
+    <string name="widget_sos_cd">SOS. Opens the emergency screen. You then hold for 10 seconds to send.</string>
+    <string name="widget_neighbourhood_fallback">Your neighborhood</string>
+    <string name="widget_alert_sos">SOS</string>
+    <string name="widget_alert_street_sep"> · </string>
+    <string name="widget_ago_now">just now</string>
+    <string name="widget_ago_min">%1$d min ago</string>
+    <string name="widget_ago_hour">%1$d h ago</string>
+
+    <string name="sos_title">Emergency SOS</string>
+    <string name="sos_prompt">Press and hold for 10 seconds to send an SOS to your neighbourhood watch.</string>
+    <string name="sos_holding">Keep holding…</string>
+    <string name="sos_button_cd">Press and hold for 10 seconds to send SOS. Release to cancel.</string>
+    <string name="sos_cancelled">Cancelled. Nothing was sent.</string>
+    <string name="sos_sending">Sending SOS…</string>
+    <string name="sos_sent">SOS sent</string>
+    <string name="sos_sent_detail">Your neighbourhood watch has been alerted.</string>
+    <string name="sos_offline">You’re offline. Call SAPS 10111.</string>
+    <string name="sos_failed">Couldn’t send the SOS. Call SAPS 10111.</string>
+    <string name="sos_signed_out">Sign in to Watchman to send an SOS. In an emergency call SAPS 10111.</string>
+    <string name="sos_call">Call SAPS 10111</string>
+    <string name="sos_open_app">Open Watchman</string>
+    <string name="sos_close">Close</string>
+    <string name="sos_try_again">Try again</string>
+    <string name="sos_countdown_cd_format">%1$d seconds left. Keep holding.</string>
+</resources>

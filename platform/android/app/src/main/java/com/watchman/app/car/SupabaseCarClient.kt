@@ -6,6 +6,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -55,6 +56,13 @@ class SupabaseCarClient(context: Context) {
             Raw.Error -> CarResult.Fail(FailKind.UNKNOWN)
         }
     }
+
+    /** For RPCs that return a table (JSON array). Same auth, refresh and error mapping as [rpc]. */
+    fun rpcRows(name: String, body: JSONObject): CarResult<JSONArray> =
+        when (val result = rpc(name, body)) {
+            is CarResult.Ok -> CarResult.Ok(result.value.optJSONArray(ROWS_KEY) ?: JSONArray())
+            is CarResult.Fail -> CarResult.Fail(result.kind)
+        }
 
     /**
      * Single-flight refresh. Re-reads the store first because the phone's WebView may have just
@@ -129,7 +137,12 @@ class SupabaseCarClient(context: Context) {
                 when {
                     code in 200..299 -> {
                         val json = try {
-                            JSONObject(text)
+                            if (text.trimStart().startsWith("[")) {
+                                // Table-returning RPCs reply with an array; wrap it for rpcRows().
+                                JSONObject().put(ROWS_KEY, JSONArray(text))
+                            } else {
+                                JSONObject(text)
+                            }
                         } catch (bad: Exception) {
                             null
                         }
@@ -181,6 +194,7 @@ class SupabaseCarClient(context: Context) {
     private fun nowSec(): Long = System.currentTimeMillis() / 1000
 
     private companion object {
+        const val ROWS_KEY = "_rows"
         const val CONNECT_TIMEOUT_MS = 8_000
         const val READ_TIMEOUT_MS = 10_000
         const val MAX_BODY_BYTES = 512 * 1024
