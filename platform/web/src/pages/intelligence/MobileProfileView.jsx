@@ -23,6 +23,7 @@ const InfoCard = ({ title, icon: Icon, children, className = "" }) => (
 
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useCriminalProfile, useProfileIncidents } from '../../hooks/useCriminalIntelligence';
 import { useActiveOrganization } from '../../auth/useActiveOrganization';
 import { shouldIncludeUnscopedProfiles } from '../../utils/organizationScope';
@@ -165,8 +166,8 @@ const MobileProfileView = () => {
           label="Request Backup" 
           color="bg-blue-600"
           onClick={() => {
-            // Trigger backup request
-            toast.success('Backup requested');
+            // Still a stub: be truthful instead of pretending a request was sent.
+            toast('Backup requests are coming soon.');
           }}
         />
         <ActionButton 

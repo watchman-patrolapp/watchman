@@ -16,6 +16,8 @@ import FunFactsPanel from "./FunFactsPanel";
 import BadgesPanel from "./BadgesPanel";
 import PatrolFuelCard from "./PatrolFuelCard";
 import BrandedLoader from "../layout/BrandedLoader";
+import ErrorBoundary from "../ErrorBoundary";
+import { fuelDefaultPeriodFromPreset } from "../../utils/leaderboardRange";
 
 const EMPTY_LOGS = [];
 
@@ -34,6 +36,7 @@ export default function VolunteerProfileSheet({
   rangeFrom = null,
   rangeTo = null,
   periodLabel = "All time",
+  periodId = "all",
   showRangeSummary = false,
   allTimeRank,
   avatarUrl,
@@ -55,7 +58,8 @@ export default function VolunteerProfileSheet({
     queryFn: () => fetchUserPatrolLogs(volunteer.userId),
   });
 
-  const patrols = logs !== undefined ? logs : (logsQuery.data ?? EMPTY_LOGS);
+  const rawPatrols = logs !== undefined ? logs : logsQuery.data;
+  const patrols = Array.isArray(rawPatrols) ? rawPatrols : EMPTY_LOGS;
   const periodPatrols = useMemo(
     () => patrols.filter((log) => logOverlapsRange(log, rangeFrom, rangeTo)),
     [patrols, rangeFrom, rangeTo]
@@ -97,30 +101,43 @@ export default function VolunteerProfileSheet({
         setLocationPoints([]);
         return;
       }
-      const points = await fetchPatrolLocationPoints(supabase, {
-        userId: volunteer.userId,
-        logs: patrols,
-      });
-      if (!cancelled) setLocationPoints(points);
+      try {
+        const points = await fetchPatrolLocationPoints(supabase, {
+          userId: volunteer.userId,
+          logs: patrols,
+        });
+        if (!cancelled) setLocationPoints(Array.isArray(points) ? points : []);
+      } catch (err) {
+        console.warn("VolunteerProfileSheet: location points failed", err);
+        if (!cancelled) setLocationPoints([]);
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [volunteer?.userId, patrols]);
 
-  const stats = useMemo(
-    () => buildVolunteerStats(patrols, routeRows, { globalRank: allTimeRank }),
-    [patrols, routeRows, allTimeRank]
-  );
+  const stats = useMemo(() => {
+    try {
+      return buildVolunteerStats(patrols, routeRows, { globalRank: allTimeRank });
+    } catch (err) {
+      console.warn("VolunteerProfileSheet: stats failed", err);
+      return null;
+    }
+  }, [patrols, routeRows, allTimeRank]);
 
-  const weatherSummary = useMemo(
-    () => summarizePatrolWeather(patrols, weatherLookup),
-    [patrols, weatherLookup]
-  );
+  const weatherSummary = useMemo(() => {
+    try {
+      return summarizePatrolWeather(patrols, weatherLookup);
+    } catch (err) {
+      console.warn("VolunteerProfileSheet: weather summary failed", err);
+      return null;
+    }
+  }, [patrols, weatherLookup]);
 
-  const facts = useMemo(
-    () =>
-      buildLeaderboardFunFacts({
+  const facts = useMemo(() => {
+    try {
+      const out = buildLeaderboardFunFacts({
         patrols,
         routeRows,
         stats,
@@ -129,11 +146,22 @@ export default function VolunteerProfileSheet({
         subjectId: volunteer?.userId,
         weather: weatherSummary,
         weatherNow,
-      }),
-    [patrols, routeRows, stats, isSelf, volunteer?.name, volunteer?.userId, weatherSummary, weatherNow]
-  );
+      });
+      return Array.isArray(out) ? out : [];
+    } catch (err) {
+      console.warn("VolunteerProfileSheet: fun facts failed", err);
+      return [];
+    }
+  }, [patrols, routeRows, stats, isSelf, volunteer?.name, volunteer?.userId, weatherSummary, weatherNow]);
 
-  const badgeState = useMemo(() => evaluateLeaderboardBadges(stats), [stats]);
+  const badgeState = useMemo(() => {
+    try {
+      return evaluateLeaderboardBadges(stats);
+    } catch (err) {
+      console.warn("VolunteerProfileSheet: badges failed", err);
+      return null;
+    }
+  }, [stats]);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -210,7 +238,10 @@ export default function VolunteerProfileSheet({
               No patrols recorded for this volunteer yet.
             </p>
           ) : (
-            <>
+            <ErrorBoundary
+              variant="inline"
+              message="Couldn't load these achievements. Try again, or close and pick the volunteer again."
+            >
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 p-3 text-center">
                   <FaTrophy className="mx-auto text-amber-500 mb-1" />
@@ -258,13 +289,13 @@ export default function VolunteerProfileSheet({
                 routeRows={routeRows}
                 locationPoints={locationPoints}
                 priceZarPerLitre={petrolPrice}
-                defaultPeriod={periodId}
+                defaultPeriod={fuelDefaultPeriodFromPreset(periodId)}
                 isSelf={isSelf}
                 name={volunteer.name}
                 userId={volunteer.userId}
               />
               <BadgesPanel badgeState={badgeState} isSelf={isSelf} name={volunteer.name} />
-            </>
+            </ErrorBoundary>
           )}
         </div>
       </div>
