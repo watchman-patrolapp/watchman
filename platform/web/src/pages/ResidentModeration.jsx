@@ -31,6 +31,11 @@ const TABS = [
 
 const REASON_LABELS = Object.fromEntries(REPORT_REASONS.map((r) => [r.value, r.label]));
 
+const CONTENT_TYPE_LABELS = {
+  service_listing: "Service listing",
+  service_review: "Service review",
+};
+
 const CARD =
   "rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
 const BTN =
@@ -114,8 +119,7 @@ export default function ResidentModeration() {
     let note = null;
     if (hideContent) {
       note = window.prompt("Reason for hiding (optional, shown to the author):", "") ?? null;
-      if (note === null) return;
-    }
+      if (note === null) return;    }
     setPendingKey(`${item.content_type}:${item.content_id}`);
     try {
       const { error } = await resolveCommunityReport(reportId, { status, note, hideContent });
@@ -198,6 +202,7 @@ export default function ResidentModeration() {
               return (
                 <article key={key} className={CARD}>
                   <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    {CONTENT_TYPE_LABELS[item.content_type] ? `${CONTENT_TYPE_LABELS[item.content_type]} - ` : ""}
                     {item.report_count} report{item.report_count === 1 ? "" : "s"} -{" "}
                     {(item.reasons || []).map((r) => REASON_LABELS[r] || r).join(", ")}
                     {item.last_reported_at ? ` - ${formatWatchDateTime(item.last_reported_at)}` : ""}

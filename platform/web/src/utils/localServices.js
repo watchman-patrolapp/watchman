@@ -36,9 +36,80 @@ const FRIENDLY_RULES = [
   ["please give a reason", "Please give a reason."],
   ["cannot change this listing", "You cannot change this listing to that status."],
   ["listing details are required", "Please fill in the listing details."],
+  ["only verified households", "Only verified households can rate services."],
+  ["cannot review your own", "You cannot review your own listing."],
+  ["please choose a rating", "Please choose a rating from 1 to 5."],
+  ["review limit reached", "You have reached today's review limit. Try again tomorrow."],
+  ["please write a short reply", "Please write a short reply."],
   ["not authenticated", "Please sign in again."],
   ["not found", "We could not find that listing."],
 ];
+
+export const REVIEW_MAX_CHARS = 1000;
+export const REPLY_MAX_CHARS = 600;
+export const REVIEW_SAVE_FALLBACK = "Could not save your review. Try again.";
+export const REVIEW_LOAD_FALLBACK = "Could not load reviews. Try again.";
+export const REVIEW_GUIDELINE =
+  "Describe your experience. Do not accuse anyone of a crime here — report crimes to SAPS or the watch.";
+export const VERIFY_TO_RATE_MESSAGE = "Verify your household to rate neighbours' services.";
+
+export const SERVICE_MODERATION_FILTERS = [
+  { key: "pending", label: "Pending" },
+  { key: "published", label: "Published" },
+  { key: "hidden", label: "Hidden" },
+  { key: "reported", label: "Reported" },
+];
+
+/** Unknown filter keys fall back to Pending. */
+export function parseModerationFilter(value) {
+  const key = String(value ?? "").toLowerCase();
+  return SERVICE_MODERATION_FILTERS.some((f) => f.key === key) ? key : "pending";
+}
+
+/** Clamp a star rating to an integer 1–5, or 0 when unusable. */
+export function clampRating(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < 1) return 0;
+  return Math.min(5, n);
+}
+
+/** Payload for upsert_service_review. Vouch only counts when the reviewer used the service. */
+export function buildReviewPayload(listingId, form) {
+  const used = Boolean(form?.used_service);
+  return {
+    p_listing_id: listingId,
+    p_rating: clampRating(form?.rating),
+    p_body: String(form?.body ?? "").trim().slice(0, REVIEW_MAX_CHARS) || null,
+    p_used_service: used,
+    p_vouch: used && Boolean(form?.vouch),
+  };
+}
+
+export function validateReviewForm(form) {
+  if (!clampRating(form?.rating)) return "Please choose a rating from 1 to 5.";
+  if (String(form?.body ?? "").length > REVIEW_MAX_CHARS) return "Keep your review under 1000 characters.";
+  return "";
+}
+
+/** Who may rate: verified residents who do not own the listing. */
+export function reviewViewerState({ isVerified, isOwner }) {
+  if (isOwner) return "owner";
+  return isVerified ? "can_review" : "needs_verification";
+}
+
+/** Reviewer label: first name + street only. */
+export function reviewerLabel(row) {
+  const name = firstNameOnly(row?.reviewer_first_name);
+  const street = String(row?.reviewer_street ?? "").trim();
+  return street ? `${name}, ${street}` : name;
+}
+
+export function ratingSummary(row) {
+  const count = Number(row?.rating_count) || 0;
+  if (!count) return "No ratings yet";
+  const avg = Number(row?.avg_rating) || 0;
+  return `${avg.toFixed(1)} (${count} rating${count === 1 ? "" : "s"})`;
+}
 
 /** Map an RPC/storage error to friendly copy. Never returns the raw message. */
 export function friendlyServiceError(error, fallback = SAVE_FALLBACK) {

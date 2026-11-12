@@ -20,8 +20,9 @@ export async function resolveCommunityReport(reportId, { status, note = null, hi
 
 export function moderationErrorMessage(error, fallback) {
   if (isRpcNotFoundError(error)) return "Run the P1 moderators SQL in Supabase first.";
-  const msg = String(error?.message || "").replace(/^ERROR:\s*/i, "").trim();
+  const msg = String(error?.message || "");
   if (/forbidden/i.test(msg)) return "You can't do that for this item.";
   if (/not found/i.test(msg)) return "This item is no longer available.";
-  return msg || fallback;
+  if (/please give a reason/i.test(msg)) return "Please give a reason.";
+  return fallback;
 }
