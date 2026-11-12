@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">Watchman</string>
     <string name="title_activity_main">Watchman</string>
-    <string name="package_name">com.watchman.app</string>
-    <string name="custom_url_scheme">com.watchman.app</string>
+    <string name="package_name">za.co.africuz.watchman</string>
+    <string name="custom_url_scheme">za.co.africuz.watchman</string>
     <string name="capacitor_background_geolocation_notification_icon" translatable="false">drawable/ic_patrol_notification</string>
     <string name="capacitor_background_geolocation_notification_color" translatable="false">#0f766e</string>
 </resources>

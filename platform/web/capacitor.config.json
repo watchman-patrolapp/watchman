@@ -1,5 +1,5 @@
 {
-  "appId": "com.watchman.app",
+  "appId": "za.co.africuz.watchman",
   "appName": "Watchman",
   "webDir": "dist",
   "android": {

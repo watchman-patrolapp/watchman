@@ -92,7 +92,7 @@ android {
     namespace "com.watchman.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.watchman.app"
+        applicationId "za.co.africuz.watchman"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode
@@ -164,7 +164,7 @@ gradle.taskGraph.whenReady { graph ->
 
 tasks.register('printWatchmanVersion') {
     doLast {
-        println "applicationId=com.watchman.app"
+        println "applicationId=za.co.africuz.watchman"
         println "versionCode=${appVersionCode}"
         println "versionName=${appVersionName}"
         println "releaseSigningReady=${releaseSigningReady}"
