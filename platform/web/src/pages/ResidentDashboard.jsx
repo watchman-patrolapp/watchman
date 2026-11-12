@@ -499,26 +499,6 @@ export default function ResidentDashboard() {
           </div>
         ) : null}
 
-        {neededCount > 0 ? (
-          <ActionCard
-            icon={FaBoxOpen}
-            tone="safe"
-            title={`Support your Neighbourhood Watch (${neededCount})`}
-            subtitle="Donate equipment or funds the patrol needs"
-            onClick={() => navigate("/resident/needs")}
-            className="w-full"
-          />
-        ) : null}
-
-        <ActionCard
-          icon={FaBriefcase}
-          tone="services"
-          title="Local services"
-          subtitle="Plumbers, tutors, welders & more near you"
-          className="w-full"
-          onClick={() => navigate("/resident/contacts?tab=services")}
-        />
-
         <div className="grid grid-cols-2 gap-3">
           <ActionCard
             icon={FaExclamationTriangle}
@@ -583,6 +563,23 @@ export default function ResidentDashboard() {
             title="How to use"
             subtitle="Guide, about & feedback"
             onClick={() => navigate("/resident/guide")}
+          />
+          {neededCount > 0 ? (
+            <ActionCard
+              icon={FaBoxOpen}
+              tone="safe"
+              title={`Support the Watch (${neededCount})`}
+              subtitle="Equipment or funds the patrol needs"
+              onClick={() => navigate("/resident/needs")}
+            />
+          ) : null}
+          <ActionCard
+            icon={FaBriefcase}
+            tone="services"
+            title="Local services"
+            subtitle="Plumbers, tutors, welders & more"
+            className={neededCount > 0 ? undefined : "col-span-2"}
+            onClick={() => navigate("/resident/contacts?tab=services")}
           />
         </div>
 
