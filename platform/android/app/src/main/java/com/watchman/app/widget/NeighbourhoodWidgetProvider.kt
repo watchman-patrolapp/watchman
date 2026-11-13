@@ -97,6 +97,8 @@ object NeighbourhoodWidgetRenderer {
         )
 
         // Anonymous indicator: on or off, nothing else.
+        // Logo glow: cyan when a patrol is active, orange when none.
+        rv.setImageViewResource(R.id.wr_logo, if (state.patrolActive) R.drawable.ic_widget_logo else R.drawable.ic_widget_logo_off)
         if (state.patrolActive) {
             rv.setImageViewResource(R.id.wr_patrol_icon, R.drawable.ic_widget_torch_patroller_on)
             rv.setViewVisibility(R.id.wr_patrol_on, View.VISIBLE)
