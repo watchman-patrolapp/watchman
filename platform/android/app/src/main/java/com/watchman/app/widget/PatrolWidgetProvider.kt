@@ -140,6 +140,8 @@ object PatrolWidgetRenderer {
     private fun bindOnline(context: Context, rv: RemoteViews, state: WidgetState) {
         val count = state.onlineCount
         val avatarIds = intArrayOf(R.id.wp_avatar1, R.id.wp_avatar2, R.id.wp_avatar3)
+        // Logo glow: cyan when patrollers are online, orange when none.
+        rv.setImageViewResource(R.id.wp_logo, if (count > 0) R.drawable.ic_widget_logo else R.drawable.ic_widget_logo_off)
         if (count > 0) {
             rv.setImageViewResource(R.id.wp_people, R.drawable.ic_widget_people_on)
             rv.setViewVisibility(R.id.wp_online_on, View.VISIBLE)
