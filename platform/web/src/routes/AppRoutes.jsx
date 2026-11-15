@@ -32,6 +32,7 @@ import {
   Register,
   PrivacyPolicy,
   TermsOfUse,
+  DeleteAccount,
   Dashboard,
   PatrolSchedule,
   AdminDashboard,
@@ -117,6 +118,7 @@ export default function AppRoutes() {
         {ShareCardFixtures ? <Route path="/dev/share-card" element={<ShareCardFixtures />} /> : null}
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfUse />} />
+        <Route path="/delete-account" element={<DeleteAccount />} />
         <Route
           path="/login"
           element={

@@ -1,6 +1,8 @@
 import { FaEnvelope, FaWhatsapp } from "react-icons/fa";
+import { getPrivacyContactEmail, privacyMailto } from "../../utils/privacyContact";
 
 export default function AboutBrandBlock() {
+  const email = getPrivacyContactEmail();
   return (
     <div className="space-y-4">
       <p className="text-gray-700 dark:text-gray-300">
@@ -14,11 +16,11 @@ export default function AboutBrandBlock() {
       </p>
       <div className="flex flex-col gap-2">
         <a
-          href="mailto:africuzprojects@gmail.com"
+          href={privacyMailto()}
           className="inline-flex items-center gap-2 text-sm text-teal-600 hover:underline dark:text-teal-400"
         >
           <FaEnvelope className="h-4 w-4 shrink-0" aria-hidden />
-          africuzprojects@gmail.com
+          {email}
         </a>
         <a
           href="https://wa.me/27814954910"

@@ -2,7 +2,7 @@
 
 Use this when the first App Bundle that contains the patrol foreground service and `ACCESS_BACKGROUND_LOCATION` is uploaded. The feature records a route only while a patroller is signed on. Signing off, or the patrol ending on its own, stops the service.
 
-Package name: `com.watchman.app`.
+Package name: `za.co.africuz.watchman`. The Java/Kotlin namespace stays `com.watchman.app`.
 
 ## Foreground service declaration
 
@@ -72,7 +72,7 @@ Upload the video unlisted (YouTube or a Play-accepted host) and paste the URL in
 | `POST_NOTIFICATIONS` | Shows the persistent patrol notification (Android 13+) |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Optional exemption prompt after the battery explainer |
 
-`applicationId` stays `com.watchman.app`. The location service is `com.equimaps.capacitor_background_geolocation.BackgroundGeolocationService` with `android:exported="false"` and `android:foregroundServiceType="location"`.
+`applicationId` is `za.co.africuz.watchman`. The Java/Kotlin namespace stays `com.watchman.app`. The location service is `com.equimaps.capacitor_background_geolocation.BackgroundGeolocationService` with `android:exported="false"` and `android:foregroundServiceType="location"`.
 
 ## Build a phone build
 

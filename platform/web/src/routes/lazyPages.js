@@ -5,6 +5,7 @@ export const Login = lazy(() => import("../pages/Login"));
 export const Register = lazy(() => import("../pages/Register"));
 export const PrivacyPolicy = lazy(() => import("../pages/PrivacyPolicy"));
 export const TermsOfUse = lazy(() => import("../pages/TermsOfUse"));
+export const DeleteAccount = lazy(() => import("../pages/DeleteAccount"));
 export const Dashboard = lazy(() => import("../pages/Dashboard"));
 export const PatrolSchedule = lazy(() => import("../pages/PatrolSchedule"));
 export const AdminDashboard = lazy(() => import("../pages/AdminDashboard"));

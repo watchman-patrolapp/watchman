@@ -5,8 +5,9 @@ import appMark from "../../assets/app-mark.png";
 /**
  * Shared auth layout: brand mark, value line, labelled theme control, and trust footer.
  */
-export default function AuthShell({ children, wide = false }) {
+export default function AuthShell({ children, wide = false, alignTop = false }) {
   const width = wide ? "max-w-2xl" : "max-w-lg";
+  const mainAlign = alignTop ? "justify-start" : "justify-center";
   return (
     <div className="flex min-h-dvh flex-col bg-surface-page text-text-primary">
       <header className="shrink-0 border-b border-subtle bg-surface-card backdrop-blur-md">
@@ -32,7 +33,7 @@ export default function AuthShell({ children, wide = false }) {
           <ThemeToggle variant="surface" labelled />
         </div>
       </header>
-      <main className="flex flex-1 flex-col items-center justify-center px-4 py-8">
+      <main className={`flex flex-1 flex-col items-center ${mainAlign} px-4 py-8`}>
         {children}
       </main>
       <footer className={`safe-area-bottom ${width} mx-auto w-full px-4 pb-6 text-center text-sm text-text-secondary`}>
@@ -44,6 +45,10 @@ export default function AuthShell({ children, wide = false }) {
           <span aria-hidden="true"> · </span>
           <Link to="/terms" className="font-medium text-text-link underline">
             Terms
+          </Link>
+          <span aria-hidden="true"> · </span>
+          <Link to="/delete-account" className="font-medium text-text-link underline">
+            Delete account
           </Link>
         </p>
       </footer>
