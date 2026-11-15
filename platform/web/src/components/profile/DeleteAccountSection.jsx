@@ -3,9 +3,10 @@ import { FaExclamationTriangle } from 'react-icons/fa';
 import { supabase } from '../../supabase/client';
 import toast from '../../utils/notify';
 import { formatAuthErrorMessage } from '../../utils/authErrorMessage';
+import { getPrivacyContactEmail, privacyMailto } from '../../utils/privacyContact';
 
 export default function DeleteAccountSection({ user, signOut, navigate }) {
-  const privacyContactEmail = (import.meta.env.VITE_PRIVACY_CONTACT_EMAIL || '').trim();
+  const privacyContactEmail = getPrivacyContactEmail();
   const [authIdentities, setAuthIdentities] = useState(null);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteAccountAck, setDeleteAccountAck] = useState(false);
@@ -141,25 +142,16 @@ export default function DeleteAccountSection({ user, signOut, navigate }) {
         <div className="text-sm text-red-900 dark:text-red-200 space-y-2">
           <p>
             This account signs in with a provider that does not use a password. To delete your data,
-            send a request from your registered email
-            {privacyContactEmail ? (
-              <>
-                {' '}
-                to{' '}
-                <a
-                  href={`mailto:${privacyContactEmail}?subject=${encodeURIComponent('Account deletion request')}&body=${encodeURIComponent(`Please delete my Neighbourhood Watch account.\n\nRegistered email: ${user?.email || ''}\nUser ID: ${user?.id || ''}\n`)}`}
-                  className="font-medium underline underline-offset-2"
-                >
-                  {privacyContactEmail}
-                </a>
-              </>
-            ) : (
-              <>
-                {' '}
-                (set <code className="text-xs bg-red-100 dark:bg-red-900/50 px-1 rounded">VITE_PRIVACY_CONTACT_EMAIL</code>{' '}
-                in your app environment for a mailto link).
-              </>
-            )}
+            send a request from your registered email to{' '}
+            <a
+              href={privacyMailto({
+                subject: 'Delete my Watchman account',
+                body: `Please delete my Watchman: Neighbourhood Watch account.\n\nRegistered email: ${user?.email || ''}\nUser ID: ${user?.id || ''}\n`,
+              })}
+              className="font-medium underline underline-offset-2"
+            >
+              {privacyContactEmail}
+            </a>
           </p>
         </div>
       )}
