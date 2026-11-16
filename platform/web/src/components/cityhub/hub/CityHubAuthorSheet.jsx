@@ -1,4 +1,6 @@
 import { FaEnvelope, FaPhone, FaTimes } from "react-icons/fa";
+import { useAuth } from "../../../auth/useAuth";
+import ReportContentButton from "../../community/ReportContentButton";
 import {
   cityHubAuthorDisplayName,
   cityHubAuthorInitials,
@@ -7,6 +9,7 @@ import {
 } from "../../../utils/cityHubAuthors";
 
 export default function CityHubAuthorSheet({ profile, organizationName, onClose }) {
+  const { user } = useAuth();
   const name = cityHubAuthorDisplayName(profile);
   const phone = String(profile?.phone || "").trim();
   const email = String(profile?.email || "").trim();
@@ -85,6 +88,13 @@ export default function CityHubAuthorSheet({ profile, organizationName, onClose 
               <span className="text-sm text-gray-500 dark:text-gray-400">Phone not provided</span>
             )}
           </div>
+          <ReportContentButton
+            variant="quietLink"
+            contentType="user_profile"
+            contentId={profile?.id}
+            currentUserId={user?.id}
+            authorUserId={profile?.id}
+          />
         </div>
       </div>
     </div>

@@ -12,6 +12,8 @@ import { fetchPatrolLocationPoints, fetchPatrolRouteRows } from "../../utils/pat
 import { fetchUserPatrolLogs, leaderboardVolunteerQueryKey } from "../../utils/leaderboardQuery";
 import { useAreaHourlyWeather } from "../../hooks/useAreaHourlyWeather";
 import { useScopedOrganization } from "../../utils/organizationScope";
+import { useAuth } from "../../auth/useAuth";
+import ReportContentButton from "../community/ReportContentButton";
 import FunFactsPanel from "./FunFactsPanel";
 import BadgesPanel from "./BadgesPanel";
 import PatrolFuelCard from "./PatrolFuelCard";
@@ -48,6 +50,7 @@ export default function VolunteerProfileSheet({
   onClose,
 }) {
   const { activeOrganizationId } = useScopedOrganization();
+  const { user } = useAuth();
   const [routeRows, setRouteRows] = useState([]);
   const [locationPoints, setLocationPoints] = useState([]);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
@@ -295,6 +298,17 @@ export default function VolunteerProfileSheet({
                 userId={volunteer.userId}
               />
               <BadgesPanel badgeState={badgeState} isSelf={isSelf} name={volunteer.name} />
+              {!isSelf ? (
+                <div className="pt-2 text-center">
+                  <ReportContentButton
+                    variant="quietLink"
+                    contentType="user_profile"
+                    contentId={volunteer.userId}
+                    currentUserId={user?.id}
+                    authorUserId={volunteer.userId}
+                  />
+                </div>
+              ) : null}
             </ErrorBoundary>
           )}
         </div>

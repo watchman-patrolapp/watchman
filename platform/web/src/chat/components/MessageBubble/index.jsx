@@ -14,6 +14,7 @@ import { MessageStatus } from './MessageStatus';
 import { MessageType } from '../../utils/constants';
 import { formatMessageTime } from '../../utils/formatters';
 import ChatErrorBoundary from '../../../components/ChatErrorBoundary';
+import ReportContentButton from '../../../components/community/ReportContentButton';
 
 export const MessageBubble = React.memo(function MessageBubble({
   message,
@@ -30,6 +31,55 @@ export const MessageBubble = React.memo(function MessageBubble({
   const criticalSeenRef = useRef(false);
   const [criticalReadCount, setCriticalReadCount] = useState(null);
   const [showMoreEmojis, setShowMoreEmojis] = useState(false);
+  const [reportMenu, setReportMenu] = useState(null);
+  const longPressTimerRef = useRef(null);
+  const canReport = Boolean(!isMe && message.id);
+  const messageSenderId = message.sender_id || message.senderId;
+
+  function clearLongPress() {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function openReportMenu(clientX, clientY) {
+    const x = Math.min(clientX, window.innerWidth - 160);
+    const y = Math.min(clientY, window.innerHeight - 80);
+    setReportMenu({ x, y });
+  }
+
+  function handleContextMenu(event) {
+    event.preventDefault();
+    openReportMenu(event.clientX, event.clientY);
+  }
+
+  function handleTouchStart(event) {
+    const touch = event.touches[0];
+    if (!touch) return;
+    clearLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      openReportMenu(touch.clientX, touch.clientY);
+    }, 500);
+  }
+
+  useEffect(() => () => clearLongPress(), []);
+
+  useEffect(() => {
+    if (!reportMenu) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") setReportMenu(null);
+    };
+    const onDown = () => setReportMenu(null);
+    window.addEventListener("keydown", onKey);
+    const timer = window.setTimeout(() => window.addEventListener("mousedown", onDown), 0);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown);
+      window.clearTimeout(timer);
+    };
+  }, [reportMenu]);
+
 
   const formattedTime = useMemo(() => 
     formatMessageTime(message.created_at || message.localTimestamp),
@@ -133,7 +183,13 @@ export const MessageBubble = React.memo(function MessageBubble({
               </span>
             )}
           
-            <div className={`px-4 py-3 rounded-2xl shadow-sm relative ${
+            <div
+              onContextMenu={canReport ? handleContextMenu : undefined}
+              onTouchStart={canReport ? handleTouchStart : undefined}
+              onTouchEnd={canReport ? clearLongPress : undefined}
+              onTouchMove={canReport ? clearLongPress : undefined}
+              onTouchCancel={canReport ? clearLongPress : undefined}
+              className={`px-4 py-3 rounded-2xl shadow-sm relative ${
               isMe
                 ? 'bg-teal-600 text-white rounded-br-md'
                 : isCritical
@@ -173,6 +229,22 @@ export const MessageBubble = React.memo(function MessageBubble({
                 )}
               </div>
             </div>
+            {reportMenu && canReport ? (
+              <div
+                role="menu"
+                className="fixed z-50 min-w-[9rem] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-sm shadow-xl dark:border-gray-700 dark:bg-gray-900"
+                style={{ left: reportMenu.x, top: reportMenu.y }}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <ReportContentButton
+                  variant="menuItem"
+                  contentType="chat_message"
+                  contentId={message.id}
+                  currentUserId={currentUserId}
+                  authorUserId={messageSenderId}
+                />
+              </div>
+            ) : null}
             {message.id && (
               <div className={`mt-1 flex items-center gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <button
