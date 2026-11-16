@@ -341,9 +341,9 @@ export default function Hotspots() {
           )}
         </div>
 
-        <aside className="space-y-3">
+        <aside className="space-y-3 lg:flex lg:flex-col lg:space-y-0 lg:gap-3 lg:h-[min(70vh,640px)] lg:min-h-[320px] lg:overflow-y-auto">
           {selectedEvent && (
-            <section className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+            <section className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:shrink-0">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className={`text-xs uppercase tracking-wide font-semibold ${hotspotKindMeta(selectedEvent.kind).toneClass}`}>
@@ -395,7 +395,7 @@ export default function Hotspots() {
           )}
 
           {selectedCamera && (
-            <section className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+            <section className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:shrink-0">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-teal-600 font-semibold">Camera</p>
@@ -441,12 +441,12 @@ export default function Hotspots() {
             </section>
           )}
 
-          <section className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+          <section className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:flex lg:flex-col lg:flex-1 lg:min-h-[12rem]">
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Pins in range</h2>
             {visibleEvents.length === 0 ? (
               <p className="text-sm text-gray-500">None yet.</p>
             ) : (
-              <ul className="space-y-1 max-h-64 overflow-y-auto">
+              <ul className="space-y-1 max-h-64 overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0">
                 {visibleEvents.map((ev) => (
                   <li key={ev.id} className="flex items-stretch gap-1">
                     <button
