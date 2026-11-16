@@ -18,6 +18,64 @@ export async function resolveCommunityReport(reportId, { status, note = null, hi
   return { data, error };
 }
 
+export async function reportCommunityContent({
+  contentType,
+  contentId,
+  reason,
+  details = "",
+}) {
+  const { data, error } = await supabase.rpc("report_community_content", {
+    p_content_type: contentType,
+    p_content_id: contentId,
+    p_reason: reason,
+    p_details: details?.trim() || null,
+  });
+  return { data, error };
+}
+
+export function friendlyReportError(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  if (msg.includes("already reported")) return "You have already reported this.";
+  if (msg.includes("too many reports")) return "You've reached today's report limit. Try again tomorrow.";
+  if (msg.includes("not found")) return "This content isn't available to report.";
+  if (msg.includes("forbidden")) return "This content isn't available to report.";
+  if (msg.includes("cannot be reported")) return "This item can't be reported yet.";
+  return "Could not send the report. Please try again.";
+}
+
+export async function listHiddenCityHubPosts({ limit = 30 } = {}) {
+  const { data, error } = await supabase.rpc("list_hidden_city_hub_posts", {
+    p_limit: limit ?? 30,
+  });
+  return { data: data || [], error };
+}
+
+export async function restoreHiddenCityHubPost(postId) {
+  const { data, error } = await supabase.rpc("restore_hidden_city_hub_post", {
+    p_post_id: postId,
+  });
+  return { data, error };
+}
+
+export const REPORT_REASONS = [
+  { value: "spam", label: "Spam" },
+  { value: "scam", label: "Scam" },
+  { value: "offensive", label: "Offensive" },
+  { value: "false_info", label: "False information" },
+  { value: "privacy", label: "Privacy concern" },
+  { value: "duplicate", label: "Duplicate" },
+  { value: "other", label: "Other" },
+];
+
+export const REPORTABLE_CONTENT_TYPES = [
+  "area_broadcast",
+  "service_listing",
+  "service_review",
+  "city_hub_post",
+  "chat_message",
+  "user_profile",
+];
+
 export function moderationErrorMessage(error, fallback) {
   if (isRpcNotFoundError(error)) return "Run the P1 moderators SQL in Supabase first.";
   const msg = String(error?.message || "");
