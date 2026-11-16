@@ -79,6 +79,10 @@ export default function ResidentModeration() {
     (row) => isStaff || (isModerator && Boolean(row?.author_badge)),
     [isStaff, isModerator]
   );
+  const canRestoreHidden = useCallback(
+    (row) => (row.hiddenKind === "city_hub_post" ? isStaff || isModerator : canActOnNotice(row)),
+    [isStaff, isModerator, canActOnNotice]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -309,12 +313,12 @@ export default function ResidentModeration() {
                   {row.hiddenKind === "city_hub_post" ? row.title || "City Hub post" : row.headline}
                 </p>
                 <p className="whitespace-pre-wrap">
-                  {row.hiddenKind === "city_hub_post" ? row.content : row.body}
+                  {row.hiddenKind === "city_hub_post" ? row.content_preview : row.body}
                 </p>
                 {row.hidden_reason ? (
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Reason: {row.hidden_reason}</p>
                 ) : null}
-                {canActOnNotice(row) ? (
+                {canRestoreHidden(row) ? (
                   <div className="mt-3">
                     <button type="button" disabled={pendingKey === row.id} onClick={() => restore(row)} className={BTN}>
                       Restore

@@ -158,13 +158,16 @@ export default function ReportContentButton({
                   ))}
                 </select>
               </label>
-              <textarea
-                value={details}
-                onChange={(e) => setDetails(e.target.value.slice(0, 1000))}
-                rows={2}
-                placeholder="Optional details"
-                className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-900"
-              />
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                Optional details
+                <textarea
+                  value={details}
+                  onChange={(e) => setDetails(e.target.value.slice(0, 1000))}
+                  rows={2}
+                  placeholder="Anything that may help a moderator"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-900"
+                />
+              </label>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"

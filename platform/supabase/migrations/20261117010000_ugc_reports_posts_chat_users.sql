@@ -115,26 +115,29 @@ BEGIN
       SELECT m.organization_id FROM public.chat_messages m WHERE m.id = p_content_id
     )
     WHEN 'user_profile' THEN (
-      SELECT coalesce(u.organization_id, public.working_organization_id())
+      SELECT u.organization_id
       FROM public.users u
       WHERE u.id = p_content_id
     )
     ELSE NULL
   END;
 
-  IF org_id IS NULL THEN
-    RAISE EXCEPTION 'content not found';
-  END IF;
-
   IF p_content_type = 'city_hub_post' THEN
     SELECT * INTO post_row FROM public.city_hub_posts WHERE id = p_content_id;
     IF post_row.id IS NULL OR post_row.status <> 'published' OR NOT public.can_view_city_hub() THEN
+      RAISE EXCEPTION 'content not found';
+    END IF;
+    IF post_row.hidden_at IS NOT NULL
+       AND NOT public.can_moderate_resident_content(post_row.author_organization_id) THEN
       RAISE EXCEPTION 'content not found';
     END IF;
     IF post_row.created_by_user_id = auth.uid() THEN
       RAISE EXCEPTION 'you cannot report your own content';
     END IF;
   ELSIF p_content_type = 'chat_message' THEN
+    IF org_id IS NULL THEN
+      RAISE EXCEPTION 'content not found';
+    END IF;
     SELECT * INTO msg_row FROM public.chat_messages WHERE id = p_content_id;
     IF msg_row.id IS NULL
        OR msg_row.organization_id NOT IN (SELECT public.current_org_ids())
@@ -151,19 +154,33 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_content_id) THEN
       RAISE EXCEPTION 'content not found';
     END IF;
-    IF org_id NOT IN (SELECT public.current_org_ids()) THEN
-      IF NOT public.can_view_city_hub()
-         OR NOT EXISTS (
-           SELECT 1
-           FROM public.city_hub_posts p
-           WHERE p.created_by_user_id = p_content_id
-             AND p.status = 'published'
-             AND p.hidden_at IS NULL
-         ) THEN
-        RAISE EXCEPTION 'content not found';
+    IF org_id IS NOT NULL AND org_id IN (SELECT public.current_org_ids()) THEN
+      NULL;
+    ELSIF public.can_view_city_hub()
+       AND EXISTS (
+         SELECT 1
+         FROM public.city_hub_posts p
+         WHERE p.created_by_user_id = p_content_id
+           AND p.status = 'published'
+           AND p.hidden_at IS NULL
+       ) THEN
+      IF org_id IS NULL THEN
+        SELECT p.author_organization_id
+          INTO org_id
+          FROM public.city_hub_posts p
+         WHERE p.created_by_user_id = p_content_id
+           AND p.status = 'published'
+           AND p.hidden_at IS NULL
+         ORDER BY p.created_at DESC
+         LIMIT 1;
       END IF;
+    ELSE
+      RAISE EXCEPTION 'content not found';
     END IF;
-  ELSIF org_id NOT IN (SELECT public.current_org_ids()) THEN
+    IF org_id IS NULL THEN
+      RAISE EXCEPTION 'content not found';
+    END IF;
+  ELSIF org_id IS NULL OR org_id NOT IN (SELECT public.current_org_ids()) THEN
     -- Existing adjacent-org exception for local services. Cross-org failure is 'not found'.
     IF p_content_type = 'service_listing'
        AND public.can_access_service_listing(p_content_id) THEN
@@ -532,7 +549,9 @@ DO $$
 DECLARE
   missing text := '';
   check_def text;
-  fn_def text;
+  report_def text;
+  list_def text;
+  col_name text;
 BEGIN
   SELECT pg_get_constraintdef(c.oid) INTO check_def
   FROM pg_constraint c
@@ -543,27 +562,33 @@ BEGIN
     AND c.conname = 'community_content_reports_content_type_check';
 
   IF check_def IS NULL
+     OR check_def NOT LIKE '%area_broadcast%'
+     OR check_def NOT LIKE '%service_listing%'
+     OR check_def NOT LIKE '%service_review%'
+     OR check_def NOT LIKE '%lost_found%'
+     OR check_def NOT LIKE '%event%'
      OR check_def NOT LIKE '%city_hub_post%'
      OR check_def NOT LIKE '%chat_message%'
-     OR check_def NOT LIKE '%user_profile%'
-     OR check_def NOT LIKE '%area_broadcast%'
-     OR check_def NOT LIKE '%service_listing%' THEN
+     OR check_def NOT LIKE '%user_profile%' THEN
     missing := missing || 'content_type check; ';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_attribute a
-    JOIN pg_class c ON c.oid = a.attrelid
-    JOIN pg_namespace nsp ON nsp.oid = c.relnamespace
-    WHERE nsp.nspname = 'public'
-      AND c.relname = 'city_hub_posts'
-      AND a.attname = 'hidden_at'
-      AND a.attnum > 0
-      AND NOT a.attisdropped
-  ) THEN
-    missing := missing || 'city_hub_posts.hidden_at; ';
-  END IF;
+  FOREACH col_name IN ARRAY ARRAY['hidden_at', 'hidden_by', 'hidden_reason']
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_attribute a
+      JOIN pg_class c ON c.oid = a.attrelid
+      JOIN pg_namespace nsp ON nsp.oid = c.relnamespace
+      WHERE nsp.nspname = 'public'
+        AND c.relname = 'city_hub_posts'
+        AND a.attname = col_name
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+    ) THEN
+      missing := missing || 'city_hub_posts.' || col_name || '; ';
+    END IF;
+  END LOOP;
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc p JOIN pg_namespace nsp ON nsp.oid = p.pronamespace
@@ -600,12 +625,28 @@ BEGIN
     missing := missing || 'list_hidden_city_hub_posts; ';
   END IF;
 
-  fn_def := pg_get_functiondef('public.report_community_content(text, uuid, text, text)'::regprocedure);
-  IF fn_def IS NULL
-     OR fn_def NOT LIKE '%city_hub_post%'
-     OR fn_def NOT LIKE '%chat_message%'
-     OR fn_def NOT LIKE '%user_profile%' THEN
+  report_def := pg_get_functiondef('public.report_community_content(text, uuid, text, text)'::regprocedure);
+  IF report_def IS NULL
+     OR report_def NOT LIKE '%city_hub_post%'
+     OR report_def NOT LIKE '%chat_message%'
+     OR report_def NOT LIKE '%user_profile%' THEN
     missing := missing || 'report_community_content missing new types; ';
+  END IF;
+  IF report_def IS NULL
+     OR report_def NOT LIKE '%hidden_at IS NOT NULL%'
+     OR report_def NOT LIKE '%can_moderate_resident_content%' THEN
+    missing := missing || 'report_community_content hidden_at guard; ';
+  END IF;
+  IF report_def IS NULL
+     OR report_def LIKE '%coalesce(u.organization_id, public.working_organization_id())%' THEN
+    missing := missing || 'report_community_content user_profile org fallback; ';
+  END IF;
+
+  list_def := pg_get_functiondef('public.list_community_reports(text)'::regprocedure);
+  IF list_def IS NULL
+     OR list_def NOT LIKE '%Preview hidden%'
+     OR list_def NOT LIKE '%cm.text%' THEN
+    missing := missing || 'list_community_reports patrol preview guard; ';
   END IF;
 
   IF missing <> '' THEN
