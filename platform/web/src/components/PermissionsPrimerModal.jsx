@@ -248,9 +248,11 @@ export default function PermissionsPrimerModal({ userId }) {
               <p>
                 Location is collected only during a signed-on patrol. On the Android app that includes background location while a patrol notification is showing, so the route continues with the screen off. Tracking stops when the patrol ends.
               </p>
-              <p className="text-xs text-amber-800/90 dark:text-amber-200/80 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 rounded-lg px-3 py-2">
-                IDE embedded browsers often cannot show the real GPS dialog. Test with Chrome, Edge, or your Android app on a device.
-              </p>
+              {import.meta.env.DEV && !isNative && (
+                <p className="text-xs text-amber-800/90 dark:text-amber-200/80 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 rounded-lg px-3 py-2">
+                  IDE embedded browsers often cannot show the real GPS dialog. Test with Chrome, Edge, or your Android app on a device.
+                </p>
+              )}
             </>
           )}
 

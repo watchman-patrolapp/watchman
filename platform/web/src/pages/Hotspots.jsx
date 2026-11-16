@@ -140,7 +140,9 @@ export default function Hotspots() {
     void loadChecks(selectedEvent?.id);
   }, [selectedEvent?.id, loadChecks]);
 
-  const rangeDays = RANGE_OPTIONS.find((r) => r.id === rangeId)?.days ?? 90;
+  const rangeOption = RANGE_OPTIONS.find((r) => r.id === rangeId);
+  // Preserve null (All time). `?? 90` would wrongly force Last 90 days.
+  const rangeDays = rangeOption ? rangeOption.days : 90;
   const visibleEvents = useMemo(() => filterByRange(events, rangeDays), [events, rangeDays]);
   const zones = useMemo(() => clusterHotZones(visibleEvents), [visibleEvents]);
   const pathSegments = useMemo(() => {
