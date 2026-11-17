@@ -75,7 +75,7 @@ export default function PrivacyPolicy() {
             Effective date: 15 November 2026 (Africa/Johannesburg)
           </p>
           <p className="text-sm text-text-secondary">
-            Last updated: 15 November 2026. Android package:{" "}
+            Last updated: 17 November 2026. Android package:{" "}
             <code className="font-mono text-xs text-text-primary">za.co.africuz.watchman</code>
           </p>
         </header>
@@ -121,10 +121,13 @@ export default function PrivacyPolicy() {
             processed in Watchman, unless a written agreement says another organisation is the
             responsible party for a particular neighbourhood.
           </p>
+          {/* Responsible party stays Khurshid Dustmurodov t/a Africuz for now. KYZN (Pty) Ltd is
+              incorporated; operation moves to KYZN after monetisation. Update this policy, the
+              Terms, Play Console and the Information Regulator registration together then. */}
           <p className={bodyClass}>
-            An Information Officer appointment is not yet published in the product. Until one is
-            appointed and registered with the Information Regulator, send privacy requests to the
-            email above.
+            <strong className="font-semibold text-text-primary">Information Officer:</strong>{" "}
+            Khurshid Dustmurodov. Registration details with the Information Regulator will be
+            published here once confirmed. Until then, send privacy requests to the email above.
           </p>
         </section>
 
@@ -278,8 +281,14 @@ export default function PrivacyPolicy() {
               information, and security logs, in order to operate and protect the service.
             </li>
             <li>
-              Optional crash and error reporting via Sentry exists in the code, but it only runs if a
-              Sentry project key is configured in that build.
+              Error and performance monitoring (Sentry). This only runs in builds where a Sentry
+              project key is configured. When it runs, the app sends error reports and a small
+              sample of performance traces to Sentry (Functional Software, Inc.). A report can
+              include your IP address, your device, operating system and browser type, the app
+              version, the screen or web address where the error happened, a short trail of recent
+              technical events, and an internal user ID. Before a report is sent, the app removes
+              email addresses, phone numbers, locations and sign-in tokens. We do not use session
+              replay or screen recording.
             </li>
           </ul>
 
@@ -335,12 +344,13 @@ export default function PrivacyPolicy() {
             columns={["Information", "Intended period"]}
             rows={[
               ["Account and profile", "Until you delete your account, then up to 90 days (unless the law requires longer)"],
-              ["Patrol location and routes", "90 days (a cleanup function can archive and then permanently delete older points)"],
+              ["Raw patrol GPS points", "1 year, then permanently deleted (including archived copies)"],
+              ["Patrol route summaries (route line, distance, duration)", "Kept for patrol history while your watch uses Watchman"],
               ["Chat messages (member view)", "24 hours"],
               ["Chat messages (admin logs)", "6 months (180 days), after which a purge function can delete them"],
               ["Incident reports and evidence", "5 years (policy target)"],
               ["Intelligence / persons-of-interest records", "1 year, with a yearly review (policy target)"],
-              ["Audit and security logs", "1 year (policy target)"],
+              ["Audit and security logs", "Up to 5 years"],
               ["Backups", "Rolling backups may last about 90 days"],
               ["Feedback and content reports", "Until reviewed and no longer needed, or until a deletion request is honoured"],
             ]}
@@ -372,7 +382,7 @@ export default function PrivacyPolicy() {
               ["Google (Firebase Cloud Messaging)", "Push notifications", "Per Google’s infrastructure"],
               ["Vercel", "Hosts the web app, if the website is served from Vercel", "Per Vercel"],
               ["Resend", "Transactional email, such as a “password changed” notice, when that function is configured", "United States"],
-              ["Sentry", "Crash and error reports, only if enabled in that build", "Per the Sentry project"],
+              ["Sentry (Functional Software, Inc.)", "Error reports and performance samples (IP address, device and app data, technical event trail), only if enabled in that build", "United States or EU, per the Sentry project's data region"],
             ]}
           />
           <p className={bodyClass}>
@@ -386,6 +396,14 @@ export default function PrivacyPolicy() {
               looks up or reverse-geocodes a place (for example a chat location or an incident pin).
             </li>
             <li>CARTO basemap tiles may be used on the live patrol map (IP address and map area).</li>
+            <li>
+              Esri (ArcGIS World Imagery) satellite tiles, used when you choose the satellite view
+              while setting your home pin, receive your IP address and the map area you are viewing.
+            </li>
+            <li>
+              Photon (Komoot GmbH, Germany) receives your search text or coordinates when the app
+              looks up an address.
+            </li>
             <li>Open-Meteo receives area coordinates so the app can show local weather.</li>
           </ul>
           <p className={bodyClass}>
@@ -414,11 +432,15 @@ export default function PrivacyPolicy() {
             Sentry).
           </p>
           <p className={bodyClass}>
-            By using Watchman and accepting this policy, you acknowledge that your personal
-            information may be processed outside South Africa, including in Ireland and the United
-            States, subject to the agreements and safeguards those providers offer. We rely on POPIA
-            section 72, including your consent to this transfer where that is the applicable
-            mechanism.
+            We transfer personal information outside South Africa only where POPIA section 72
+            allows it, in particular where the recipient is bound by a law, binding corporate rules
+            or a binding agreement (such as the provider&apos;s data processing agreement) that gives
+            protection substantially similar to POPIA, including rules on onward transfer, or where
+            the transfer is needed to provide the service you asked for.
+          </p>
+          <p className={bodyClass}>
+            We do not rely on your consent as the main basis for these transfers. You can ask our
+            Information Officer for details of the safeguards.
           </p>
         </section>
 
@@ -433,6 +455,11 @@ export default function PrivacyPolicy() {
           <p className={bodyClass}>
             No system is perfectly secure. Please choose a strong password and only upload
             information you are allowed to share.
+          </p>
+          <p className={bodyClass}>
+            If a security compromise affects your personal information, we will notify the
+            Information Regulator and you as soon as reasonably possible, as POPIA section 22
+            requires.
           </p>
         </section>
 
@@ -499,7 +526,8 @@ export default function PrivacyPolicy() {
           <p className={bodyClass}>
             Watchman is for users aged 18 and over. Registration requires you to confirm this. If you
             think we have collected information about a person under 18, email us and we will take
-            steps to delete it.
+            steps to delete it. Members must not upload photos or details that identify children (see
+            the Terms of Use).
           </p>
         </section>
 

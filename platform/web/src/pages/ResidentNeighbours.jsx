@@ -7,6 +7,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import PageHeader from "../components/layout/PageHeader";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import ResidentHouseholdCard from "../components/resident/ResidentHouseholdCard";
+import ReportContentButton from "../components/community/ReportContentButton";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import {
   RESIDENT_VOUCH_THRESHOLD,
@@ -262,6 +263,14 @@ export default function ResidentNeighbours() {
                       </p>
                     </>
                   ) : null}
+                  <ReportContentButton
+                    variant="quietLink"
+                    className="mt-1 text-center"
+                    contentType="user_profile"
+                    contentId={row.user_id}
+                    currentUserId={user?.id}
+                    authorUserId={row.user_id}
+                  />
                 </ResidentHouseholdCard>
               );
             })}

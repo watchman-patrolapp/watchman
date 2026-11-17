@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     const token = authHeader?.replace(/^Bearer\s+/i, '').trim()
     if (!token) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Please sign in again and retry.' }), {
         status: 401,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY')
     if (!serviceRoleKey) {
       console.error('admin-delete-user: missing SUPABASE_SERVICE_ROLE_KEY (or SERVICE_ROLE_KEY)')
-      return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+      return new Response(JSON.stringify({ error: 'User deletion is temporarily unavailable. Please try again later.' }), {
         status: 500,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       error: jwtError,
     } = await supabaseAdmin.auth.getUser(token)
     if (jwtError || !jwtUser) {
-      return new Response(JSON.stringify({ error: 'Invalid session' }), {
+      return new Response(JSON.stringify({ error: 'Your session has expired. Please sign in again and retry.' }), {
         status: 401,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       .single()
 
     if (callerErr || !caller) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      return new Response(JSON.stringify({ error: 'You do not have permission to delete users.' }), {
         status: 403,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
 
     const callerRole = String(caller.role || '').toLowerCase()
     if (callerRole !== 'admin' && callerRole !== 'technical_support') {
-      return new Response(JSON.stringify({ error: 'Admin or technical support role required' }), {
+      return new Response(JSON.stringify({ error: 'Only watch admins or technical support can delete users.' }), {
         status: 403,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -210,7 +210,8 @@ Deno.serve(async (req) => {
       !!delErr &&
       (authErrMsg.includes('user not found') || authErrMsg.includes('users not found'))
     if (delErr && !authUserAlreadyGone) {
-      return new Response(JSON.stringify({ error: delErr.message || 'Delete failed' }), {
+      console.error('admin-delete-user: auth delete failed:', delErr.message || delErr)
+      return new Response(JSON.stringify({ error: 'Could not delete this user right now. Please try again in a few minutes.' }), {
         status: 400,
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
@@ -220,7 +221,7 @@ Deno.serve(async (req) => {
     if (profileErr) {
       console.error('admin-delete-user: public.users delete failed:', profileErr.message || profileErr)
       return new Response(
-        JSON.stringify({ error: profileErr.message || 'Failed to remove profile row' }),
+        JSON.stringify({ error: 'The login was deleted, but the profile could not be removed because it is still linked to other records (for example patrol slots). Please contact technical support.' }),
         {
           status: 400,
           headers: { ...headers, 'Content-Type': 'application/json' },
@@ -234,7 +235,8 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    return new Response(JSON.stringify({ error: message }), {
+    console.error('admin-delete-user: unexpected error:', message)
+    return new Response(JSON.stringify({ error: 'Could not delete this user right now. Please try again in a few minutes.' }), {
       status: 500,
       headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
     })

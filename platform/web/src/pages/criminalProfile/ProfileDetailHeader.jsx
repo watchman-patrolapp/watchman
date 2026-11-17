@@ -12,6 +12,7 @@ export default function ProfileDetailHeader({
   onSave,
   saving,
   photoUploadsPending,
+  moreMenu = null,
 }) {
   return (
     <div className="mb-6 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
@@ -48,6 +49,7 @@ export default function ProfileDetailHeader({
             >
               <FaTrash /> Delete
             </button>
+            {moreMenu}
           </>
         ) : (
           <>

@@ -18,8 +18,10 @@ import {
 } from "../utils/areaBroadcasts";
 import {
   listCommunityReports,
+  listHiddenCityHubPosts,
   moderationErrorMessage,
   resolveCommunityReport,
+  restoreHiddenCityHubPost,
 } from "../utils/communityReports";
 import { REPORT_REASONS } from "../components/community/ReportContentButton";
 
@@ -32,8 +34,14 @@ const TABS = [
 const REASON_LABELS = Object.fromEntries(REPORT_REASONS.map((r) => [r.value, r.label]));
 
 const CONTENT_TYPE_LABELS = {
+  area_broadcast: "Area notice",
   service_listing: "Service listing",
   service_review: "Service review",
+  city_hub_post: "City Hub post",
+  chat_message: "Chat message",
+  user_profile: "User profile",
+  incident_report: "Incident report",
+  criminal_profile: "Suspect profile",
 };
 
 const CARD =
@@ -73,6 +81,10 @@ export default function ResidentModeration() {
     (row) => isStaff || (isModerator && Boolean(row?.author_badge)),
     [isStaff, isModerator]
   );
+  const canRestoreHidden = useCallback(
+    (row) => (row.hiddenKind === "city_hub_post" ? isStaff || isModerator : canActOnNotice(row)),
+    [isStaff, isModerator, canActOnNotice]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,7 +92,7 @@ export default function ResidentModeration() {
       if (tab === "reports") {
         const { data, error } = await listCommunityReports("open");
         if (error) {
-          if (isRpcNotFoundError(error)) setSchemaHint("Run the P1 moderators SQL in Supabase first.");
+          if (isRpcNotFoundError(error)) setSchemaHint("Moderation isn't available yet. Please try again later.");
           else toast.error(moderationErrorMessage(error, "Could not load reports."));
           setReports([]);
           return;
@@ -88,13 +100,21 @@ export default function ResidentModeration() {
         setSchemaHint("");
         setReports(data);
       } else if (tab === "hidden") {
-        const { data, error } = await listHiddenAreaBroadcasts(30);
-        if (error) {
-          toast.error(areaBroadcastActionError(error, "Could not load hidden notices."));
-          setHidden([]);
-          return;
+        const [noticesRes, postsRes] = await Promise.all([
+          listHiddenAreaBroadcasts(30),
+          listHiddenCityHubPosts({ limit: 30 }),
+        ]);
+        if (noticesRes.error) {
+          toast.error(areaBroadcastActionError(noticesRes.error, "Could not load hidden notices."));
         }
-        setHidden(data);
+        if (postsRes.error) {
+          toast.error(moderationErrorMessage(postsRes.error, "Could not load hidden City Hub posts."));
+        }
+        const noticeRows = (noticesRes.data || []).map((row) => ({ ...row, hiddenKind: "area_broadcast" }));
+        const postRows = (postsRes.data || []).map((row) => ({ ...row, hiddenKind: "city_hub_post" }));
+        setHidden(
+          [...noticeRows, ...postRows].sort((a, b) => String(b.hidden_at || "").localeCompare(String(a.hidden_at || "")))
+        );
       } else {
         const { data, error } = await listAreaBroadcasts(30);
         if (error) {
@@ -154,12 +174,22 @@ export default function ResidentModeration() {
     if (pendingKey) return;
     setPendingKey(row.id);
     try {
-      const { error } = await restoreAreaBroadcast(row.id);
-      if (error) throw error;
-      toast.success("Notice restored.");
+      if (row.hiddenKind === "city_hub_post") {
+        const { error } = await restoreHiddenCityHubPost(row.id);
+        if (error) throw error;
+        toast.success("City Hub post restored.");
+      } else {
+        const { error } = await restoreAreaBroadcast(row.id);
+        if (error) throw error;
+        toast.success("Notice restored.");
+      }
       await load();
     } catch (err) {
-      toast.error(areaBroadcastActionError(err, "Could not restore notice."));
+      toast.error(
+        row.hiddenKind === "city_hub_post"
+          ? moderationErrorMessage(err, "Could not restore the post.")
+          : areaBroadcastActionError(err, "Could not restore notice.")
+      );
     } finally {
       setPendingKey(null);
     }
@@ -217,7 +247,11 @@ export default function ResidentModeration() {
                       {item.content_hidden_at ? " - already hidden" : ""}
                     </p>
                   ) : null}
-                  {item.body_preview ? <p className="mt-1 whitespace-pre-wrap">{item.body_preview}</p> : null}
+                  {item.body_preview === "Preview hidden" ? (
+                    <p className="mt-1 text-xs italic text-gray-500 dark:text-gray-400">Preview hidden</p>
+                  ) : item.body_preview ? (
+                    <p className="mt-1 whitespace-pre-wrap">{item.body_preview}</p>
+                  ) : null}
                   {(item.details || []).length ? (
                     <ul className="mt-2 list-disc pl-5 text-xs text-gray-600 dark:text-gray-300">
                       {item.details.map((d, i) => (
@@ -245,9 +279,13 @@ export default function ResidentModeration() {
                       Dismiss
                     </button>
                   </div>
-                  {!item.can_hide ? (
+                  {!item.can_hide && item.content_type === "area_broadcast" ? (
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                       Staff notices can only be hidden by the NW admin or committee.
+                    </p>
+                  ) : !item.can_hide && !item.content_hidden_at ? (
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      This item can&apos;t be hidden from here. You can still dismiss the report.
                     </p>
                   ) : null}
                 </article>
@@ -258,20 +296,31 @@ export default function ResidentModeration() {
 
         {!loading && tab === "hidden" ? (
           hidden.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No hidden notices.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">No hidden notices or City Hub posts.</p>
           ) : (
             hidden.map((row) => (
-              <article key={row.id} className={CARD}>
+              <article key={`${row.hiddenKind || "area_broadcast"}:${row.id}`} className={CARD}>
                 <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  {row.author_name}
-                  <BadgeChip badge={row.author_badge} /> - hidden {formatWatchDateTime(row.hidden_at) || ""}
+                  {row.hiddenKind === "city_hub_post" ? "City Hub post" : "Area notice"}
+                  {row.author_name ? (
+                    <>
+                      {" - "}
+                      {row.author_name}
+                      <BadgeChip badge={row.author_badge} />
+                    </>
+                  ) : null}
+                  {` - hidden ${formatWatchDateTime(row.hidden_at) || ""}`}
                 </p>
-                <p className="font-semibold text-gray-900 dark:text-white">{row.headline}</p>
-                <p className="whitespace-pre-wrap">{row.body}</p>
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  {row.hiddenKind === "city_hub_post" ? row.title || "City Hub post" : row.headline}
+                </p>
+                <p className="whitespace-pre-wrap">
+                  {row.hiddenKind === "city_hub_post" ? row.content_preview : row.body}
+                </p>
                 {row.hidden_reason ? (
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Reason: {row.hidden_reason}</p>
                 ) : null}
-                {canActOnNotice(row) ? (
+                {canRestoreHidden(row) ? (
                   <div className="mt-3">
                     <button type="button" disabled={pendingKey === row.id} onClick={() => restore(row)} className={BTN}>
                       Restore

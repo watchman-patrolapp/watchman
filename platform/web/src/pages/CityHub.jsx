@@ -8,6 +8,7 @@ import { canManageCityHubPost, canPublishCityHub, homeBackNav } from "../auth/ro
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import CityHubBanner from "../components/cityhub/CityHubBanner";
 import CityHubAuthorSheet from "../components/cityhub/hub/CityHubAuthorSheet";
+import ReportContentButton, { OverflowMenu } from "../components/community/ReportContentButton";
 import CityHubEditModal from "../components/cityhub/hub/CityHubEditModal";
 import { POST_TYPES, POST_TYPE_CARD_ACCENT, cityHubPostTypeHeadline } from "../components/cityhub/hub/cityHubConfig";
 import { CityHubPostBody, CityHubPhotoGrid, CityHubDocumentList } from "../components/cityhub/hub/CityHubPostParts";
@@ -70,6 +71,7 @@ export default function CityHub() {
         .from("city_hub_posts")
         .select("*")
         .in("status", ["published", "draft"])
+        .is("hidden_at", null)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -623,6 +625,17 @@ export default function CityHub() {
                             Delete
                           </button>
                         </div>
+                      ) : null}
+                      {user?.id && user.id !== post.created_by_user_id ? (
+                        <OverflowMenu label="More actions">
+                          <ReportContentButton
+                            variant="menuItem"
+                            contentType="city_hub_post"
+                            contentId={post.id}
+                            currentUserId={user.id}
+                            authorUserId={post.created_by_user_id}
+                          />
+                        </OverflowMenu>
                       ) : null}
                     </div>
                     <CityHubPostBody title={post.title} content={post.content} />
