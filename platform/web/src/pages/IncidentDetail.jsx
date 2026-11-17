@@ -38,6 +38,7 @@ import { canStaffManageIncidents } from '../auth/staffRoles';
 import { canPublishCityHub } from '../auth/roleMatrix';
 import { belongsToActiveOrganization, useScopedOrganization } from '../utils/organizationScope';
 import { fetchCityHubShareForIncident } from '../utils/cityHubShare';
+import ReportContentButton, { OverflowMenu } from '../components/community/ReportContentButton';
 
 export default function IncidentDetail() {
   const { id } = useParams();
@@ -394,6 +395,19 @@ export default function IncidentDetail() {
                 {deleteBusy ? 'Deleting…' : 'Delete incident (admin)'}
               </button>
             )}
+            {user?.id &&
+              String(incident.submitted_by ?? '') !== String(user.id) &&
+              String(incident.reporter_id ?? '') !== String(user.id) && (
+                <OverflowMenu label="More actions">
+                  <ReportContentButton
+                    variant="menuItem"
+                    contentType="incident_report"
+                    contentId={incident.id || id}
+                    currentUserId={user.id}
+                    authorUserId={incident.submitted_by || incident.reporter_id || null}
+                  />
+                </OverflowMenu>
+              )}
           </div>
         </div>
       </div>
