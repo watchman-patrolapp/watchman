@@ -291,7 +291,7 @@ export function useCriminalProfileDetail() {
 
       if (!data?.length) {
         toast.error(
-          'Nothing was deleted. Open supabase/criminal_profiles_delete_policy.sql in your project, copy the SQL inside the file (not the path), paste into Supabase → SQL Editor → Run.'
+          'This profile could not be deleted. Only watch staff can delete intelligence profiles. Ask a watch admin for help.'
         );
         return;
       }
