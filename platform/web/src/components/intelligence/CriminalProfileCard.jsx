@@ -24,6 +24,8 @@ import CriminalPhotoImg from './CriminalPhotoImg';
 import BrandedLoader from '../layout/BrandedLoader';
 import ProfileRecordAudit from './ProfileRecordAudit';
 import { formatWatchDate, formatWatchDateTime } from '../../utils/watchTime';
+import ReportContentButton, { OverflowMenu } from '../community/ReportContentButton';
+import { useAuth } from '../../auth/useAuth';
 
 const RiskBadge = ({ level }) => {
   const styles = {
@@ -157,6 +159,7 @@ export default function CriminalProfileCard({ profile, stats = {}, associatesPre
   const [associatesPeekList, setAssociatesPeekList] = useState([]);
   const [associatesPeekError, setAssociatesPeekError] = useState(null);
   const [photoLightbox, setPhotoLightbox] = useState(null);
+  const { user } = useAuth();
 
   const associateCount = stats.associateCount || 0;
 
@@ -260,9 +263,25 @@ export default function CriminalProfileCard({ profile, stats = {}, associatesPre
       <div className="pt-16 px-6 pb-6">
         {/* Identity */}
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-            {profile.primary_name}
-          </h2>
+          <div className="mb-1 flex items-start justify-between gap-2">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {profile.primary_name}
+            </h2>
+            {user?.id && profile.id && String(profile.created_by ?? '') !== String(user.id) ? (
+              // The card often sits inside a clickable row; keep menu and dialog clicks here.
+              <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                <OverflowMenu label="More actions">
+                  <ReportContentButton
+                    variant="menuItem"
+                    contentType="criminal_profile"
+                    contentId={profile.id}
+                    currentUserId={user.id}
+                    authorUserId={profile.created_by || null}
+                  />
+                </OverflowMenu>
+              </div>
+            ) : null}
+          </div>
           
           <div className="mb-2 flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400">
             {profile.date_of_birth && (

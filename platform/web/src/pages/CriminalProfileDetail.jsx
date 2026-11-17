@@ -12,9 +12,12 @@ import ProfileHistorySection from './criminalProfile/ProfileHistorySection';
 import ProfileLinkedIncidentsSection from './criminalProfile/ProfileLinkedIncidentsSection';
 import ProfileAssociatesSection from './criminalProfile/ProfileAssociatesSection';
 import ProfileFieldGuideModal from './criminalProfile/ProfileFieldGuideModal';
+import ReportContentButton, { OverflowMenu } from '../components/community/ReportContentButton';
+import { useAuth } from '../auth/useAuth';
 
 export default function CriminalProfileDetail() {
   const detail = useCriminalProfileDetail();
+  const { user } = useAuth();
 
   if (detail.loading) {
     return (
@@ -90,6 +93,19 @@ export default function CriminalProfileDetail() {
           onSave={handleSave}
           saving={saving}
           photoUploadsPending={photoUploadsPending}
+          moreMenu={
+            user?.id && profile?.id && String(profile.created_by ?? '') !== String(user.id) ? (
+              <OverflowMenu label="More actions">
+                <ReportContentButton
+                  variant="menuItem"
+                  contentType="criminal_profile"
+                  contentId={profile.id}
+                  currentUserId={user.id}
+                  authorUserId={profile.created_by || null}
+                />
+              </OverflowMenu>
+            ) : null
+          }
         />
 
         {profile && (

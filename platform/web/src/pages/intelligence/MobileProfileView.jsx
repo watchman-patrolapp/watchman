@@ -39,11 +39,14 @@ import BrandedLoader from '../../components/layout/BrandedLoader';
 import PatrollerPhotoPreview from '../../components/patrol/PatrollerPhotoPreview';
 import CriminalPhotoImg from '../../components/intelligence/CriminalPhotoImg';
 import { connectionTypeLabel } from '../../data/profileIncidentLinkTaxonomy';
+import ReportContentButton from '../../components/community/ReportContentButton';
+import { useAuth } from '../../auth/useAuth';
 
 const MobileProfileView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [photoLightbox, setPhotoLightbox] = useState(null);
+  const { user } = useAuth();
 
   const { activeOrganizationId, activeOrganization } = useActiveOrganization();
   const { data: profile, isLoading: profileLoading } = useCriminalProfile(
@@ -275,6 +278,18 @@ const MobileProfileView = () => {
           </div>
         )}
       </div>
+
+      {user?.id && profile.id && String(profile.created_by ?? '') !== String(user.id) ? (
+        <div className="px-4 pb-4 text-right">
+          <ReportContentButton
+            variant="quietLink"
+            contentType="criminal_profile"
+            contentId={profile.id}
+            currentUserId={user.id}
+            authorUserId={profile.created_by || null}
+          />
+        </div>
+      ) : null}
 
       <PatrollerPhotoPreview
         key={photoLightbox ? `mobile-ph-${photoLightbox.index}` : 'mobile-ph-closed'}
