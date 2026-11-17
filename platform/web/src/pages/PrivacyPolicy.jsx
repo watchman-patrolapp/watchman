@@ -344,7 +344,8 @@ export default function PrivacyPolicy() {
             columns={["Information", "Intended period"]}
             rows={[
               ["Account and profile", "Until you delete your account, then up to 90 days (unless the law requires longer)"],
-              ["Patrol location and routes", "Archived after 90 days (removed from the live app), then permanently deleted after 2 years"],
+              ["Raw patrol GPS points", "1 year, then permanently deleted (including archived copies)"],
+              ["Patrol route summaries (route line, distance, duration)", "Kept for patrol history while your watch uses Watchman"],
               ["Chat messages (member view)", "24 hours"],
               ["Chat messages (admin logs)", "6 months (180 days), after which a purge function can delete them"],
               ["Incident reports and evidence", "5 years (policy target)"],
