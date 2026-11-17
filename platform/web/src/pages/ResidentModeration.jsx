@@ -40,6 +40,8 @@ const CONTENT_TYPE_LABELS = {
   city_hub_post: "City Hub post",
   chat_message: "Chat message",
   user_profile: "User profile",
+  incident_report: "Incident report",
+  criminal_profile: "Suspect profile",
 };
 
 const CARD =

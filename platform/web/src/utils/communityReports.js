@@ -74,6 +74,8 @@ export const REPORTABLE_CONTENT_TYPES = [
   "city_hub_post",
   "chat_message",
   "user_profile",
+  "incident_report",
+  "criminal_profile",
 ];
 
 export function moderationErrorMessage(error, fallback) {
