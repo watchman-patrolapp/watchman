@@ -248,7 +248,7 @@ export default function UserManagement() {
       });
 
       if (error) {
-        let msg = error.message || "Request failed";
+        let msg = "";
         try {
           const ctx = error.context;
           if (ctx && typeof ctx.json === "function") {
@@ -258,11 +258,11 @@ export default function UserManagement() {
         } catch {
           /* keep msg */
         }
-        throw new Error(msg);
+        throw Object.assign(new Error(msg || error.message || "Request failed"), { friendly: msg });
       }
 
       if (data && typeof data === "object" && "error" in data && data.error) {
-        throw new Error(String(data.error));
+        throw Object.assign(new Error(String(data.error)), { friendly: String(data.error) });
       }
 
       setUsers((prev) => prev.filter((u) => u.uid !== uid));
@@ -270,7 +270,7 @@ export default function UserManagement() {
       toast.success("User deleted.");
     } catch (err) {
       console.error("Delete user failed:", err);
-      toast.error(err.message || "Failed to delete user. Deploy the admin-delete-user Edge Function if this persists.");
+      toast.error(err?.friendly || "Could not delete this user right now. Please try again in a few minutes.");
     } finally {
       setDeleteLoading(false);
     }

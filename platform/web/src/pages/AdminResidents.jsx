@@ -494,7 +494,7 @@ export default function AdminResidents() {
       });
 
       if (error) {
-        let msg = error.message || "Request failed";
+        let msg = "";
         try {
           const ctx = error.context;
           if (ctx && typeof ctx.json === "function") {
@@ -504,11 +504,11 @@ export default function AdminResidents() {
         } catch {
           /* keep msg */
         }
-        throw new Error(msg);
+        throw Object.assign(new Error(msg || error.message || "Request failed"), { friendly: msg });
       }
 
       if (data && typeof data === "object" && "error" in data && data.error) {
-        throw new Error(String(data.error));
+        throw Object.assign(new Error(String(data.error)), { friendly: String(data.error) });
       }
 
       setUsers((prev) => prev.filter((u) => u.uid !== uid));
@@ -516,7 +516,7 @@ export default function AdminResidents() {
       toast.success("Resident deleted.");
     } catch (err) {
       console.error("Delete resident failed:", err);
-      toast.error(err.message || "Failed to delete resident.");
+      toast.error(err?.friendly || "Could not delete this resident right now. Please try again in a few minutes.");
     } finally {
       setDeleteLoading(false);
     }

@@ -62,7 +62,7 @@ export default function DeleteAccountSection({ user, signOut, navigate }) {
       });
 
       if (error) {
-        let msg = error.message || 'Request failed';
+        let msg = '';
         try {
           const ctx = error.context;
           if (ctx && typeof ctx.json === 'function') {
@@ -72,10 +72,10 @@ export default function DeleteAccountSection({ user, signOut, navigate }) {
         } catch {
           /* keep msg */
         }
-        throw new Error(msg);
+        throw Object.assign(new Error(msg || error.message || 'Request failed'), { friendly: msg });
       }
       if (data && typeof data === 'object' && 'error' in data && data.error) {
-        throw new Error(String(data.error));
+        throw Object.assign(new Error(String(data.error)), { friendly: String(data.error) });
       }
 
       setDeletePassword('');
@@ -85,7 +85,7 @@ export default function DeleteAccountSection({ user, signOut, navigate }) {
       navigate('/login', { replace: true });
     } catch (err) {
       console.error('delete-my-account:', err);
-      toast.error(err.message || 'Could not delete account. Deploy the delete-my-account Edge Function if this persists.');
+      toast.error(err?.friendly || 'We could not delete your account right now. Please try again in a few minutes.');
     } finally {
       setDeleteBusy(false);
     }
