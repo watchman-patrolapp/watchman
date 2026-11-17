@@ -79,7 +79,7 @@ export const REPORTABLE_CONTENT_TYPES = [
 ];
 
 export function moderationErrorMessage(error, fallback) {
-  if (isRpcNotFoundError(error)) return "Run the P1 moderators SQL in Supabase first.";
+  if (isRpcNotFoundError(error)) return "This isn't available yet. Please try again later.";
   const msg = String(error?.message || "");
   if (/forbidden/i.test(msg)) return "You can't do that for this item.";
   if (/not found/i.test(msg)) return "This item is no longer available.";

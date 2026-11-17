@@ -92,7 +92,7 @@ export default function ResidentModeration() {
       if (tab === "reports") {
         const { data, error } = await listCommunityReports("open");
         if (error) {
-          if (isRpcNotFoundError(error)) setSchemaHint("Run the P1 moderators SQL in Supabase first.");
+          if (isRpcNotFoundError(error)) setSchemaHint("Moderation isn't available yet. Please try again later.");
           else toast.error(moderationErrorMessage(error, "Could not load reports."));
           setReports([]);
           return;
