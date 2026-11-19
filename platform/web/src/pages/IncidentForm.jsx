@@ -472,19 +472,44 @@ export default function IncidentForm() {
             metadata: meta,
             media_urls: mergedUrls,
             submitted_by: user.id,
+            _dbId: isEditMode && entry.db_id && oldEvidenceIds.includes(entry.db_id) ? entry.db_id : null,
           });
         }
       }
 
       let insertedEvidenceRows = [];
-      if (evidenceEntries.length > 0) {
+      const evidenceToInsert = [];
+      for (const { _dbId, ...row } of evidenceEntries) {
+        if (_dbId) {
+          // Edit mode: update the existing row in place so its original submitter is kept
+          // (the database also refuses to change submitted_by on update).
+          const patch = {
+            category: row.category,
+            description: row.description,
+            metadata: row.metadata,
+            media_urls: row.media_urls,
+          };
+          const { data: updated, error: updateError } = await supabase
+            .from("incident_evidence")
+            .update(patch)
+            .eq("id", _dbId)
+            .select("id, metadata");
+          if (!updateError && updated && updated.length > 0) {
+            insertedEvidenceRows.push(...updated);
+            continue;
+          }
+          if (updateError) console.warn("incident_evidence update in place failed, re-adding:", updateError.message);
+        }
+        evidenceToInsert.push(row);
+      }
+      if (evidenceToInsert.length > 0) {
         const { data: inserted, error: evidenceError } = await supabase
           .from("incident_evidence")
-          .insert(evidenceEntries)
+          .insert(evidenceToInsert)
           .select("id, metadata");
 
         if (evidenceError) throw evidenceError;
-        insertedEvidenceRows = inserted || [];
+        insertedEvidenceRows.push(...(inserted || []));
       }
 
       const formEntryIdToEvidenceId = {};
@@ -584,15 +609,37 @@ export default function IncidentForm() {
             confidence_score: cfg.confidence_score,
           };
         });
-        const { error: piErr } = await supabase.from("profile_incidents").upsert(linkRows, {
-          onConflict: "profile_id,incident_id",
-        });
+        // Links that already exist keep their linked_by; only new links record the editor.
+        let existingLinkIds = new Set();
+        if (isEditMode) {
+          const { data: existingLinks } = await supabase
+            .from("profile_incidents")
+            .select("profile_id")
+            .eq("incident_id", incidentId)
+            .in("profile_id", linkedProfileIds);
+          existingLinkIds = new Set((existingLinks || []).map((r) => r.profile_id));
+        }
+        let piErr = null;
+        for (const r of linkRows.filter((x) => existingLinkIds.has(x.profile_id))) {
+          const { error } = await supabase
+            .from("profile_incidents")
+            .update({ connection_type: r.connection_type, confidence_score: r.confidence_score })
+            .eq("incident_id", incidentId)
+            .eq("profile_id", r.profile_id);
+          if (error) {
+            piErr = error;
+            break;
+          }
+        }
+        const newLinkRows = linkRows.filter((x) => !existingLinkIds.has(x.profile_id));
+        if (!piErr && newLinkRows.length > 0) {
+          ({ error: piErr } = await supabase.from("profile_incidents").upsert(newLinkRows, {
+            onConflict: "profile_id,incident_id",
+          }));
+        }
         if (piErr) {
           console.error("profile_incidents link error:", piErr);
-          throw new Error(
-            piErr.message ||
-              "Could not save profile–incident links (confidence / connection type). Check database policies or try again."
-          );
+          throw new Error("Could not save the suspect profile links. Please try again.");
         }
       }
 

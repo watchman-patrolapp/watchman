@@ -112,6 +112,8 @@ export function mapDbEvidenceToFormState(rows) {
     }
     next[cat].push({
       id: formId,
+      // Existing DB row: edits update it in place so submitted_by is kept.
+      db_id: row.id ?? null,
       category: cat,
       description: row.description || "",
       metadata: meta,
