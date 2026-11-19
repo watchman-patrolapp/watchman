@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../auth/useAuth'
 
+import { friendlyError } from '../utils/friendlyError';
 /**
  * useSupabaseQuery
  * A stable data-fetching hook for Supabase queries that handles auth,
@@ -70,7 +71,7 @@ export function useSupabaseQuery(queryFn, deps = [], options = {}) {
     } catch (err) {
       if (isMounted.current && gen === fetchGen.current) {
         console.error('useSupabaseQuery error:', err)
-        setError(err.message || 'An error occurred')
+        setError(friendlyError(err, 'An error occurred'))
         setData(undefined)
       }
     } finally {

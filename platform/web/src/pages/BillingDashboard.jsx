@@ -247,7 +247,7 @@ export default function BillingDashboard() {
       toast.success("Default prices saved. Organizations without a custom price use these rates.");
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Could not save default prices. Run the latest billing SQL in Supabase.");
+      toast.error(err.message || "Could not save default prices. Please try again.");
     } finally {
       setSavingCatalog(false);
     }
@@ -280,7 +280,7 @@ export default function BillingDashboard() {
       );
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Could not save this price. Run the latest billing SQL in Supabase.");
+      toast.error(err.message || "Could not save this price. Please try again.");
     } finally {
       setSavingPrice(false);
     }

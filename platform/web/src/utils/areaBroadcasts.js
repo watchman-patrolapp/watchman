@@ -88,7 +88,7 @@ export function isMissingAreaBroadcastHideSchema(error) {
 
 export function areaBroadcastActionError(error, fallback) {
   if (isMissingAreaBroadcastHideSchema(error)) {
-    return "Run the area broadcast hide SQL in Supabase first.";
+    return "Hiding broadcasts isn't available yet. Please try again later.";
   }
   const message = String(error?.message || "").replace(/^ERROR:\s*/i, "").trim();
   return message || fallback;

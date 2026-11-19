@@ -203,7 +203,7 @@ export async function listSecurityPartnerSosAlerts() {
   if (error && !isRpcNotFoundError(error)) {
     throw error;
   }
-  throw new Error("Run the security partner SOS SQL in Supabase to load the command SOS board.");
+  throw new Error("The command SOS board isn't available yet. Please try again later.");
 }
 
 export async function updateSecurityPartnerSos(alertId, action) {

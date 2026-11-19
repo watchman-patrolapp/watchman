@@ -16,7 +16,7 @@ export default function ResidentCapabilityList({ reloadKey = 0, onChanged }) {
     const { data, error } = await listCapabilityGrants(showHistory);
     if (error) {
       setRows([]);
-      setHint(isRpcNotFoundError(error) ? "Run the capability SQL (P0a) in Supabase first." : "");
+      setHint(isRpcNotFoundError(error) ? "This feature isn't switched on for your watch yet." : "");
       return;
     }
     setHint("");

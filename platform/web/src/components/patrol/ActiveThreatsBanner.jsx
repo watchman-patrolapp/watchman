@@ -9,6 +9,7 @@ import { parsePatrolTime } from '../../utils/watchTime';
 import CriminalPhotoImg from '../intelligence/CriminalPhotoImg';
 import { threatPhotoAlt } from '../../utils/sosDelivery';
 
+import { friendlyError } from '../../utils/friendlyError';
 /** Haversine distance in km */
 function distanceKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
@@ -143,7 +144,7 @@ export default function ActiveThreatsBanner({
 
       if (error) {
         console.error('Error:', error);
-        setError(error.message);
+        setError(friendlyError(error));
         setNearbyProfiles([]);
       } else {
         const filtered = filterProfilesWithRecentNearbySightings(
@@ -157,7 +158,7 @@ export default function ActiveThreatsBanner({
       }
     } catch (err) {
       console.error('Error:', err);
-      if (isMounted.current) setError(err.message);
+      if (isMounted.current) setError(friendlyError(err));
     } finally {
       isFetching.current = false;
     }

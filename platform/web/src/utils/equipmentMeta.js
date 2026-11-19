@@ -105,7 +105,7 @@ export function equipmentQrTokenFromText(text) {
 }
 
 export function equipmentErrorMessage(error, isNotFound = false, fallback = "Something went wrong.") {
-  if (isNotFound) return "The equipment catalogue is not switched on yet (run the P3a SQL in Supabase first).";
+  if (isNotFound) return "The equipment catalogue is not switched on yet.";
   const msg = String(error?.message || "").replace(/^ERROR:\s*/i, "").trim();
   if (/not found/i.test(msg)) return "That equipment was not found.";
   if (/forbidden/i.test(msg)) return "You can't manage equipment here.";

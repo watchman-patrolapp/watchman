@@ -178,7 +178,7 @@ export default function SecurityCompanyDashboard() {
       const firstError = [areaRes, residentRes, patrolRes, slotRes].find((r) => r.error)?.error;
       if (firstError && !isRpcNotFoundError(firstError)) throw firstError;
       if (firstError && isRpcNotFoundError(firstError) && !silent) {
-        toast.error("Run the partner dashboard SQL in Supabase to load live partner data.");
+        toast.error("Live partner data isn't available yet. Please try again later.");
       }
       if (incidentRes.error && !isRpcNotFoundError(incidentRes.error)) {
         console.warn("security_partner_incidents:", incidentRes.error.message);

@@ -15,7 +15,7 @@ import { displayWatchAreaName } from "../config/neighborhoodRegions";
 import { formatWatchDateTime, watchDayStamp } from "../utils/watchTime";
 
 const AUDIT_PAGE = 100;
-const AUDIT_SQL_HINT = "Run the 20261003002000_audit_log_hardening.sql SQL in Supabase first.";
+const AUDIT_SQL_HINT = "The audit log isn't available yet. Please try again later.";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const AUDIT_ACTIONS = [
@@ -205,7 +205,7 @@ export default function AdminWatchStaffActivity() {
       if (gen !== loadGen.current) return;
       if (error) {
         if (isRpcNotFoundError(error)) {
-          toast.error("Apply the watch staff activity SQL on Supabase first.");
+          toast.error("Staff activity isn't available yet. Please try again later.");
           setRows([]);
           return;
         }

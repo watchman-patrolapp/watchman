@@ -14,7 +14,7 @@ export function formatAuthErrorMessage(err) {
     lower.includes('email rate limit') ||
     status === 429
   ) {
-    return 'Too many confirmation emails were sent. Please wait up to an hour and try again, or use Sign in if you already registered. (This limit is set in Supabase — admins can adjust Authentication → Rate Limits.)';
+    return 'Too many confirmation emails were sent. Please wait up to an hour and try again, or use Sign in if you already registered.';
   }
   if (
     lower.includes('already registered') ||

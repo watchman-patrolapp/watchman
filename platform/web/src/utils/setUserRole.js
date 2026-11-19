@@ -2,7 +2,7 @@ import { supabase } from "../supabase/client";
 import { isRpcNotFoundError } from "./isRpcNotFound";
 
 export const ROLE_SQL_MISSING_MESSAGE =
-  "Run the 20261031040000_admin_set_user_role.sql migration in Supabase first.";
+  "Changing roles isn't available yet. Please try again later.";
 
 /**
  * Change another user's role. Uses admin_set_user_role, which raises instead of

@@ -344,7 +344,7 @@ export default function AdminResidents() {
       const { data, error } = await assignResidentToNeighborhood(uid, orgId);
       if (error) {
         if (isRpcNotFoundError(error)) {
-          toast.error("Apply the assign-resident SQL on Supabase first.");
+          toast.error("Assigning households isn't available yet. Please try again later.");
           return;
         }
         throw error;
@@ -374,7 +374,7 @@ export default function AdminResidents() {
       const { data, error } = await verifyResidentAsStaff(uid);
       if (error) {
         if (isRpcNotFoundError(error)) {
-          toast.error("Apply the resident verification SQL on Supabase first.");
+          toast.error("Resident verification isn't available yet. Please try again later.");
           return;
         }
         throw error;
@@ -402,7 +402,7 @@ export default function AdminResidents() {
       }
     } catch (err) {
       console.error("Verify resident failed:", err);
-      toast.error(err.message || "Failed to verify resident. Apply the latest SQL if this persists.");
+      toast.error(err.message || "Could not verify this resident. Please try again.");
     } finally {
       setBusyUid(null);
     }
@@ -415,7 +415,7 @@ export default function AdminResidents() {
       const { error } = await reviewPatrollerRoleRequest(uid, approve);
       if (error) {
         if (isRpcNotFoundError(error)) {
-          toast.error("Apply the patroller-request SQL on Supabase first.");
+          toast.error("Patroller requests aren't available yet. Please try again later.");
           return;
         }
         throw error;

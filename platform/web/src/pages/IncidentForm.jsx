@@ -41,6 +41,7 @@ import {
 } from "../components/incident/form/FormFields.jsx";
 import SectionCard from "../components/ui/SectionCard";
 
+import { friendlyError } from "../utils/friendlyError";
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -174,7 +175,7 @@ export default function IncidentForm() {
       } catch (err) {
         if (!cancelled) {
           console.error("Edit load failed:", err);
-          setEditLoadError(err.message || "Failed to load incident");
+          setEditLoadError(friendlyError(err, "Failed to load incident"));
           toast.error("Could not load incident for editing.", {
             retry: () => setEditAttempt((attempt) => attempt + 1),
           });
@@ -717,7 +718,7 @@ export default function IncidentForm() {
     } catch (err) {
       console.error("Submission error:", err);
       toast.error("Failed to submit: " + err.message);
-      setError(err.message);
+      setError(friendlyError(err));
     } finally {
       submitLockRef.current = false;
       setIsSubmitting(false);

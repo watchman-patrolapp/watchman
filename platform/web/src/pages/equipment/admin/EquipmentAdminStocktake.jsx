@@ -28,7 +28,7 @@ export default function EquipmentAdminStocktake() {
     setLoading(false);
     if (error) {
       setBoard(null);
-      setHint(equipmentErrorMessage(error, "Stocktake is not switched on yet. Ask an admin to apply the latest equipment SQL."));
+      setHint(equipmentErrorMessage(error, "Stocktake is not switched on yet. Please try again later."));
       return;
     }
     setBoard(data);

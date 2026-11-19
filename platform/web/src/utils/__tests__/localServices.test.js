@@ -41,7 +41,7 @@ test("friendly errors never leak raw messages", () => {
   assert.match(friendlyServiceError({ message: "please agree to publish your contact details to members" }), /agree/i);
   assert.match(friendlyServiceError({ message: "not found" }), /could not find/i);
   assert.match(friendlyServiceError({ message: "this listing is hidden; a moderator must restore it" }), /moderator must restore/i);
-  assert.match(friendlyServiceError({ code: "PGRST202", message: "Could not find the function" }), /Run the local services SQL/);
+  assert.match(friendlyServiceError({ code: "PGRST202", message: "Could not find the function" }), /Local services aren't available yet/);
   const raw = "duplicate key value violates unique constraint xyz";
   const out = friendlyServiceError({ message: raw });
   assert.equal(out, "Could not save your listing. Try again.");

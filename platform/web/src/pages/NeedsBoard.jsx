@@ -44,7 +44,7 @@ export default function NeedsBoard() {
     setLoading(false);
     if (error) {
       setAllItems([]);
-      setHint(isRpcNotFoundError(error) ? "Neighbourhood Watch Needs is not switched on yet (run the P2 SQL in Supabase first)." : wishlistErrorMessage(error));
+      setHint(isRpcNotFoundError(error) ? "Neighbourhood Watch Needs is not switched on yet." : wishlistErrorMessage(error));
       return;
     }
     setHint("");

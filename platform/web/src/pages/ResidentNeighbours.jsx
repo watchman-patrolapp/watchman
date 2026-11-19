@@ -95,7 +95,7 @@ export default function ResidentNeighbours() {
       const { data, error } = await vouchForResident(neighbourId);
       if (error) {
         if (isRpcNotFoundError(error)) {
-          toast.error("Apply the resident verification SQL on Supabase first.");
+          toast.error("Resident verification isn't available yet. Please try again later.");
           return;
         }
         throw error;

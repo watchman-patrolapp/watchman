@@ -42,7 +42,7 @@ export function equipmentErrorMessage(error, fallback = "Something went wrong. T
   if (isRpcNotFoundError(error)) {
     const msg = String(error?.message || "");
     if (/handover|maintenance|write_off|liability|case_number|housekeeping|stocktake|dashboard|export_equipment|paper_handover|return_request/i.test(msg)) {
-      return "This equipment step is not switched on yet. Ask an admin to apply the latest equipment SQL.";
+      return "This equipment step is not switched on yet. Please try again later.";
     }
   } else {
     const loanText = equipmentLoanErrorText(error);

@@ -206,7 +206,7 @@ export default function NeedsAdmin() {
     const { data, error } = await listWishlistItems();
     if (error) {
       setItems([]);
-      setHint(isRpcNotFoundError(error) ? "Run the needs board SQL (P2) in Supabase first." : wishlistErrorMessage(error));
+      setHint(isRpcNotFoundError(error) ? "The needs board isn't switched on yet." : wishlistErrorMessage(error));
       return;
     }
     setHint("");

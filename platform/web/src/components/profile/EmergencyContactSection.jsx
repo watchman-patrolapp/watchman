@@ -81,7 +81,7 @@ export default function EmergencyContactSection({ user, onSaved, slot = 1 }) {
     const { data, error } = await setMyEmergencyContact({ ...payload, slot: isBackup ? 2 : 1 });
     if (error) {
       if (isRpcNotFoundError(error)) {
-        toast.error("Apply the emergency-contact SQL on Supabase first.");
+        toast.error("Emergency contacts aren't available yet. Please try again later.");
         return null;
       }
       throw error;

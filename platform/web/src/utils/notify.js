@@ -1,6 +1,7 @@
 import React from "react";
 import hotToast from "react-hot-toast";
 import { toastIdentity } from "./toastPolicy";
+import { friendlyMessage } from "./friendlyError";
 
 function apply(kind, message, options) {
   const { id, duration } = toastIdentity(kind, message, options || {});
@@ -18,6 +19,8 @@ function toast(message, options) {
 toast.success = (message, options) => hotToast.success(message, apply("success", message, options));
 
 toast.error = (message, options) => {
+  // Never show raw database or code errors to members.
+  if (typeof message === "string") message = friendlyMessage(message);
   const retry = options && typeof options.retry === "function" ? options.retry : null;
   const next = apply("error", message, options);
   if (retry && typeof message === "string") {

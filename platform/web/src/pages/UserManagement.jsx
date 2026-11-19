@@ -211,7 +211,7 @@ export default function UserManagement() {
       const { data, error } = await assignResidentToNeighborhood(uid, orgId);
       if (error) {
         if (isRpcNotFoundError(error)) {
-          toast.error("Apply the move-to-suburb SQL on Supabase first.");
+          toast.error("Moving users between suburbs isn't available yet. Please try again later.");
           return;
         }
         throw error;
