@@ -30,6 +30,7 @@ import {
 import HomePinPicker from '../components/profile/HomePinPicker';
 import EmergencyContactSection from '../components/profile/EmergencyContactSection';
 import DeleteAccountSection from '../components/profile/DeleteAccountSection';
+import BlockedMembersSection from '../components/community/BlockedMembersSection';
 import AvatarCropModal from '../components/profile/AvatarCropModal';
 import NotificationPrefs from '../components/profile/NotificationPrefs';
 import MyCapabilities from '../components/profile/MyCapabilities';
@@ -1152,6 +1153,7 @@ export default function Profile() {
           </button>
         </div>
 
+        <BlockedMembersSection user={user} />
         <DeleteAccountSection user={user} signOut={signOut} navigate={navigate} />
       </div>
     </div>

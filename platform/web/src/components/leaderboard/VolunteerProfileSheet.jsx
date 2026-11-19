@@ -14,6 +14,7 @@ import { useAreaHourlyWeather } from "../../hooks/useAreaHourlyWeather";
 import { useScopedOrganization } from "../../utils/organizationScope";
 import { useAuth } from "../../auth/useAuth";
 import ReportContentButton from "../community/ReportContentButton";
+import BlockUserButton from "../community/BlockUserButton";
 import FunFactsPanel from "./FunFactsPanel";
 import BadgesPanel from "./BadgesPanel";
 import PatrolFuelCard from "./PatrolFuelCard";
@@ -306,6 +307,13 @@ export default function VolunteerProfileSheet({
                     contentId={volunteer.userId}
                     currentUserId={user?.id}
                     authorUserId={volunteer.userId}
+                  />
+                  <BlockUserButton
+                    variant="quietLink"
+                    className="ml-3"
+                    targetUserId={volunteer.userId}
+                    currentUserId={user?.id}
+                    targetName={volunteer.name}
                   />
                 </div>
               ) : null}
