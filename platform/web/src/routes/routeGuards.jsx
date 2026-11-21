@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import RequireActiveOrganization from "../components/RequireActiveOrganization";
 import PageSkeleton from "../components/layout/PageSkeleton";
+import TermsGate from "../components/TermsGate";
 
 /** Don’t render login/register until INITIAL_SESSION finished — avoids faded sign-in flash on refresh */
 export function AuthBootstrapGate({ children }) {
@@ -18,7 +19,8 @@ export function PrivateRoute({ children }) {
   if (!sessionReady || loading) {
     return <PageSkeleton message="Signing you in…" />;
   }
-  return user ? children : <Navigate to="/login" />;
+  // Signed-in members must accept the current Terms/Privacy version first (fails open).
+  return user ? <TermsGate>{children}</TermsGate> : <Navigate to="/login" />;
 }
 
 export function NeighborhoodRoute({ children }) {

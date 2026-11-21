@@ -82,6 +82,9 @@ const PROFILE_FIELDS = [
   "emergencyContact2Relationship",
   "vehicles",
   "requiredSopVersion",
+  "termsColumnPresent",
+  "termsVersion",
+  "termsAcceptedAt",
 ];
 
 export function offlineIndexKey(version = OFFLINE_CACHE_VERSION) {

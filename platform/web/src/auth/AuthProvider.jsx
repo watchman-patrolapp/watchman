@@ -11,6 +11,7 @@ import { hasHydratedAppRole, sessionUserForAppState } from './appRole'
 import { nextProfileLoadStep, profileLoadAttemptPlan } from './profileLoadRetry'
 import { isOfflineOrNetworkError } from '../offline/policy'
 import { readProfileSnapshot, saveProfileSnapshot } from '../offline/snapshots'
+import { termsFieldsFromUsersRow, termsSignupMetadataFrom } from '../utils/termsGate'
 import { clearOfflineSession } from '../offline/sessionCleanup'
 import { syncCarSessionFromAuth } from '../geo/carSessionSync'
 
@@ -92,6 +93,8 @@ function buildPhase1Profile(data, authUser) {
     emergencyContact2Phone: data.emergency_contact_2_phone ?? null,
     emergencyContact2UserId: data.emergency_contact_2_user_id ?? null,
     emergencyContact2Relationship: data.emergency_contact_2_relationship ?? null,
+    ...termsFieldsFromUsersRow(data),
+    termsSignupMetadata: termsSignupMetadataFrom(authUser),
     vehicles: [],
     requiredSopVersion: null,
     profileLoaded: true,
