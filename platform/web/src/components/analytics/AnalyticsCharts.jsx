@@ -41,6 +41,14 @@ function useChartTheme() {
   };
 }
 
+/** Axis ticks stay short so they fit the narrow axis: 1500 -> "1.5k", 18000 -> "18k". */
+function compactTick(value) {
+  const v = Number(value);
+  if (!Number.isFinite(v) || Math.abs(v) < 1000) return value;
+  const k = v / 1000;
+  return `${Number.isInteger(k) || Math.abs(k) >= 10 ? Math.round(k) : k.toFixed(1)}k`;
+}
+
 function valueFormatter(unit) {
   return (value, name) => [`${formatCount(value, 1)}${unit ? ` ${unit}` : ""}`, name];
 }
@@ -61,7 +69,7 @@ export function TrendArea({ data, lines, height = 220, xKey = "label" }) {
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={false} />
         <XAxis dataKey={xKey} tick={t.tick} tickLine={false} axisLine={false} minTickGap={16} />
-        <YAxis tick={t.tick} tickLine={false} axisLine={false} allowDecimals={false} width={48} />
+        <YAxis tick={t.tick} tickFormatter={compactTick} tickLine={false} axisLine={false} allowDecimals={false} width={48} />
         <Tooltip contentStyle={t.tooltip} labelStyle={t.label} formatter={(value, name, item) => valueFormatter(lines.find((l) => l.key === item?.dataKey)?.unit)(value, name)} />
         {lines.map((line) => (
           <Area
@@ -90,13 +98,13 @@ export function Bars({ data, bars, height = 220, xKey = "label", layout = "horiz
         <CartesianGrid strokeDasharray="3 3" stroke={t.grid} vertical={vertical} horizontal={!vertical} />
         {vertical ? (
           <>
-            <XAxis type="number" tick={t.tick} tickLine={false} axisLine={false} allowDecimals={false} />
+            <XAxis type="number" tick={t.tick} tickFormatter={compactTick} tickLine={false} axisLine={false} allowDecimals={false} />
             <YAxis type="category" dataKey={xKey} tick={t.tick} tickLine={false} axisLine={false} width={96} />
           </>
         ) : (
           <>
             <XAxis dataKey={xKey} tick={t.tick} tickLine={false} axisLine={false} minTickGap={12} />
-            <YAxis tick={t.tick} tickLine={false} axisLine={false} allowDecimals={false} width={48} />
+            <YAxis tick={t.tick} tickFormatter={compactTick} tickLine={false} axisLine={false} allowDecimals={false} width={48} />
           </>
         )}
         <Tooltip contentStyle={t.tooltip} labelStyle={t.label} cursor={{ fill: t.dark ? "#1e293b" : "#f3f4f6" }} formatter={valueFormatter(unit)} />

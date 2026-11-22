@@ -107,22 +107,6 @@ export function ProgressRow({ label, value, sub, color = "bg-teal-600" }) {
   );
 }
 
-export function ComingNext({ title = "Coming next", items = [], className = "" }) {
-  return (
-    <div className={`rounded-2xl border border-dashed border-gray-300 bg-white/60 p-4 dark:rounded-[10px] dark:border-slate-700 dark:bg-transparent dark:p-3 ${className}`}>
-      <p className="dark:text-[10px] dark:font-semibold dark:uppercase dark:tracking-[0.1em] dark:text-slate-400 text-sm font-semibold text-gray-700">{title}</p>
-      <ul className="mt-2 grid gap-1.5 text-sm text-gray-500 sm:grid-cols-2 dark:text-slate-500">
-        {items.map((item) => (
-          <li key={item} className="flex items-start gap-2">
-            <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300 dark:bg-slate-600" />
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 export function EmptyChart({ message = "No data for this period yet.", height = 200 }) {
   return (
     <div className="flex items-center justify-center rounded-xl bg-gray-50 text-sm text-gray-500 dark:bg-slate-900/60 dark:text-slate-500" style={{ height }}>

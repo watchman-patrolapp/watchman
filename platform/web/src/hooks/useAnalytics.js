@@ -62,11 +62,60 @@ export function useAnalytics(args, { enabled = true } = {}) {
   }, [key, enabled, tick]);
 
   const refetch = useCallback(() => {
-    resultCache.delete(key);
+    // Refresh reloads the whole dashboard, including the section RPCs for these filters.
+    resultCache.clear();
     setTick((t) => t + 1);
-  }, [key]);
+  }, []);
 
-  return { ...state, refetch };
+  return { ...state, refetch, refreshKey: tick };
+}
+
+export const ANALYTICS_SECTION_NOT_READY_MESSAGE =
+  "This section needs the latest analytics database update. Once it has been run, refresh this page.";
+
+/**
+ * Loads one phase 3 section RPC (analytics_patrols, analytics_safety, ...) with the same
+ * arguments and 5-minute cache as useAnalytics. `refreshKey` changes force a reload.
+ */
+export function useAnalyticsSection(rpc, args, { enabled = true, refreshKey = 0 } = {}) {
+  const key = `${rpc}:${JSON.stringify(args || {})}`;
+  const [state, setState] = useState({ status: "loading", data: null, error: null });
+
+  useEffect(() => {
+    if (!enabled || !rpc) {
+      setState({ status: "idle", data: null, error: null });
+      return undefined;
+    }
+    const hit = resultCache.get(key);
+    if (hit && Date.now() - hit.at < CACHE_MS) {
+      setState({ status: "ready", data: hit.value, error: null });
+      return undefined;
+    }
+    let cancelled = false;
+    setState((prev) => ({ status: "loading", data: prev.data, error: null }));
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc(rpc, JSON.parse(key.slice(rpc.length + 1)));
+        if (error) throw error;
+        resultCache.set(key, { at: Date.now(), value: data || null });
+        if (!cancelled) setState({ status: "ready", data: data || null, error: null });
+      } catch (err) {
+        if (cancelled) return;
+        console.warn("Analytics section load failed", rpc, err?.code || "");
+        const info = analyticsErrorInfo(err);
+        setState({
+          status: "error",
+          data: null,
+          error: info.notReady ? { notReady: true, message: ANALYTICS_SECTION_NOT_READY_MESSAGE } : info,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [key, rpc, enabled, refreshKey]);
+
+  return state;
 }
 
 /** Clears every cached analytics result (used by "Refresh"). */

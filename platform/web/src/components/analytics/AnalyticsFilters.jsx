@@ -32,6 +32,9 @@ function Segmented({ label, options, value, onChange, labels }) {
   );
 }
 
+const EXPORT_BTN =
+  "inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:h-8 dark:border-slate-700 dark:bg-slate-900 dark:text-xs dark:text-slate-300 dark:hover:bg-slate-800";
+
 function Picker({ id, label, value, onChange, options, allLabel, disabled }) {
   return (
     <label htmlFor={id} className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
@@ -50,10 +53,10 @@ function Picker({ id, label, value, onChange, options, allLabel, disabled }) {
 }
 
 /**
- * Sticky filter bar: date presets, custom range, city / suburb / watch, grain, tabs, export placeholders.
+ * Sticky filter bar: date presets, custom range, city / suburb / watch, grain, tabs, CSV and PDF export.
  * `onChange(patch)` receives a partial page state; the page writes it to the URL.
  */
-export default function AnalyticsFilters({ state, options, optionsLoading, onChange, onRefresh, refreshing }) {
+export default function AnalyticsFilters({ state, options, optionsLoading, onChange, onRefresh, refreshing, onExportCsv, onExportPdf, exporting, canPrint }) {
   const [open, setOpen] = useState(false);
   const activeCount = [state.cityId, state.suburbId, state.orgId].filter(Boolean).length;
 
@@ -158,23 +161,26 @@ export default function AnalyticsFilters({ state, options, optionsLoading, onCha
             <FaSyncAlt className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
             Refresh
           </button>
-          {[
-            { label: "Export CSV", Icon: FaFileCsv },
-            { label: "Export PDF", Icon: FaFilePdf },
-          ].map(({ label, Icon }) => (
-            <button
-              key={label}
-              type="button"
-              disabled
-              title="Coming soon"
-              aria-label={`${label} (coming soon)`}
-              className="inline-flex h-9 cursor-not-allowed items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 text-sm font-medium text-gray-400 dark:h-8 dark:border-slate-700 dark:text-xs dark:text-slate-500"
-            >
-              <Icon className="h-3.5 w-3.5" aria-hidden />
-              {label}
-              <span className="rounded bg-gray-100 px-1 text-[10px] font-semibold uppercase text-gray-500 dark:bg-slate-800 dark:text-slate-400">Soon</span>
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={onExportCsv}
+            disabled={!onExportCsv || exporting}
+            title="Download this tab's figures and the watch table as a spreadsheet (CSV)"
+            className={EXPORT_BTN}
+          >
+            <FaFileCsv className="h-3.5 w-3.5" aria-hidden />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={onExportPdf}
+            disabled={!onExportPdf || exporting}
+            title={canPrint ? "Print this tab, or choose Save as PDF in the print window" : "PDF export works in a web browser, not in the Android app. Use Export CSV here."}
+            className={EXPORT_BTN}
+          >
+            <FaFilePdf className="h-3.5 w-3.5" aria-hidden />
+            Export PDF
+          </button>
         </div>
       </div>
     </div>
