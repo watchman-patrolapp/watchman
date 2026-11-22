@@ -10,6 +10,8 @@
 -- Output is aggregates only: no names of people, emails, phones, coordinates or message text.
 -- Watch names, city and suburb names are returned because they are organisations and places.
 -- Times are bucketed in Africa/Johannesburg. Ranges are capped at 24 months.
+-- Incidents are timed by when they were reported (submitted_at), falling back to
+-- incident_date when submitted_at is empty; the incidents table has no created_at.
 -- Patrol rows with no organization_id belong to the original (legacy) watch, matching
 -- leaderboard_patrol_stats.
 --
@@ -36,7 +38,7 @@ BEGIN
       ('patrol_logs','start_shared_at'),('patrol_logs','end_shared_at'),
       ('patrol_routes','organization_id'),('patrol_routes','created_at'),('patrol_routes','total_distance_km'),
       ('incidents','id'),('incidents','organization_id'),('incidents','status'),
-      ('incidents','created_at'),('incidents','incident_date'),
+      ('incidents','submitted_at'),('incidents','incident_date'),
       ('sos_alerts','incident_id'),('sos_alerts','organization_id'),('sos_alerts','created_at'),
       ('sos_alerts','acknowledged_at'),
       ('city_hub_posts','author_organization_id'),('city_hub_posts','created_at'),
@@ -139,7 +141,8 @@ GRANT EXECUTE ON FUNCTION public.report_app_version(integer, text, text) TO auth
 
 -- 2. Indexes for analytics ranges ---------------------------------------------------
 CREATE INDEX IF NOT EXISTS incidents_org_incident_date_idx ON public.incidents (organization_id, incident_date);
-CREATE INDEX IF NOT EXISTS incidents_org_created_at_idx ON public.incidents (organization_id, created_at);
+-- incidents has no created_at: report time is submitted_at (incident_date when it is empty).
+CREATE INDEX IF NOT EXISTS incidents_org_submitted_at_idx ON public.incidents (organization_id, submitted_at);
 CREATE INDEX IF NOT EXISTS patrol_routes_org_created_at_idx ON public.patrol_routes (organization_id, created_at);
 CREATE INDEX IF NOT EXISTS sos_alerts_org_created_at_idx ON public.sos_alerts (organization_id, created_at);
 CREATE INDEX IF NOT EXISTS users_created_at_idx ON public.users (created_at);
@@ -318,7 +321,7 @@ AS $$
   inc AS (
     SELECT i.status
     FROM public.incidents i
-    WHERE i.created_at >= p_from AND i.created_at < p_to
+    WHERE coalesce(i.submitted_at, i.incident_date::timestamptz) >= p_from AND coalesce(i.submitted_at, i.incident_date::timestamptz) < p_to
       AND public.analytics_in_scope(i.organization_id, p_all, p_orgs, p_unassigned)
       AND NOT EXISTS (SELECT 1 FROM public.sos_alerts sa WHERE sa.incident_id = i.id)
   ),
@@ -426,9 +429,9 @@ AS $$
     GROUP BY 1
   ),
   inc AS (
-    SELECT date_trunc(p_grain, i.created_at AT TIME ZONE 'Africa/Johannesburg') AS bucket, count(*) AS n
+    SELECT date_trunc(p_grain, coalesce(i.submitted_at, i.incident_date::timestamptz) AT TIME ZONE 'Africa/Johannesburg') AS bucket, count(*) AS n
     FROM public.incidents i
-    WHERE i.created_at >= p_from AND i.created_at < p_to
+    WHERE coalesce(i.submitted_at, i.incident_date::timestamptz) >= p_from AND coalesce(i.submitted_at, i.incident_date::timestamptz) < p_to
       AND public.analytics_in_scope(i.organization_id, p_all, p_orgs, p_unassigned)
       AND NOT EXISTS (SELECT 1 FROM public.sos_alerts sa WHERE sa.incident_id = i.id)
     GROUP BY 1
@@ -662,14 +665,14 @@ BEGIN
   inc AS (
     SELECT coalesce(i.organization_id, v_legacy) AS org, count(*) AS n
     FROM public.incidents i
-    WHERE i.created_at >= b.from_ts AND i.created_at < b.to_ts
+    WHERE coalesce(i.submitted_at, i.incident_date::timestamptz) >= b.from_ts AND coalesce(i.submitted_at, i.incident_date::timestamptz) < b.to_ts
       AND NOT EXISTS (SELECT 1 FROM public.sos_alerts sa WHERE sa.incident_id = i.id)
     GROUP BY 1
   ),
   last_inc AS (
-    SELECT coalesce(i.organization_id, v_legacy) AS org, max(i.created_at) AS at
+    SELECT coalesce(i.organization_id, v_legacy) AS org, max(coalesce(i.submitted_at, i.incident_date::timestamptz)) AS at
     FROM public.incidents i
-    WHERE i.created_at < b.to_ts
+    WHERE coalesce(i.submitted_at, i.incident_date::timestamptz) < b.to_ts
     GROUP BY 1
   ),
   sos AS (
@@ -745,7 +748,7 @@ BEGIN
   END LOOP;
 
   FOREACH ix IN ARRAY ARRAY[
-    'incidents_org_incident_date_idx', 'incidents_org_created_at_idx', 'patrol_routes_org_created_at_idx',
+    'incidents_org_incident_date_idx', 'incidents_org_submitted_at_idx', 'patrol_routes_org_created_at_idx',
     'sos_alerts_org_created_at_idx', 'users_created_at_idx', 'city_hub_posts_author_org_created_at_idx'
   ] LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = ix) THEN
