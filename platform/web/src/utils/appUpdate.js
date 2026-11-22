@@ -77,3 +77,16 @@ export function canPerformImmediateUpdate(info) {
   if (info.immediateUpdateAllowed === false) return false;
   return info.updateAvailability === UPDATE_AVAILABLE || info.updateAvailability === UPDATE_IN_PROGRESS;
 }
+
+/**
+ * Arguments for the report_app_version RPC from Capacitor App.getInfo()
+ * (build = versionCode, version = versionName). Null when there is nothing usable to report.
+ */
+export function appVersionReportPayload(info, platform) {
+  if (platform !== "android") return null;
+  const code = parseVersionCode(info?.build);
+  if (code == null) return null;
+  const raw = typeof info?.version === "string" ? info.version.trim() : "";
+  const name = /^[0-9A-Za-z._+ -]{1,40}$/.test(raw) ? raw : null;
+  return { p_code: code, p_name: name, p_platform: "android" };
+}

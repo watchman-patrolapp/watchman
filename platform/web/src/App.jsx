@@ -25,6 +25,8 @@ import PermissionsPrimerModal from "./components/PermissionsPrimerModal";
 import PatrolTrackingPrompts from "./components/patrol/PatrolTrackingPrompts";
 import AppRoutes from "./routes/AppRoutes";
 import AppUpdateHost from "./components/AppUpdateHost";
+import { reportAppVersionOnce } from "./utils/appVersionReport";
+import { touchActivityOnce } from "./utils/activityTouch";
 import { useTermsGateDecision } from "./auth/useTermsGate";
 
 /**
@@ -134,6 +136,32 @@ function WidgetLinkHost() {
   return null;
 }
 
+/** Android: records the installed app version once per session (analytics version spread). */
+function AppVersionReportHost() {
+  const { user, sessionReady } = useAuth();
+  const userId = sessionReady ? user?.id : null;
+  useEffect(() => {
+    if (userId) void reportAppVersionOnce(userId);
+  }, [userId]);
+  return null;
+}
+
+/** Records "opened the app today" once per day (active-member analytics). Silent on any error. */
+function ActivityTouchHost() {
+  const { user, sessionReady } = useAuth();
+  const userId = sessionReady ? user?.id : null;
+  useEffect(() => {
+    if (!userId) return undefined;
+    void touchActivityOnce(userId);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void touchActivityOnce(userId);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [userId]);
+  return null;
+}
+
 /** One-time permission intro (location + notifications) after sign-in; not tied to a single page. */
 function PermissionFlowHost() {
   const { user, sessionReady } = useAuth();
@@ -162,6 +190,8 @@ function App() {
           <CarPatrolGpsHost />
           <WidgetProfileHost />
           <WidgetLinkHost />
+          <AppVersionReportHost />
+          <ActivityTouchHost />
           <AppRoutes />
           <HardwareBackNavHost />
           <MobilePatrolDockHost />

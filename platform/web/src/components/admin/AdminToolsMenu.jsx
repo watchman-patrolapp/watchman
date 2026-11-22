@@ -3,6 +3,7 @@ import {
   FaBook,
   FaBuilding,
   FaBullhorn,
+  FaChartBar,
   FaChartLine,
   FaChevronDown,
   FaClipboardList,
@@ -232,6 +233,14 @@ export default function AdminToolsMenu({
         icon: FaCreditCard,
         tone: "bg-emerald-700",
         show: isPlatformConsoleUser,
+      },
+      {
+        id: "analytics",
+        label: "Analytics",
+        to: "/admin/analytics",
+        icon: FaChartBar,
+        tone: "bg-teal-700",
+        show: isGlobalAppUser,
       },
       {
         id: "security-memberships",

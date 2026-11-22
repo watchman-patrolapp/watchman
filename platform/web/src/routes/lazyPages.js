@@ -86,5 +86,6 @@ export const SosEscalationBoard = lazy(() => import("../pages/SosEscalationBoard
 export const PilotReadiness = lazy(() => import("../pages/PilotReadiness"));
 export const RoleAccessGuide = lazy(() => import("../pages/RoleAccessGuide"));
 export const ChooseArea = lazy(() => import("../pages/ChooseArea"));
+export const AdminAnalytics = lazy(() => import("../pages/AdminAnalytics"));
 // Dev-only share card fixtures; tree-shaken from production builds.
 export const ShareCardFixtures = import.meta.env.DEV ? lazy(() => import("../pages/dev/ShareCardFixtures")) : null;

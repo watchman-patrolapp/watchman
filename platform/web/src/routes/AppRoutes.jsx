@@ -109,6 +109,7 @@ import {
   RoleAccessGuide,
   ChooseArea,
   ShareCardFixtures,
+  AdminAnalytics,
 } from "./lazyPages";
 
 export default function AppRoutes() {
@@ -933,6 +934,17 @@ export default function AppRoutes() {
               <RequirePlatformRole>
                 <BillingDashboard />
               </RequirePlatformRole>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/analytics"
+          element={
+            <PrivateRoute>
+              <RequireRole allowedRoles={GLOBAL_APP_ROLES}>
+                <AdminAnalytics />
+              </RequireRole>
             </PrivateRoute>
           }
         />
