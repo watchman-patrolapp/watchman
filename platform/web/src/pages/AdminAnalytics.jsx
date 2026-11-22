@@ -17,7 +17,9 @@ const TABS = {
   patrols: lazy(() => import("../components/analytics/tabs/PatrolsTab")),
   safety: lazy(() => import("../components/analytics/tabs/SafetyTab")),
   people: lazy(() => import("../components/analytics/tabs/PeopleTab")),
+  residents: lazy(() => import("../components/analytics/tabs/ResidentsTab")),
   community: lazy(() => import("../components/analytics/tabs/CommunityTab")),
+  security: lazy(() => import("../components/analytics/tabs/SecurityTab")),
   watches: lazy(() => import("../components/analytics/tabs/WatchesTab")),
 };
 

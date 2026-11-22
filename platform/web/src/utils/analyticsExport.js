@@ -8,6 +8,8 @@ import {
   formatBucketLabel,
   hourLabel,
   labelize,
+  monthLabel,
+  roleGroupLabel,
   roleRows,
   seriesRows,
   versionRows,
@@ -258,6 +260,145 @@ export function tabExportSections(tab, { overview, watches, section }) {
       },
       list("City Hub posts by kind", "Kind", countRows(s.hub_posts?.by_type, "type", "posts")),
       list("Reports by reason", "Reason", countRows(s.reports?.by_reason, "reason", "reports"))
+    );
+  } else if (tab === "residents") {
+    const s = section || {};
+    const a = s.active || {};
+    const sv = s.services || {};
+    out.push(
+      kv("Active members", [
+        ["Tracking since", a.tracking_since || "not started"],
+        ["As of", a.as_of],
+        ["Daily active residents", a.dau?.residents],
+        ["Daily active patrollers", a.dau?.patrollers],
+        ["Average daily active residents", a.avg_dau?.residents],
+        ["Weekly active residents (7 days)", a.wau?.residents],
+        ["Weekly active patrollers (7 days)", a.wau?.patrollers],
+        ["Monthly active residents (30 days)", a.mau?.residents],
+        ["Monthly active patrollers (30 days)", a.mau?.patrollers],
+        ["Residents active in period", a.in_period?.residents],
+        ["Patrollers active in period", a.in_period?.patrollers],
+      ]),
+      {
+        title: "Active members over time",
+        columns: [
+          { key: "bucket", label: "Period starting" },
+          { key: "residents", label: "Active residents" },
+          { key: "patrollers", label: "Active patrollers" },
+          { key: "members", label: "All active members" },
+        ],
+        rows: a.series || [],
+      },
+      {
+        title: "Reports by who raised them",
+        columns: [
+          { key: "group", label: "Raised by" },
+          { key: "incidents", label: "Incidents" },
+          { key: "approved", label: "Approved" },
+          { key: "approve_median_seconds", label: "Median to approve (s)" },
+          { key: "approve_p90_seconds", label: "90% approved within (s)" },
+          { key: "sos", label: "SOS alerts" },
+          { key: "sos_acknowledged", label: "SOS acknowledged" },
+          { key: "sos_ack_median_seconds", label: "Median to acknowledge (s)" },
+          { key: "sos_ack_p90_seconds", label: "90% acknowledged within (s)" },
+        ],
+        rows: (s.reports?.by_role || []).map((r) => ({ ...r, group: roleGroupLabel(r.role) })),
+      },
+      {
+        title: "Residents and patrol coverage by suburb",
+        columns: [
+          { key: "suburb", label: "Suburb" },
+          { key: "city", label: "City" },
+          { key: "residents", label: "Residents" },
+          { key: "patrols", label: "Patrols" },
+          { key: "hours", label: "Patrol hours" },
+          { key: "hours_per_100_residents", label: "Hours per 100 residents" },
+          { key: "under", label: "Under-covered" },
+        ],
+        rows: (s.suburbs?.rows || []).map((r) => ({ ...r, under: r.under_covered ? "Yes" : "" })),
+      },
+      {
+        title: "Retention by sign-up month",
+        columns: [
+          { key: "month_label", label: "Joined" },
+          { key: "group_label", label: "Group" },
+          { key: "joined", label: "Joined" },
+          { key: "eligible_30", label: "Joined 30+ days ago" },
+          { key: "retained_30", label: "Active after 30 days" },
+          { key: "eligible_90", label: "Joined 90+ days ago" },
+          { key: "retained_90", label: "Active after 90 days" },
+        ],
+        rows: (s.retention?.cohorts || []).map((r) => ({ ...r, month_label: monthLabel(r.month), group_label: roleGroupLabel(r.group) })),
+      },
+      kv("Local services", [
+        ["Listings", sv.listings],
+        ["Active (published)", sv.active],
+        ["Inactive", sv.inactive],
+        ["Awaiting review", sv.awaiting_review],
+        ["New in period", sv.new_in_period],
+        ["Providers", sv.providers],
+        ["Providers with an active listing", sv.active_providers],
+        ["Reviews", sv.reviews?.total],
+        ["Average rating", sv.reviews?.avg_rating],
+      ]),
+      {
+        title: "Local services by category",
+        columns: [
+          { key: "category", label: "Category" },
+          { key: "listings", label: "Listings" },
+          { key: "active", label: "Active" },
+        ],
+        rows: sv.by_category || [],
+      }
+    );
+  } else if (tab === "security") {
+    const s = section || {};
+    out.push(
+      kv("Security companies", [
+        ["Companies", s.companies?.total],
+        ["Active", s.companies?.active],
+        ["New in period", s.companies?.new_in_period],
+        ["Covering a whole city", s.companies?.city_wide],
+        ["Assigned suburbs", s.areas?.assigned_suburbs],
+        ["Watch areas covered", s.areas?.watch_areas_covered],
+        ["Watch areas in scope", s.areas?.watch_areas_total],
+        ["Clients linked", s.clients?.linked],
+        ["Clients verified", s.clients?.verified],
+        ["Clients awaiting verification", s.clients?.awaiting_verification],
+        ["Clients won in period", s.movement?.won],
+        ["Clients lost in period", s.movement?.lost],
+        ["SOS in partner areas", s.safety?.sos],
+        ["SOS acknowledged", s.safety?.sos_acknowledged],
+        ["SOS acknowledged by security", s.safety?.sos_ack_by_security],
+        ["Median SOS acknowledge (s)", s.safety?.sos_ack_median_seconds],
+        ["SOS resolved by security", s.safety?.sos_resolved_by_security],
+        ["Incidents in partner areas", s.safety?.incidents],
+        ["Live patrols now", s.coverage?.live_patrols_now],
+        ["Patrols scheduled today", s.coverage?.scheduled_today],
+        ["Patrols scheduled next 7 days", s.coverage?.scheduled_next_7_days],
+      ]),
+      {
+        title: "Onboarding over time",
+        columns: [
+          { key: "bucket", label: "Period starting" },
+          { key: "companies", label: "Companies set up" },
+          { key: "clients", label: "Client links" },
+        ],
+        rows: s.series || [],
+      },
+      {
+        title: "Companies",
+        columns: [
+          { key: "name", label: "Company" },
+          { key: "status", label: "Status" },
+          { key: "clients", label: "Clients" },
+          { key: "verified", label: "Verified" },
+          { key: "suburbs", label: "Assigned suburbs" },
+          { key: "watch_areas", label: "Watch areas" },
+        ],
+        rows: s.top_companies || [],
+      },
+      list("Client changes", "Change", countRows(s.movement?.by_event, "event", "events"))
     );
   }
   out.push(watchesSection(watches));

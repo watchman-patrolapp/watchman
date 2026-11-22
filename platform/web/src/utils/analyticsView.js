@@ -19,7 +19,9 @@ export const ANALYTICS_TABS = [
   { id: "patrols", label: "Patrols" },
   { id: "safety", label: "Safety" },
   { id: "people", label: "People" },
+  { id: "residents", label: "Residents" },
   { id: "community", label: "Community" },
+  { id: "security", label: "Security" },
   { id: "watches", label: "Watches" },
 ];
 const TAB_IDS = ANALYTICS_TABS.map((t) => t.id);
@@ -478,4 +480,26 @@ export function percent(part, whole) {
   const b = num(whole);
   if (a === null || !b) return null;
   return Math.round((a / b) * 1000) / 10;
+}
+
+const ROLE_GROUP_LABELS = {
+  resident: "Residents",
+  patroller: "Patrollers",
+  watch_admin: "Watch admins",
+  security: "Security staff",
+  staff: "Global admins and support",
+  other: "Other roles",
+  unknown: "Not recorded",
+};
+
+/** "Residents", "Patrollers", ... for analytics_role_group() values. */
+export function roleGroupLabel(group) {
+  return ROLE_GROUP_LABELS[group] || labelize(group);
+}
+
+/** "Sep 2026" from "2026-09". */
+export function monthLabel(ym) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(ym || ""));
+  if (!m) return String(ym || "");
+  return `${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
 }

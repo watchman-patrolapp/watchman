@@ -167,3 +167,13 @@ test("distance KPI explains where kilometres come from", () => {
   assert.equal(k.find((x) => x.key === "distance").sub, "GPS-tracked on 120 of 812 patrols");
   assert.equal(buildKpis(OVERVIEW).find((x) => x.key === "distance").sub, "from routes and GPS tracks");
 });
+
+test("role group and month labels", async () => {
+  const { roleGroupLabel, monthLabel, ANALYTICS_TABS } = await import("../analyticsView.js");
+  assert.equal(roleGroupLabel("resident"), "Residents");
+  assert.equal(roleGroupLabel("watch_admin"), "Watch admins");
+  assert.equal(roleGroupLabel("unknown"), "Not recorded");
+  assert.equal(monthLabel("2026-09"), "Sep 2026");
+  assert.equal(monthLabel("bad"), "bad");
+  assert.deepEqual(ANALYTICS_TABS.map((t) => t.id), ["overview", "patrols", "safety", "people", "residents", "community", "security", "watches"]);
+});
