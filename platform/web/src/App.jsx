@@ -24,6 +24,7 @@ import OfflineBanner from "./components/layout/OfflineBanner";
 import PermissionsPrimerModal from "./components/PermissionsPrimerModal";
 import PatrolTrackingPrompts from "./components/patrol/PatrolTrackingPrompts";
 import AppRoutes from "./routes/AppRoutes";
+import { useTermsGateDecision } from "./auth/useTermsGate";
 
 /**
  * Android Auto: a patrol started from the car starts phone GPS from here, so it works on any page
@@ -135,7 +136,10 @@ function WidgetLinkHost() {
 /** One-time permission intro (location + notifications) after sign-in; not tied to a single page. */
 function PermissionFlowHost() {
   const { user, sessionReady } = useAuth();
+  const { decision } = useTermsGateDecision();
   if (!sessionReady || !user?.id) return null;
+  // Terms first: no permission prompts on top of the acceptance screen.
+  if (decision === "ask") return null;
   return (
     <>
       <PermissionsPrimerModal userId={user.id} />

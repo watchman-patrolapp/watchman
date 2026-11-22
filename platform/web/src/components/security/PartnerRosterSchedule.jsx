@@ -74,7 +74,7 @@ export default function PartnerRosterSchedule({ areas, areaFilter, patrols, onOp
       }
       if (result.error && !isRpcNotFoundError(result.error)) throw result.error;
       if (result.error && isRpcNotFoundError(result.error)) {
-        if (!silent) toast.error("Run the partner roster SQL in Supabase to load live schedules.");
+        if (!silent) toast.error("Live schedules aren't available yet. Please try again later.");
         setSlots([]);
         return;
       }

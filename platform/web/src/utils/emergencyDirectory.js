@@ -123,7 +123,7 @@ export async function uploadEmergencyDirectoryImage(kind, file, { scope = "org",
     upsert: false,
   });
   if (error) {
-    throw new Error(error.message || "Could not upload. Run the emergency directory media SQL if the bucket is missing.");
+    throw new Error(error.message || "Could not upload. Please try again.");
   }
   const { data } = supabase.storage.from(EMERGENCY_DIRECTORY_BUCKET).getPublicUrl(filePath);
   return data?.publicUrl || "";
@@ -146,7 +146,7 @@ export async function uploadSecurityBrandingImage(companyId, kind, file) {
     upsert: true,
   });
   if (error) {
-    throw new Error(error.message || "Could not upload. Run the branding SQL if the bucket is missing.");
+    throw new Error(error.message || "Could not upload. Please try again.");
   }
   const { data } = supabase.storage.from(SECURITY_BRANDING_BUCKET).getPublicUrl(filePath);
   return data?.publicUrl || "";

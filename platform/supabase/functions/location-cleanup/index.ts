@@ -1,12 +1,57 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 import { getServiceRoleKey, requireCronSecret } from '../_shared/auth.ts';
+
+const HARD_DELETE_BATCH_SIZE = 200;
+const HARD_DELETE_MAX_BATCHES = 50;
 
 interface CleanupResult {
   success: boolean;
   softDeleted: number;
   archived: number;
   hardDeleted: number;
+  hardDeletedLive: number;
+  hardDeletedArchive: number;
   errors: string[];
+}
+
+async function hardDeleteOlderThan(
+  supabase: SupabaseClient,
+  table: 'patrol_locations' | 'patrol_locations_archive',
+  cutoffIso: string,
+  allowMissingTable = false,
+): Promise<number> {
+  let totalDeleted = 0;
+
+  for (let batch = 0; batch < HARD_DELETE_MAX_BATCHES; batch++) {
+    const { data: rows, error: selectError } = await supabase
+      .from(table)
+      .select('id')
+      .lt('timestamp', cutoffIso)
+      .limit(HARD_DELETE_BATCH_SIZE);
+
+    if (selectError) {
+      if (allowMissingTable && String(selectError.message || '').includes('does not exist')) {
+        console.warn(`${table} does not exist; skipping hard delete`);
+        return totalDeleted;
+      }
+      throw selectError;
+    }
+
+    if (!rows || rows.length === 0) break;
+
+    const ids = rows.map((r) => r.id);
+    const { error: deleteError } = await supabase
+      .from(table)
+      .delete()
+      .in('id', ids);
+
+    if (deleteError) throw deleteError;
+
+    totalDeleted += ids.length;
+    if (rows.length < HARD_DELETE_BATCH_SIZE) break;
+  }
+
+  return totalDeleted;
 }
 
 Deno.serve(async (req): Promise<Response> => {
@@ -25,6 +70,8 @@ Deno.serve(async (req): Promise<Response> => {
     softDeleted: 0,
     archived: 0,
     hardDeleted: 0,
+    hardDeletedLive: 0,
+    hardDeletedArchive: 0,
     errors: [],
   };
 
@@ -45,6 +92,9 @@ Deno.serve(async (req): Promise<Response> => {
     });
 
     const now = new Date();
+    const oneYearAgo = new Date(now);
+    oneYearAgo.setUTCFullYear(oneYearAgo.getUTCFullYear() - 1);
+    const oneYearIso = oneYearAgo.toISOString();
 
     // STEP 1: SOFT DELETE - Patrols ended > 7 days ago
     try {
@@ -79,7 +129,7 @@ Deno.serve(async (req): Promise<Response> => {
       console.error('Soft delete error:', message);
     }
 
-    // STEP 2: ARCHIVE - Locations > 90 days old
+    // STEP 2: ARCHIVE - Locations > 90 days old (and <= 1 year old; older rows are purged in Step 4)
     try {
       const ninetyDaysAgo = new Date(now);
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -88,6 +138,7 @@ Deno.serve(async (req): Promise<Response> => {
         .from('patrol_locations')
         .select('*')
         .lt('timestamp', ninetyDaysAgo.toISOString())
+        .gte('timestamp', oneYearIso)
         .is('deleted_at', null)
         .eq('is_archived', false)
         .limit(1000);
@@ -134,7 +185,7 @@ Deno.serve(async (req): Promise<Response> => {
       console.error('Archive error:', message);
     }
 
-    // STEP 3: ARCHIVE patrol_routes
+    // STEP 3: ARCHIVE patrol_routes (keep route summaries for history; never delete)
     try {
       const ninetyDaysAgo = new Date(now);
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -157,22 +208,26 @@ Deno.serve(async (req): Promise<Response> => {
       console.error('Routes archive error:', message);
     }
 
-    // STEP 4: HARD DELETE - Archived > 2 years (GDPR)
+    // STEP 4: HARD DELETE - Permanently delete raw GPS points older than 1 year (live + archive)
     try {
-      const twoYearsAgo = new Date(now);
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+      result.hardDeletedLive = await hardDeleteOlderThan(
+        supabase,
+        'patrol_locations',
+        oneYearIso,
+        false,
+      );
+      result.hardDeletedArchive = await hardDeleteOlderThan(
+        supabase,
+        'patrol_locations_archive',
+        oneYearIso,
+        true,
+      );
+      result.hardDeleted = result.hardDeletedLive + result.hardDeletedArchive;
 
-      const { data: deletedData, error: hardDeleteError } = await supabase
-        .from('patrol_locations_archive')
-        .delete()
-        .lt('archived_at', twoYearsAgo.toISOString())
-        .select('id');
-
-      if (hardDeleteError) throw hardDeleteError;
-
-      result.hardDeleted = deletedData?.length || 0;
       if (result.hardDeleted > 0) {
-        console.log(`Hard deleted ${result.hardDeleted} old records`);
+        console.log(
+          `Hard deleted ${result.hardDeleted} raw GPS points older than 1 year (${result.hardDeletedLive} live, ${result.hardDeletedArchive} archive)`,
+        );
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

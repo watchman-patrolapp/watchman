@@ -229,11 +229,7 @@ export default function IncidentDetail() {
     try {
       const result = await deleteIncidentFully(id);
       if (!result.ok) {
-        toast.error(
-          result.error?.includes('admin_delete_incident') || result.error?.includes('function')
-            ? `Delete failed: ${result.error} — run the SQL migration admin_delete_incident in Supabase.`
-            : `Delete failed: ${result.error || 'Unknown error'}`
-        );
+        toast.error('Could not delete this incident. Please try again.');
         return;
       }
       toast.success('Incident deleted');

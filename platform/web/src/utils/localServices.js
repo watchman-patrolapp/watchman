@@ -10,7 +10,7 @@ export const MAX_ACTIVE_LISTINGS = 3;
 export const SAVE_FALLBACK = "Could not save your listing. Try again.";
 export const LOAD_FALLBACK = "Could not load local services. Try again.";
 export const NEIGHBOUR_FALLBACK = "Could not update neighbouring suburbs. Try again.";
-export const SQL_MISSING_MESSAGE = "Run the local services SQL in Supabase first.";
+export const SQL_MISSING_MESSAGE = "Local services aren't available yet. Please try again later.";
 
 export const PRICE_RANGES = [
   { value: "", label: "Not stated" },

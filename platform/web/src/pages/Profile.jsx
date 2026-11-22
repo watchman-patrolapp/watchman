@@ -30,6 +30,7 @@ import {
 import HomePinPicker from '../components/profile/HomePinPicker';
 import EmergencyContactSection from '../components/profile/EmergencyContactSection';
 import DeleteAccountSection from '../components/profile/DeleteAccountSection';
+import BlockedMembersSection from '../components/community/BlockedMembersSection';
 import AvatarCropModal from '../components/profile/AvatarCropModal';
 import NotificationPrefs from '../components/profile/NotificationPrefs';
 import MyCapabilities from '../components/profile/MyCapabilities';
@@ -433,7 +434,7 @@ export default function Profile() {
         : await requestPatrollerRole();
       if (error) {
         if (isRpcNotFoundError(error)) {
-          toast.error('Apply the patroller-request SQL on Supabase first.');
+          toast.error('Patroller requests aren\'t available yet. Please try again later.');
           return;
         }
         throw error;
@@ -496,7 +497,7 @@ export default function Profile() {
 
         await refreshUser();
         toast.success(
-          'Profile updated. Phone is saved on your account; add column users.phone in Supabase (migration 20260328250000) to store it on the member row.'
+          'Profile updated.'
         );
         return;
       }
@@ -1152,6 +1153,7 @@ export default function Profile() {
           </button>
         </div>
 
+        <BlockedMembersSection user={user} />
         <DeleteAccountSection user={user} signOut={signOut} navigate={navigate} />
       </div>
     </div>

@@ -151,7 +151,7 @@ export default function SosEscalationBoard() {
     } catch (err) {
       console.error(err);
       toast.error(
-        err.message || "Could not acknowledge. Apply the SOS patrol SQL if this persists."
+        err.message || "Could not acknowledge this SOS. Please try again."
       );
     } finally {
       setBusyId(null);
@@ -174,7 +174,7 @@ export default function SosEscalationBoard() {
       await loadAlerts({ silent: true });
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Could not resolve SOS. Apply the latest SOS SQL if this persists.");
+      toast.error(err.message || "Could not resolve this SOS. Please try again.");
     } finally {
       setBusyId(null);
     }
@@ -221,7 +221,7 @@ export default function SosEscalationBoard() {
     } catch (err) {
       console.error(err);
       toast.error(
-        err.message || "Could not delete SOS. Apply the SOS history delete SQL if this persists."
+        err.message || "Could not delete this SOS. Please try again."
       );
     } finally {
       setBusyId(null);

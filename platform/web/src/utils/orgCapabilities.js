@@ -60,7 +60,7 @@ export async function listMyCapabilityGrants(userId) {
 }
 
 export function capabilityErrorMessage(error, fallback) {
-  if (isRpcNotFoundError(error)) return "Run the capability SQL (P0a) in Supabase first.";
+  if (isRpcNotFoundError(error)) return "This feature isn't switched on for your watch yet.";
   const msg = String(error?.message || "").replace(/^ERROR:\s*/i, "").trim();
   if (/no neighbourhood selected/i.test(msg)) return "Choose a neighbourhood first (Choose area).";
   if (/only verified households/i.test(msg)) return "Only verified households can hold this responsibility.";

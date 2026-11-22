@@ -42,7 +42,7 @@ function saveErrorMessage(error) {
     || msg.includes("does not exist")
     || msg.includes("could not find the table")
   ) {
-    return "The neighbourhood price table is not on the server yet. Apply the latest Supabase migration, then try again.";
+    return "Neighbourhood fuel prices aren't available yet. Please try again later.";
   }
   if (msg.includes("not allowed") || msg.includes("permission") || msg.includes("rls") || msg.includes("42501")) {
     return "Your role cannot publish the neighbourhood pump price. The slider still applies on this device.";

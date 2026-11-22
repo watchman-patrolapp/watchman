@@ -22,6 +22,7 @@ import BrandedLoader from './layout/BrandedLoader';
 import { useScopedOrganization } from '../utils/organizationScope';
 import { parsePatrolTime } from '../utils/watchTime';
 
+import { friendlyError } from '../utils/friendlyError';
 let garageRpcTriedAndMissing = false;
 
 /** Never plot points older than this wall-clock age (same user_id may hold years of history). */
@@ -440,7 +441,7 @@ export default function LivePatrolMap() {
         setError(null);
       } catch (err) {
         console.error('Error fetching patrols:', err);
-        setError(err.message);
+        setError(friendlyError(err));
       } finally {
         initialMapFetchDoneRef.current = true;
         if (showSpinner) setLoading(false);

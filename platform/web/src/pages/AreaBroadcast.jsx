@@ -91,7 +91,7 @@ export default function AreaBroadcast() {
     if (hidden.error) {
       if (isMissingAreaBroadcastHideSchema(hidden.error)) {
         setHiddenRows([]);
-        setSchemaHint("Run the area broadcast hide SQL in Supabase first.");
+        setSchemaHint("Hiding broadcasts isn't available yet. Please try again later.");
         return;
       }
       console.warn("hidden broadcasts:", hidden.error.message);

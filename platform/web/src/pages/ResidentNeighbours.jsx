@@ -8,6 +8,7 @@ import PageHeader from "../components/layout/PageHeader";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import ResidentHouseholdCard from "../components/resident/ResidentHouseholdCard";
 import ReportContentButton from "../components/community/ReportContentButton";
+import BlockUserButton from "../components/community/BlockUserButton";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
 import {
   RESIDENT_VOUCH_THRESHOLD,
@@ -94,7 +95,7 @@ export default function ResidentNeighbours() {
       const { data, error } = await vouchForResident(neighbourId);
       if (error) {
         if (isRpcNotFoundError(error)) {
-          toast.error("Apply the resident verification SQL on Supabase first.");
+          toast.error("Resident verification isn't available yet. Please try again later.");
           return;
         }
         throw error;
@@ -270,6 +271,12 @@ export default function ResidentNeighbours() {
                     contentId={row.user_id}
                     currentUserId={user?.id}
                     authorUserId={row.user_id}
+                  />
+                  <BlockUserButton
+                    variant="quietLink"
+                    className="mt-1 block w-full text-center"
+                    targetUserId={row.user_id}
+                    currentUserId={user?.id}
                   />
                 </ResidentHouseholdCard>
               );

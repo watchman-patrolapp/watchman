@@ -15,6 +15,7 @@ import { MessageType } from '../../utils/constants';
 import { formatMessageTime } from '../../utils/formatters';
 import ChatErrorBoundary from '../../../components/ChatErrorBoundary';
 import ReportContentButton from '../../../components/community/ReportContentButton';
+import BlockUserButton from '../../../components/community/BlockUserButton';
 
 export const MessageBubble = React.memo(function MessageBubble({
   message,
@@ -242,6 +243,12 @@ export const MessageBubble = React.memo(function MessageBubble({
                   contentId={message.id}
                   currentUserId={currentUserId}
                   authorUserId={messageSenderId}
+                />
+                <BlockUserButton
+                  variant="menuItem"
+                  targetUserId={messageSenderId}
+                  currentUserId={currentUserId}
+                  targetName={message.sender_name || message.senderName}
                 />
               </div>
             ) : null}

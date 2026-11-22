@@ -56,7 +56,7 @@ export default function SecurityBranding() {
       console.error(err);
       toast.error(
         isRpcNotFoundError(err)
-          ? "Run the branding SQL in Supabase to enable logo and banner uploads."
+          ? "Logo and banner uploads aren't available yet."
           : err.message || "Could not load branding."
       );
     } finally {
@@ -138,7 +138,7 @@ export default function SecurityBranding() {
     } catch (err) {
       toast.error(
         isRpcNotFoundError(err)
-          ? "Run the branding SQL in Supabase first."
+          ? "Logo and banner uploads aren't available yet."
           : err.message || "Could not save branding."
       );
     } finally {

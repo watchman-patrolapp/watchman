@@ -9,6 +9,8 @@ import { useActiveOrganization } from "../auth/useActiveOrganization";
 import CityHubBanner from "../components/cityhub/CityHubBanner";
 import CityHubAuthorSheet from "../components/cityhub/hub/CityHubAuthorSheet";
 import ReportContentButton, { OverflowMenu } from "../components/community/ReportContentButton";
+import BlockUserButton from "../components/community/BlockUserButton";
+import { useBlockedUserIds } from "../utils/userBlocks";
 import CityHubEditModal from "../components/cityhub/hub/CityHubEditModal";
 import { POST_TYPES, POST_TYPE_CARD_ACCENT, cityHubPostTypeHeadline } from "../components/cityhub/hub/cityHubConfig";
 import { CityHubPostBody, CityHubPhotoGrid, CityHubDocumentList } from "../components/cityhub/hub/CityHubPostParts";
@@ -34,6 +36,7 @@ import { friendlyMediaMessage, removeCityHubPostMedia } from "../utils/privateMe
 export default function CityHub() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const blockedIds = useBlockedUserIds(user?.id);
   const { activeOrganizationId } = useActiveOrganization();
   const allowPublish = canPublishCityHub(user?.role, user?.platformRole);
   const { backTo, backLabel } = homeBackNav(user?.role, user?.platformRole);
@@ -388,6 +391,11 @@ export default function CityHub() {
     }
   };
 
+  // Hide posts from members this user blocked, but always keep suspect alerts visible for safety.
+  const visiblePosts = blockedIds.size
+    ? posts.filter((post) => post.type === "suspect_alert" || !blockedIds.has(String(post.created_by_user_id || "")))
+    : posts;
+
   return (
     <div className="min-h-screen bg-gray-100 p-4 dark:bg-gray-900 sm:p-6">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -535,11 +543,11 @@ export default function CityHub() {
           {savedAt ? <div className="mb-3"><LastUpdatedNote savedAt={savedAt} /></div> : null}
           {loading ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">Loading posts...</p>
-          ) : posts.length === 0 ? (
+          ) : visiblePosts.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">No city-hub posts yet.</p>
           ) : (
             <div className="space-y-5">
-              {posts.map((post) => {
+              {visiblePosts.map((post) => {
                 const canManage = canManageCityHubPost(user?.role, user?.id, post, user?.platformRole);
                 const busy = busyId === post.id;
                 const unread = unreadPostIds.has(post.id);
@@ -634,6 +642,11 @@ export default function CityHub() {
                             contentId={post.id}
                             currentUserId={user.id}
                             authorUserId={post.created_by_user_id}
+                          />
+                          <BlockUserButton
+                            variant="menuItem"
+                            targetUserId={post.created_by_user_id}
+                            currentUserId={user.id}
                           />
                         </OverflowMenu>
                       ) : null}

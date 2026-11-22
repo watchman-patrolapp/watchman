@@ -39,6 +39,7 @@ import { useEquipmentPendingCounts } from '../hooks/useEquipmentPendingCounts';
 import { useNewWishlistOffersCount } from '../hooks/useNewWishlistOffersCount';
 import { countPendingPatrollerRequests } from '../utils/residentVerification';
 
+import { friendlyError } from "../utils/friendlyError";
 const adminCharts = () => import('../components/admin/AdminPatrolCharts');
 const AdminVolunteerHoursChart = lazy(() => adminCharts().then((m) => ({ default: m.AdminVolunteerHoursChart })));
 const AdminLast7Chart = lazy(() => adminCharts().then((m) => ({ default: m.AdminLast7Chart })));
@@ -214,7 +215,7 @@ export default function AdminDashboard() {
       setActivePatrolsError(null);
     } catch (err) {
       if (gen !== activePatrolsGen.current) return;
-      setActivePatrolsError(err.message);
+      setActivePatrolsError(friendlyError(err));
     } finally {
       if (gen === activePatrolsGen.current && !silent) setActivePatrolsLoading(false);
     }
@@ -281,7 +282,7 @@ export default function AdminDashboard() {
       setRecentActivity(combined);
     } catch (err) {
       if (gen !== recentActivityGen.current) return;
-      setRecentActivityError(err.message);
+      setRecentActivityError(friendlyError(err));
     } finally {
       if (gen === recentActivityGen.current) setRecentActivityLoading(false);
     }

@@ -462,7 +462,7 @@ export default function EmergencyContacts() {
       if (gen !== loadGen.current) return;
       toast.error(
         isRpcNotFoundError(err)
-          ? "Run the emergency directory SQL in Supabase to load contacts."
+          ? "Emergency contacts aren't available yet. Please try again later."
           : err.message || "Could not load contacts."
       );
     } finally {
@@ -489,7 +489,7 @@ export default function EmergencyContacts() {
     } catch (err) {
       toast.error(
         isRpcNotFoundError(err)
-          ? "Run the emergency directory media SQL in Supabase first."
+          ? "Photo uploads for the directory aren't available yet."
           : err.message || "Could not upload image."
       );
     } finally {
@@ -516,7 +516,7 @@ export default function EmergencyContacts() {
     } catch (err) {
       toast.error(
         isRpcNotFoundError(err)
-          ? "Run the emergency directory org scope SQL in Supabase first."
+          ? "This directory option isn't available yet."
           : err.message || "Could not save contact."
       );
     } finally {
@@ -534,7 +534,7 @@ export default function EmergencyContacts() {
     } catch (err) {
       toast.error(
         isRpcNotFoundError(err)
-          ? "Run the latest emergency directory SQL in Supabase first."
+          ? "This directory option isn't available yet."
           : err.message || "Could not update contact."
       );
     } finally {

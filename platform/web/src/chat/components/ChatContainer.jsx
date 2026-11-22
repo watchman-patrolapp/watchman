@@ -1,5 +1,5 @@
 // src/chat/components/ChatContainer.jsx
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { messageService } from '../services/messageService';
 import { useAuth } from '../../auth/useAuth';
@@ -25,6 +25,7 @@ import { chatInputRateLimiter, useChatComposer } from '../hooks/useChatComposer'
 import { useChatSession } from '../hooks/useChatSession';
 import { useChatIncidentReport } from '../hooks/useChatIncidentReport';
 import ChatIncidentReportModal from './ChatIncidentReportModal';
+import { isSafetyChatMessage, useBlockedUserIds } from '../../utils/userBlocks';
 
 export default function ChatContainer() {
   const { user } = useAuth();
@@ -57,6 +58,17 @@ export default function ChatContainer() {
     isOpsChat,
     searchParams,
   });
+
+  // Hide messages from members this user blocked, but never emergency or critical alerts.
+  const blockedIds = useBlockedUserIds(user?.id);
+  const visibleMessages = useMemo(() => {
+    const list = session.messages || [];
+    if (!blockedIds.size) return list;
+    return list.filter((m) => {
+      const senderId = m?.sender_id || m?.senderId;
+      return !senderId || !blockedIds.has(String(senderId)) || isSafetyChatMessage(m);
+    });
+  }, [session.messages, blockedIds]);
 
   const inputRateLimited = chatInputRateLimiter.isRateLimited();
 
@@ -210,7 +222,7 @@ export default function ChatContainer() {
             aria-hidden
           />
           <MessageList
-            messages={session.messages}
+            messages={visibleMessages}
             currentUserId={user?.id}
             containerRef={session.containerRef}
             endRef={session.endRef}

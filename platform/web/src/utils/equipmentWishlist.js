@@ -453,7 +453,7 @@ export async function listWishlistOffers({ itemId = null, includeClosed = false 
 }
 
 export function wishlistErrorMessage(error, fallback = "Something went wrong.") {
-  if (isRpcNotFoundError(error)) return "Run the needs board SQL (P2) in Supabase first.";
+  if (isRpcNotFoundError(error)) return "The needs board isn't switched on yet.";
   const msg = String(error?.message || "").replace(/^ERROR:\s*/i, "").trim();
   if (/pledge is only allowed/i.test(msg)) return "A pledge can only be added to a cost contribution.";
   if (/pledge must be/i.test(msg)) return "Pledge must be whole rands from R 1 to R 1,000,000.";

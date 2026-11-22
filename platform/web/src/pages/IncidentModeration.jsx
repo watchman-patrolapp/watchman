@@ -26,6 +26,7 @@ import { parsePatrolTime } from "../utils/watchTime";
 import { canPublishCityHub } from "../auth/roleMatrix";
 import ShareToCityHubSheet from "../components/incident/ShareToCityHubSheet";
 
+import { friendlyError } from "../utils/friendlyError";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -345,7 +346,7 @@ export default function IncidentModeration() {
     } catch (err) {
       if (gen !== loadGen.current) return;
       console.error("Error fetching incidents:", err);
-      setError(err.message);
+      setError(friendlyError(err));
       if (!silent) toast.error("Failed to load pending incidents");
     } finally {
       if (gen === loadGen.current && !silent) setLoading(false);

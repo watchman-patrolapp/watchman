@@ -1,6 +1,7 @@
 import { FaEnvelope, FaPhone, FaTimes } from "react-icons/fa";
 import { useAuth } from "../../../auth/useAuth";
 import ReportContentButton from "../../community/ReportContentButton";
+import BlockUserButton from "../../community/BlockUserButton";
 import {
   cityHubAuthorDisplayName,
   cityHubAuthorInitials,
@@ -94,6 +95,11 @@ export default function CityHubAuthorSheet({ profile, organizationName, onClose 
             contentId={profile?.id}
             currentUserId={user?.id}
             authorUserId={profile?.id}
+          />
+          <BlockUserButton
+            variant="quietLink"
+            targetUserId={profile?.id}
+            currentUserId={user?.id}
           />
         </div>
       </div>

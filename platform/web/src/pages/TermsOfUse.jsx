@@ -8,9 +8,11 @@ import { getPrivacyContactEmail, privacyMailto } from "../utils/privacyContact";
 // consent/terms version used at registration (see FIX_PLAN.md item 6).
 // Responsible party stays Khurshid Dustmurodov t/a Africuz for now. KYZN (Pty) Ltd
 // is incorporated; operation moves to KYZN after monetisation.
-// Clause 9.6 (blocking) is kept out of the page until blocking ships.
+// Clause 9.6 (blocking) added 21 Nov 2026 now that blocking has shipped.
+// When this page or the Privacy Policy changes materially, bump CURRENT_TERMS_VERSION
+// in utils/termsGate.js so every member is asked to accept again.
 
-const TERMS_VERSION_LABEL = "Draft of 17 November 2026";
+const TERMS_VERSION_LABEL = "Draft of 21 November 2026";
 
 const linkClass = "font-medium text-text-link underline";
 const bodyClass = "text-sm leading-relaxed text-text-secondary";
@@ -270,7 +272,10 @@ export default function TermsOfUse() {
             9.4 <strong className="font-semibold text-text-primary">Takedown requests from non-members.</strong> If you are not a member and believe Watchman contains false, defamatory or unlawful content about you, or personal information about you, email <MailLink /> with the subject &quot;Takedown request&quot;. Say what the content is, which watch or area it is in (if you know), and why it should be removed. We will acknowledge the request <strong className="font-semibold text-text-primary">within 5 business days</strong> and aim to decide <strong className="font-semibold text-text-primary">within 30 days</strong>, sooner for serious harm. You may also have rights under POPIA (see the Privacy Policy).
           </p>
           <p className={bodyClass}>
-            9.5 <strong className="font-semibold text-text-primary">Appeals.</strong> If your content is removed or your account is restricted, you may ask for a review by emailing us within 30 days.{/* Note: clause 9.6 (blocking) is held back until blocking ships. See TERMS_DRAFT.md. */}
+            9.5 <strong className="font-semibold text-text-primary">Appeals.</strong> If your content is removed or your account is restricted, you may ask for a review by emailing us within 30 days.
+          </p>
+          <p className={bodyClass}>
+            9.6 <strong className="font-semibold text-text-primary">Blocking.</strong> You can block another member from the ⋯ menu on their message, post or profile. You will no longer see their chat messages or City Hub posts. They are not told. Emergency and critical alerts and suspect alerts are still shown to you, for everyone&apos;s safety. You can unblock someone at any time from your profile. Blocking does not replace reporting: if content breaks these Terms, please report it as well.
           </p>
         </section>
 
@@ -373,7 +378,7 @@ export default function TermsOfUse() {
         <section className="space-y-3" id="t16">
           <h3 className={headingClass}>16. Changes</h3>
           <p className={bodyClass}>
-            We may change these Terms. For material changes we will give notice in the App, and you may be asked to accept the new version before you can keep posting content. The version and effective date are shown at the top.
+            We may change these Terms. For material changes we will give notice in the App, and you will be asked to accept the new version before you can keep using the App. The version and effective date are shown at the top.
           </p>
         </section>
 

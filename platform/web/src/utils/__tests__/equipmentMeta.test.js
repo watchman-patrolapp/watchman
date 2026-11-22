@@ -56,7 +56,7 @@ test("status meta, emoji and errors", () => {
   assert.equal(equipmentCategoryEmoji("Radios"), "📻");
   assert.equal(equipmentCategoryEmoji("nope"), "🧰");
   assert.match(equipmentErrorMessage({ message: "unit not found" }), /not found/);
-  assert.match(equipmentErrorMessage(null, true), /P3a SQL/);
+  assert.match(equipmentErrorMessage(null, true), /not switched on yet/);
 });
 
 test("equipmentItemPhotoPaths prefers photo_paths, falls back to cover", () => {

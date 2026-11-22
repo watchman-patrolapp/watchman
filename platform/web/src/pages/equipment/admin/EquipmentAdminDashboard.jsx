@@ -40,7 +40,7 @@ export default function EquipmentAdminDashboard() {
     setLoading(false);
     if (board.error) {
       setDash(null);
-      setHint(equipmentErrorMessage(board.error, "The equipment overview is not switched on yet. Ask an admin to apply the latest equipment SQL."));
+      setHint(equipmentErrorMessage(board.error, "The equipment overview is not switched on yet. Please try again later."));
       return;
     }
     setDash(board.data);

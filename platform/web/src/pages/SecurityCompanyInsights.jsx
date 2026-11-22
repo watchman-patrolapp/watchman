@@ -16,7 +16,7 @@ export default function SecurityCompanyInsights() {
         const { data, error } = await supabase.rpc("list_security_company_resident_metrics");
         if (error) {
           if (isRpcNotFoundError(error)) {
-            throw new Error("Apply the security metrics SQL on Supabase first.");
+            throw new Error("Security insights aren't available yet. Please try again later.");
           }
           throw error;
         }

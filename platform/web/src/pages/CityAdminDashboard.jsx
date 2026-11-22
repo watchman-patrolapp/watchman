@@ -71,7 +71,7 @@ export default function CityAdminDashboard() {
         const { data, error } = await supabase.rpc("city_admin_communities");
         if (error) {
           if (isRpcNotFoundError(error)) {
-            toast.error("Run the city admin dashboard SQL in Supabase to load community details.");
+            toast.error("Community details aren't available yet. Please try again later.");
           } else {
             throw error;
           }

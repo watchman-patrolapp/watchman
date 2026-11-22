@@ -164,7 +164,7 @@ export default function NotificationPrefs({ user }) {
 
       {unavailable ? (
         <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-          Notification settings aren&apos;t available yet. Run the notification_prefs SQL in Supabase first.
+          Notification settings aren&apos;t available yet. Please try again later.
         </p>
       ) : loading ? (
         <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">Loading...</p>
