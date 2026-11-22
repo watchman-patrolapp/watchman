@@ -475,7 +475,7 @@ export default function UserManagement() {
                   <span className={`px-2 py-1 rounded text-sm ${
                     u.role === 'admin' 
                       ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
-                      : u.role === 'nw_admin' || u.role === 'city_admin' || u.role === 'security_admin'
+                      : u.role === 'nw_admin' || u.role === 'security_admin'
                       ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
                       : u.role === 'committee' 
                       ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' 
@@ -505,7 +505,6 @@ export default function UserManagement() {
                     <option value="investigator" className="dark:bg-gray-700">Investigator</option>
                     <option value="nw_admin" className="dark:bg-gray-700">NW Admin</option>
                     <option value="security_admin" className="dark:bg-gray-700">Security Admin</option>
-                    <option value="city_admin" className="dark:bg-gray-700">City Admin</option>
                     <option value="committee" className="dark:bg-gray-700">Committee</option>
                   </select>
                 </td>

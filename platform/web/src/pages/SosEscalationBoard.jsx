@@ -86,8 +86,7 @@ export default function SosEscalationBoard() {
   const canRespond =
     canAccessPatrolSchedule(user?.role) ||
     isAdmin ||
-    role === "security_admin" ||
-    role === "city_admin";
+    role === "security_admin";
   const householdView = isResidentAppRole(user?.role);
   const canDeleteHistory = canDeleteSosHistory(user?.role);
 

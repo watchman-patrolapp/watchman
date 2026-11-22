@@ -75,9 +75,7 @@ export default function Hotspots() {
   const backLabel =
     backTo === "/security"
       ? "Back to command"
-      : backTo === "/city-admin"
-        ? "Back to city admin"
-        : "Back to home";
+      : "Back to home";
 
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);

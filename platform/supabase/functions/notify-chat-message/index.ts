@@ -110,7 +110,6 @@ Deno.serve(async (req) => {
     'volunteer',
     'investigator',
     'security_admin',
-    'city_admin',
   ])
   const isOpsRole = (role: unknown) =>
     OPS_ROLES.has(String(role || '').trim().toLowerCase().replace(/-/g, '_'))

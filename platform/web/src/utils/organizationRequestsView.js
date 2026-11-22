@@ -3,7 +3,6 @@
 export const ORG_TYPE_LABELS = {
   nw_group: "Neighbourhood watch",
   security_company: "Security company",
-  city_admin: "City admin",
 };
 
 export const REQUESTED_ROLE_LABELS = {
