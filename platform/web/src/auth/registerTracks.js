@@ -46,7 +46,7 @@ export const REGISTER_TRACKS = [
     label: "Security company",
     tagline: "Partner response and member verification",
     description:
-      "For private security companies partnering with neighborhood watches. Company registration details are required; patrol vehicles are not.",
+      "For private security companies partnering with neighborhood watches. Company registration details are required; patrol vehicles are not. Your request is reviewed first, and company admin tools unlock after approval.",
     cta: "Continue as security partner",
     requiresVehicle: false,
     requiresAddress: false,
@@ -64,7 +64,7 @@ export const REGISTER_TRACKS = [
     label: "Neighborhood Watch",
     tagline: "Register or lead a local watch group",
     description:
-      "For committee leads setting up a neighborhood watch. Your group is reviewed before it goes live. Vehicle details can be added later.",
+      "For committee leads setting up a neighborhood watch. Your request is reviewed first, and admin tools unlock after approval. Vehicle details can be added later.",
     cta: "Continue as watch admin",
     requiresVehicle: false,
     requiresAddress: true,

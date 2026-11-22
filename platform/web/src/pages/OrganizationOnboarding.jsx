@@ -7,6 +7,8 @@ import { useActiveOrganization } from "../auth/useActiveOrganization";
 import PageHeader from "../components/layout/PageHeader";
 import { isGlobalAppRole } from "../auth/roleMatrix";
 import { fetchParentCity } from "../utils/cityScope";
+import { canAccessPlatformConsole } from "../auth/platformRoles";
+import OrganizationRequestsPanel from "../components/admin/OrganizationRequestsPanel";
 import { DEFAULT_CITY_FULL_NAME } from "../config/neighborhoodRegions";
 import {
   DEFAULT_BILLING_CATALOG,
@@ -45,7 +47,7 @@ function orgToForm(org) {
   };
 }
 
-export default function OrganizationOnboarding() {
+function OrganizationConsole() {
   const { user } = useAuth();
   const { activeOrganizationId, setActiveOrganizationId, refreshOrganizations } = useActiveOrganization();
   const [loading, setLoading] = useState(true);
@@ -59,6 +61,11 @@ export default function OrganizationOnboarding() {
   const [editingOrg, setEditingOrg] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [billingCatalog, setBillingCatalog] = useState(DEFAULT_BILLING_CATALOG);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reloadOrganizations = () => {
+    setReloadKey((k) => k + 1);
+    void refreshOrganizations({ silent: true });
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -107,7 +114,7 @@ export default function OrganizationOnboarding() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   const cancelEdit = () => {
     setEditingOrg(null);
@@ -270,6 +277,8 @@ export default function OrganizationOnboarding() {
           backTo="/admin"
           backLabel="Back to admin"
         />
+
+        <OrganizationRequestsPanel onChanged={reloadOrganizations} />
 
         <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow space-y-4">
           <div className="flex items-start justify-between gap-3">
@@ -515,4 +524,27 @@ export default function OrganizationOnboarding() {
       </div>
     </div>
   );
+}
+
+/** Global admins and technical support review requests only; the rest of setup stays with platform staff. */
+function OrganizationRequestsOnly() {
+  return (
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <PageHeader
+          title="Organisation requests"
+          subtitle="Approve or reject new neighbourhood watches and security companies. Creating and editing organisations stays in the Platform Console."
+          backTo="/admin"
+          backLabel="Back to admin"
+        />
+        <OrganizationRequestsPanel />
+      </div>
+    </div>
+  );
+}
+
+export default function OrganizationOnboarding() {
+  const { user } = useAuth();
+  if (canAccessPlatformConsole(user?.platformRole)) return <OrganizationConsole />;
+  return <OrganizationRequestsOnly />;
 }

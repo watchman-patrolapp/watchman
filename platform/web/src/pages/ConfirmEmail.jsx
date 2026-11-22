@@ -66,9 +66,9 @@ export default function ConfirmEmail() {
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
           Click the link in the email to verify your account, then sign in.
           {signupTrack === "security_company"
-            ? " If you picked a listed company, your account is linked to it. If you typed a new company name, it stays pending until platform staff activate it."
+            ? " Your security company request is reviewed by Watchman staff. Company admin tools unlock after approval; until then you can use the app as a resident."
             : signupTrack === "neighborhood_watch"
-              ? " Your neighborhood watch stays pending until platform staff activate it."
+              ? " Your neighborhood watch request is reviewed by Watchman staff. Admin tools unlock after approval; until then you can use the app as a resident."
               : ""}
         </p>
 

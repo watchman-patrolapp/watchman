@@ -590,6 +590,9 @@ function Register() {
         {track.requiresCompanyProfile ? (
           <section className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Company profile</h3>
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-100">
+              This is a request. Watchman staff review it first; company admin tools unlock after approval. You can use the app as a resident while you wait.
+            </p>
             <Field
               id="reg-listed-company"
               label="Listed company"
@@ -758,6 +761,9 @@ function Register() {
         {track.requiresWatchProfile ? (
           <section className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Watch group</h3>
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-100">
+              This is a request. Watchman staff review your watch first; admin tools unlock after approval. You can use the app as a resident while you wait.
+            </p>
             <Field id="reg-watch-name" label="Neighborhood watch name" required>
               <input
                 id="reg-watch-name"
