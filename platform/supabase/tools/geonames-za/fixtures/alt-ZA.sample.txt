@@ -1,0 +1,9 @@
+1	964420	en	Port Elizabeth						
+2	964420	zu	Ibhayi						
+3	964420	iata	PLZ						
+4	964420	fr	Port Elisabeth						
+5	964420	ja	ポート・エリザベス						
+6	1000501	en	Makhanda	1					
+7	1000501	xh	IRhini						
+8	939270		Witbank						
+9	7576313	en	Warmbaths				1		

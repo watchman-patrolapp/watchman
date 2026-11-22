@@ -1,0 +1,21 @@
+964420	Gqeberha	Gqeberha	Port Elizabeth,PLZ,Ibhayi	-33.96	25.6	P	PPLA2	ZA		05	NMA			1050078			Africa/Johannesburg	2026-11-01
+8347444	Nelson Mandela Bay	Nelson Mandela Bay		-33.9	25.5	A	ADM3	ZA		05	NMA			1050930			Africa/Johannesburg	2026-11-01
+964419	Port Elizabeth	Port Elizabeth		-33.96	25.61	S	RSTN	ZA		05	NMA			0			Africa/Johannesburg	2026-11-01
+949546	Theescombe	Theescombe		-33.98	25.5	S	RSD	ZA		05	NMA			0			Africa/Johannesburg	2026-11-01
+900001	Walmer	Walmer		-33.98	25.58	P	PPLX	ZA		05	NMA			0			Africa/Johannesburg	2026-11-01
+1000501	Grahamstown	Grahamstown	Makhanda,Grahamstad	-33.3	26.53	P	PPLA3	ZA		05	DC10			91548			Africa/Johannesburg	2026-11-01
+939270	Emalahleni	Emalahleni	Witbank	-25.87	29.23	P	PPLA3	ZA		07	DC31			373403			Africa/Johannesburg	2026-11-01
+939271	Witbank	Witbank		-25.88	29.22	P	PPL	ZA		07	DC31			0			Africa/Johannesburg	2026-11-01
+976361	Middelburg	Middelburg		-25.77	29.46	P	PPLA2	ZA		07	DC31			196263			Africa/Johannesburg	2026-11-01
+976358	Middelburg	Middelburg		-31.49	25.01	P	PPL	ZA		05	DC10			22380			Africa/Johannesburg	2026-11-01
+976357	Middelburg	Middelburg		-31.62	26.07	P	PPL	ZA		05	DC13			0			Africa/Johannesburg	2026-11-01
+963516	Queenstown	Queenstown		-31.9	26.88	P	PPLA2	ZA		05	DC13			118599			Africa/Johannesburg	2026-11-01
+970001	Molteno	Molteno		-31.4	26.36	P	PPL	ZA		05	DC13			9000			Africa/Johannesburg	2026-11-01
+7291234	Mogale City	Mogale City		-26.1	27.77	P	PPL	ZA		06	WR			0			Africa/Johannesburg	2026-11-01
+7291235	Mogale City	Mogale City		-26.1	27.77	A	ADM3	ZA		06	WR			383864			Africa/Johannesburg	2026-11-01
+962331	Richmond	Richmond		-29.87	30.27	P	PPL	ZA		02	DC22			0			Africa/Johannesburg	2026-11-01
+962332	Richmond	Richmond		-29.87	30.27	A	ADM3	ZA		02	DC22			65000			Africa/Johannesburg	2026-11-01
+941966	Bela Bela	Bela Bela		-24.886	28.295	P	PPL	ZA		09	DC36			0			Africa/Johannesburg	2026-11-01
+7576313	Bela-Bela	Bela-Bela	Warmbaths	-24.885	28.294	P	PPLA3	ZA		09	DC36			0			Africa/Johannesburg	2026-11-01
+990001	Nelson Mandela Bay Ward 10	x		-33.9	25.5	P	PPL	ZA		05	NMA			0			Africa/Johannesburg	2026-11-01
+990002	Kroonstad Farm	x		-27.6	27.2	S	FRM	ZA		03	DC20			0			Africa/Johannesburg	2026-11-01

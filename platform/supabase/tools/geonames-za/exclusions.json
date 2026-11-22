@@ -1,0 +1,14 @@
+{
+  "_about": "Points GeoNames lists as populated places that are only local-municipality names, not towns people live in. Reviewed by hand; matched by name + province and only when GeoNames has no population for them.",
+  "not_places": [
+    { "name": "Mogale City", "province": "ZA-GP", "note": "local municipality (Krugersdorp)" },
+    { "name": "Bergrivier", "province": "ZA-WC", "note": "local municipality" },
+    { "name": "Cederberg", "province": "ZA-WC", "note": "local municipality" },
+    { "name": "Blouberg", "province": "ZA-LP", "note": "local municipality" },
+    { "name": "Maletswai", "province": "ZA-EC", "note": "former local municipality (Aliwal North)" },
+    { "name": "Nkonkobe", "province": "ZA-EC", "note": "former local municipality (Dikeni)" },
+    { "name": "Mogalakwena", "province": "ZA-LP", "note": "local municipality (Mokopane)" },
+    { "name": "Mfolozi", "province": "ZA-KZN", "note": "local municipality" },
+    { "name": "Umvoti", "province": "ZA-KZN", "note": "local municipality (Greytown)" }
+  ]
+}
