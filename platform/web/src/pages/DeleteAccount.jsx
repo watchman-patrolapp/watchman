@@ -82,7 +82,10 @@ export default function DeleteAccount() {
             <li>Your login and profile</li>
             <li>Patrol sign-ups and location history</li>
             <li>Vehicles on file</li>
-            <li>Chat messages you sent</li>
+            <li>Chat messages you sent, including chat images and voice notes</li>
+            <li>Your profile photo</li>
+            <li>Photos and documents on your own general City Hub posts</li>
+            <li>Your local service listings and their photos</li>
             <li>Intelligence profiles you created</li>
             <li>Push notification tokens stored for your devices</li>
           </ul>
@@ -96,8 +99,8 @@ export default function DeleteAccount() {
               field where the database allows, because the report is a neighbourhood safety record.
             </li>
             <li>
-              Uploaded files are not automatically deleted. That includes a profile photo, chat
-              images or voice notes, and photos attached to an incident that remains on file.
+              Photos and evidence attached to incident reports stay with the report. City Hub
+              suspect alerts and their photos also stay. Both are neighbourhood safety records.
             </li>
             <li>Text in reports may still mention you.</li>
             <li>

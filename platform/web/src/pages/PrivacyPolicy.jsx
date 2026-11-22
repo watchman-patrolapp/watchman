@@ -503,9 +503,12 @@ export default function PrivacyPolicy() {
             database allows, because the report is a neighbourhood safety record.
           </p>
           <p className={bodyClass}>
-            It does not automatically delete every file you uploaded (for example a profile photo,
-            chat images or voice notes, or photos attached to an incident that remains on file). Text
-            in reports may still mention you. Email us if you need those remnants reviewed.
+            It also permanently deletes your personal files: your profile photo, chat images and voice
+            notes you sent, photos and documents on your own general City Hub posts, and photos on your
+            own local service listings. Photos and evidence attached to incident reports are kept with
+            the report, and so are City Hub suspect alerts and their photos, because they are
+            neighbourhood safety records. Text in reports may still mention you. Email us if you need
+            those remnants reviewed.
           </p>
           <p className={bodyClass}>
             If you cannot sign in, email <MailLink subject="Delete my Watchman account">{email}</MailLink>{" "}

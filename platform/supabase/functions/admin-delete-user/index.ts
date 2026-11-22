@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { buildAccountMediaPurgePlan, runAccountMediaPurge } from '../_shared/accountMediaPurge.ts'
 
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin')
@@ -14,7 +15,7 @@ function corsHeaders(req: Request): Record<string, string> {
 
 async function safeCleanup(
   label: string,
-  run: () => Promise<{ error: { message?: string } | null }>
+  run: () => PromiseLike<{ error: { message?: string } | null }>
 ) {
   const { error } = await run()
   if (error) console.error(`admin-delete-user cleanup [${label}]:`, error.message || error)
@@ -175,6 +176,11 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Personal media (avatar, chat media, own City Hub general posts, own service listings).
+    // Read now, before chat_messages and the users row are gone; removed only after the
+    // login is deleted. Incident photos and suspect alerts are never touched.
+    const mediaPlan = await buildAccountMediaPurgePlan(supabaseAdmin, targetId, 'admin-delete-user')
+
     await safeCleanup('active_patrols', () =>
       supabaseAdmin.from('active_patrols').delete().eq('user_id', targetId)
     )
@@ -216,6 +222,9 @@ Deno.serve(async (req) => {
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
     }
+
+    // Never blocks the deletion: every failure is logged inside and the call never throws.
+    await runAccountMediaPurge(supabaseAdmin, mediaPlan, 'admin-delete-user')
 
     const { error: profileErr } = await supabaseAdmin.from('users').delete().eq('id', targetId)
     if (profileErr) {
