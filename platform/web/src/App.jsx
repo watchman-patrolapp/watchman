@@ -24,6 +24,7 @@ import OfflineBanner from "./components/layout/OfflineBanner";
 import PermissionsPrimerModal from "./components/PermissionsPrimerModal";
 import PatrolTrackingPrompts from "./components/patrol/PatrolTrackingPrompts";
 import AppRoutes from "./routes/AppRoutes";
+import AppUpdateHost from "./components/AppUpdateHost";
 import { useTermsGateDecision } from "./auth/useTermsGate";
 
 /**
@@ -154,6 +155,7 @@ function App() {
       <SkipLink />
       <div id="main-content" tabIndex={-1}>
         <OfflineBanner />
+        <AppUpdateHost />
         <BrowserRouter>
           <ScrollToTop />
           <PermissionFlowHost />
