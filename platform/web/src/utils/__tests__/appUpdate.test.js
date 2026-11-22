@@ -6,6 +6,7 @@ import {
   UPDATE_AVAILABLE,
   UPDATE_IN_PROGRESS,
   appUpdateMode,
+  appVersionReportPayload,
   canPerformImmediateUpdate,
   compareVersionCodes,
   flexibleUpdateOffer,
@@ -91,4 +92,20 @@ test("immediate update needs Play to allow it", () => {
   assert.equal(canPerformImmediateUpdate({ updateAvailability: UPDATE_AVAILABLE, immediateUpdateAllowed: false }), false);
   assert.equal(canPerformImmediateUpdate({ updateAvailability: 1 }), false);
   assert.equal(canPerformImmediateUpdate(undefined), false);
+});
+
+test("app version report payload from App.getInfo()", () => {
+  assert.deepEqual(appVersionReportPayload({ build: "13", version: "1.0.11" }, "android"), {
+    p_code: 13,
+    p_name: "1.0.11",
+    p_platform: "android",
+  });
+  assert.deepEqual(appVersionReportPayload({ build: 12, version: "<b>" }, "android"), {
+    p_code: 12,
+    p_name: null,
+    p_platform: "android",
+  });
+  assert.equal(appVersionReportPayload({ build: "abc", version: "1.0.11" }, "android"), null);
+  assert.equal(appVersionReportPayload({ build: "13" }, "web"), null);
+  assert.equal(appVersionReportPayload(null, "android"), null);
 });

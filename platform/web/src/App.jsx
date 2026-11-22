@@ -25,6 +25,7 @@ import PermissionsPrimerModal from "./components/PermissionsPrimerModal";
 import PatrolTrackingPrompts from "./components/patrol/PatrolTrackingPrompts";
 import AppRoutes from "./routes/AppRoutes";
 import AppUpdateHost from "./components/AppUpdateHost";
+import { reportAppVersionOnce } from "./utils/appVersionReport";
 import { useTermsGateDecision } from "./auth/useTermsGate";
 
 /**
@@ -134,6 +135,16 @@ function WidgetLinkHost() {
   return null;
 }
 
+/** Android: records the installed app version once per session (analytics version spread). */
+function AppVersionReportHost() {
+  const { user, sessionReady } = useAuth();
+  const userId = sessionReady ? user?.id : null;
+  useEffect(() => {
+    if (userId) void reportAppVersionOnce(userId);
+  }, [userId]);
+  return null;
+}
+
 /** One-time permission intro (location + notifications) after sign-in; not tied to a single page. */
 function PermissionFlowHost() {
   const { user, sessionReady } = useAuth();
@@ -162,6 +173,7 @@ function App() {
           <CarPatrolGpsHost />
           <WidgetProfileHost />
           <WidgetLinkHost />
+          <AppVersionReportHost />
           <AppRoutes />
           <HardwareBackNavHost />
           <MobilePatrolDockHost />
