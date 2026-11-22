@@ -98,10 +98,11 @@ export default function DeleteAccountSection({ user, signOut, navigate }) {
         Delete account
       </h2>
       <p className="text-sm text-red-900/90 dark:text-red-200/90 leading-relaxed">
-        Permanently delete your login, profile, patrol sign-ups, vehicles on file, chat messages you
-        sent, and criminal-intelligence profiles you created. Incident reports you submitted may
-        stay in the system with the submitter field cleared where the database allows. This cannot be
-        undone.
+        Permanently delete your login, profile, profile photo, patrol sign-ups, vehicles on file, chat
+        messages (with their photos and voice notes) you sent, photos on your own general City Hub
+        posts and service listings, and criminal-intelligence profiles you created. Incident reports
+        and their photos may stay in the system with the submitter field cleared where the database
+        allows. This cannot be undone.
       </p>
       {authIdentities === null ? (
         <p className="text-sm text-gray-600 dark:text-gray-400">Checking account type…</p>
