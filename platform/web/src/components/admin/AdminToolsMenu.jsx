@@ -220,11 +220,11 @@ export default function AdminToolsMenu({
     const platform = [
       {
         id: "organizations",
-        label: "Organizations",
+        label: isPlatformConsoleUser ? "Organizations" : "Organisation requests",
         to: "/admin/organizations",
         icon: FaBuilding,
         tone: "bg-slate-700",
-        show: isPlatformConsoleUser,
+        show: isPlatformConsoleUser || isGlobalAppUser,
       },
       {
         id: "billing",

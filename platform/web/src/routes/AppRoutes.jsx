@@ -904,9 +904,9 @@ export default function AppRoutes() {
           path="/admin/organizations"
           element={
             <PrivateRoute>
-              <RequirePlatformRole>
+              <RequireRole allowedRoles={GLOBAL_APP_ROLES} allowPlatformConsole>
                 <OrganizationOnboarding />
-              </RequirePlatformRole>
+              </RequireRole>
             </PrivateRoute>
           }
         />
