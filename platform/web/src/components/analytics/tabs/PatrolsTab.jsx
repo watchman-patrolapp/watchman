@@ -114,7 +114,7 @@ export default function PatrolsTab({ data, args, refreshKey, onSection }) {
                   <li key={`${p.name}-${i}`} className="flex items-center gap-3 py-2 text-sm dark:text-xs">
                     <span className="w-5 shrink-0 text-right font-semibold text-gray-400 tabular-nums dark:text-slate-500">{i + 1}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-gray-900 dark:text-slate-200">{p.name}</span>
+                      <span className="block break-words font-medium text-gray-900 dark:text-slate-200" title={p.name}>{p.name}</span>
                       <span className="block text-xs text-gray-500 dark:text-[11px] dark:text-slate-500">
                         {formatCount(p.patrols)} patrols · {formatCount(p.days)} days
                         {n(p.longest_streak_days) > 1 ? ` · ${p.longest_streak_days}-day streak` : ""}
