@@ -35,6 +35,7 @@ DO $pre$
 DECLARE
   missing text[] := ARRAY[]::text[];
   r record;
+  found text;
 BEGIN
   FOR r IN
     SELECT * FROM (VALUES
@@ -42,7 +43,7 @@ BEGIN
       ('public', 'users', 'id'), ('public', 'users', 'role'), ('public', 'users', 'platform_role'),
       ('public', 'users', 'organization_id'), ('public', 'users', 'active_organization_id'),
       ('public', 'users', 'full_name'), ('public', 'users', 'email'), ('public', 'users', 'phone'),
-      ('public', 'users', 'signup_track'), ('public', 'users', 'emergency_contact_relationship'),
+      ('public', 'users', 'signup_track'),
       ('public', 'organizations', 'id'), ('public', 'organizations', 'name'), ('public', 'organizations', 'type'),
       ('public', 'organizations', 'status'), ('public', 'organizations', 'settings_json'),
       ('public', 'organizations', 'city_id'), ('public', 'organizations', 'created_at'),
@@ -60,24 +61,47 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- Functions are matched by name; the expected arguments are reported if a
+  -- function exists under that name with different ones.
   FOR r IN
     SELECT * FROM (VALUES
-      ('public.apply_signup_profile_for_user_core(uuid)'),
-      ('public.apply_signup_profile_for_user(uuid)'),
-      ('public.normalize_emergency_contact_relationship(text)'),
-      ('public.is_global_app_staff()'),
-      ('public.is_platform_staff()'),
-      ('public.working_organization_id()'),
-      ('public.default_city_id()'),
-      ('public.current_org_ids()'),
-      ('public.is_org_nw_admin(uuid)'),
-      ('public.city_admin_communities()')
-    ) AS t(fn)
+      ('is_global_app_staff', ''),
+      ('is_platform_staff', ''),
+      ('working_organization_id', ''),
+      ('default_city_id', ''),
+      ('current_org_ids', ''),
+      ('city_admin_communities', '')
+    ) AS t(fn, args)
   LOOP
-    IF to_regprocedure(r.fn) IS NULL THEN
-      missing := missing || (r.fn || ' function');
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = r.fn
+        AND pg_get_function_identity_arguments(p.oid) = r.args
+    ) THEN
+      SELECT string_agg(format('%s(%s)', p.proname, pg_get_function_identity_arguments(p.oid)), ', ')
+        INTO found
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = r.fn;
+      missing := missing || (format('%s(%s) function', r.fn, r.args)
+        || CASE WHEN found IS NULL THEN '' ELSE format(' (found %s instead)', found) END);
     END IF;
   END LOOP;
+
+  -- Sign-up logic: either the core (after 20260818063000) or the single
+  -- apply_signup_profile_for_user(uuid) that still holds the logic.
+  IF to_regprocedure('public.apply_signup_profile_for_user_core(uuid)') IS NULL
+     AND to_regprocedure('public.apply_signup_profile_for_user(uuid)') IS NULL THEN
+    SELECT string_agg(format('%s(%s)', p.proname, pg_get_function_identity_arguments(p.oid)), ', ')
+      INTO found
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname LIKE 'apply%signup%';
+    missing := missing || ('apply_signup_profile_for_user(uuid) or apply_signup_profile_for_user_core(uuid) function'
+      || CASE WHEN found IS NULL THEN '' ELSE format(' (found %s instead; run signup-gate-diagnostic.sql)', found) END);
+  ELSIF to_regprocedure('public.apply_signup_profile_for_user_core(uuid)') IS NULL
+     AND position('apply_signup_profile_for_user_core' IN
+         pg_get_functiondef('public.apply_signup_profile_for_user(uuid)'::regprocedure)) > 0 THEN
+    missing := missing || 'apply_signup_profile_for_user_core(uuid) function (the sign-up wrapper calls it but it is gone; run signup-gate-diagnostic.sql)'::text;
+  END IF;
 
   IF cardinality(missing) > 0 THEN
     RAISE EXCEPTION 'Signup admin gate: not applied, missing %. Nothing was changed.',
@@ -278,8 +302,27 @@ GRANT EXECUTE ON FUNCTION public.is_org_nw_admin(uuid) TO authenticated, service
 
 -- ---------------------------------------------------------------------------
 -- Sign-up: watch and security company become requests
--- (same wrapper as 20260818063000, plus the gate at the end)
+--
+-- 20260818063000 renamed the original apply_signup_profile_for_user(uuid) to
+-- apply_signup_profile_for_user_core(uuid) and put a thin wrapper in front.
+-- Where that never ran, the single function still holds the logic: do the
+-- same rename here (same body, same grants), then (re)create the wrapper.
+-- The sign-up trigger and apply_my_signup_profile() call the wrapper by name.
 -- ---------------------------------------------------------------------------
+DO $prep$
+BEGIN
+  IF to_regprocedure('public.apply_signup_profile_for_user_core(uuid)') IS NULL
+     AND to_regprocedure('public.apply_signup_profile_for_user(uuid)') IS NOT NULL THEN
+    ALTER FUNCTION public.apply_signup_profile_for_user(uuid)
+      RENAME TO apply_signup_profile_for_user_core;
+    RAISE NOTICE 'Signup admin gate: moved the sign-up logic to apply_signup_profile_for_user_core(uuid) (as 20260818063000 does).';
+  END IF;
+END
+$prep$;
+
+REVOKE ALL ON FUNCTION public.apply_signup_profile_for_user_core(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.apply_signup_profile_for_user_core(uuid) TO service_role;
+
 CREATE OR REPLACE FUNCTION public.apply_signup_profile_for_user(p_user_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -288,28 +331,35 @@ SET search_path = public
 AS $$
 DECLARE
   result jsonb;
-  rel text;
   v_track text;
   v_role text;
   v_org uuid;
 BEGIN
   result := public.apply_signup_profile_for_user_core(p_user_id);
 
-  SELECT public.normalize_emergency_contact_relationship(
-    au.raw_user_meta_data->>'emergency_contact_relationship'
-  )
-  INTO rel
-  FROM auth.users au
-  WHERE au.id = p_user_id;
-
-  IF rel IS NOT NULL THEN
-    UPDATE public.users
-    SET emergency_contact_relationship = CASE
-      WHEN emergency_contact_relationship IS NULL
-        OR btrim(emergency_contact_relationship) = '' THEN rel
-      ELSE emergency_contact_relationship
-    END
-    WHERE id = p_user_id;
+  -- Next-of-kin relationship (20260818063000), only where that feature exists.
+  IF to_regprocedure('public.normalize_emergency_contact_relationship(text)') IS NOT NULL
+     AND EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'users'
+         AND column_name = 'emergency_contact_relationship'
+     ) THEN
+    EXECUTE $q$
+      UPDATE public.users u
+      SET emergency_contact_relationship = CASE
+        WHEN u.emergency_contact_relationship IS NULL
+          OR btrim(u.emergency_contact_relationship) = '' THEN x.rel
+        ELSE u.emergency_contact_relationship
+      END
+      FROM (
+        SELECT public.normalize_emergency_contact_relationship(
+          au.raw_user_meta_data->>'emergency_contact_relationship'
+        ) AS rel
+        FROM auth.users au
+        WHERE au.id = $1
+      ) x
+      WHERE u.id = $1 AND x.rel IS NOT NULL
+    $q$ USING p_user_id;
   END IF;
 
   -- Signup admin gate
@@ -812,7 +862,9 @@ BEGIN
     'public.reject_organization(uuid,uuid,text)',
     'public.my_organization_requests()',
     'public.trg_org_review_on_activate()',
-    'public.trg_org_promote_on_activate()'
+    'public.trg_org_promote_on_activate()',
+    'public.apply_signup_profile_for_user_core(uuid)',
+    'public.apply_signup_profile_for_user(uuid)'
   ] LOOP
     IF to_regprocedure(fn) IS NULL THEN
       problems := problems || (fn || ' missing');
@@ -823,7 +875,8 @@ BEGIN
     -- internal helpers are not client-callable
     FOREACH fn IN ARRAY ARRAY[
       'public.org_access_blocked(uuid)', 'public.signup_admin_role_key(text)',
-      'public.promote_org_requesters(uuid,uuid)', 'public.apply_signup_profile_for_user(uuid)'
+      'public.promote_org_requesters(uuid,uuid)', 'public.apply_signup_profile_for_user(uuid)',
+      'public.apply_signup_profile_for_user_core(uuid)'
     ] LOOP
       IF has_function_privilege('authenticated', fn, 'EXECUTE') OR has_function_privilege('anon', fn, 'EXECUTE') THEN
         problems := problems || (fn || ' is callable by clients');
