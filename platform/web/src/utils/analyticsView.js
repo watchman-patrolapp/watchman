@@ -210,6 +210,12 @@ export function formatBucketLabel(bucket, grain) {
   return `${d} ${MONTHS[m - 1]}`;
 }
 
+export function distanceSub(c) {
+  const tracked = num(c?.distance_tracked_patrols);
+  if (tracked === null) return "from routes and GPS tracks";
+  return tracked ? `GPS-tracked on ${formatCount(tracked)} of ${formatCount(c.patrols)} patrols` : "no GPS-tracked patrols";
+}
+
 /** The eight overview KPI cards. */
 export function buildKpis(overview) {
   const c = overview?.current;
@@ -246,7 +252,7 @@ export function buildKpis(overview) {
       label: "Distance patrolled",
       value: `${formatCount(c.distance_km, 1)} km`,
       delta: formatDelta(c.distance_km, p.distance_km),
-      sub: "from saved patrol routes",
+      sub: distanceSub(c),
       spark: "distance_km",
     },
     {
@@ -397,4 +403,79 @@ export function narrowFilterOptions({ suburbs = [], watches = [], orgSuburbs = [
     return true;
   });
   return { suburbs: visibleSuburbs, watches: visibleWatches };
+}
+
+export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** 7 x 24 matrix of patrol counts (rows Mon..Sun, columns 00..23) plus the busiest cell. */
+export function heatMatrix(heat) {
+  const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => ({ patrols: 0, hours: 0 })));
+  let max = 0;
+  let busiest = null;
+  for (const cell of Array.isArray(heat) ? heat : []) {
+    const d = Number(cell?.dow);
+    const h = Number(cell?.hour);
+    if (!Number.isInteger(d) || !Number.isInteger(h) || d < 0 || d > 6 || h < 0 || h > 23) continue;
+    const patrols = num(cell.patrols) || 0;
+    grid[d][h] = { patrols, hours: num(cell.hours) || 0 };
+    if (patrols > max) {
+      max = patrols;
+      busiest = { dow: d, hour: h, patrols };
+    }
+  }
+  return { grid, max, busiest };
+}
+
+export function hourLabel(hour) {
+  return `${String(hour).padStart(2, "0")}:00`;
+}
+
+/** "R 1,234.50" from cents; "R 0" when empty. */
+export function formatRand(cents) {
+  const n = num(cents);
+  if (n === null) return "—";
+  const rand = n / 100;
+  const text = formatCount(Math.abs(rand), 2);
+  const withCents = text.includes(".") && text.split(".")[1].length === 1 ? `${text}0` : text;
+  return `${rand < 0 ? "−" : ""}R ${withCents}`;
+}
+
+const WORD_FIXES = { sos: "SOS", nw: "NW", id: "ID", ugc: "UGC" };
+
+/** "contribute_cost" -> "Contribute cost"; "false_info" -> "False info". */
+export function labelize(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Unknown";
+  const words = raw.replace(/[_-]+/g, " ").split(/\s+/).map((w) => WORD_FIXES[w.toLowerCase()] || w.toLowerCase());
+  const first = words[0];
+  words[0] = first === first.toUpperCase() ? first : first.charAt(0).toUpperCase() + first.slice(1);
+  return words.join(" ");
+}
+
+/** [{ key: x, value: n }] rows from an RPC list, labelled and sorted by value. */
+export function countRows(list, key, valueKey) {
+  return (Array.isArray(list) ? list : [])
+    .map((r) => ({ name: labelize(r?.[key]), value: num(r?.[valueKey]) || 0 }))
+    .filter((r) => r.value > 0)
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+}
+
+/** Seconds -> "2h 05m" / "3 d 4 h" for turnaround figures. */
+export function formatDuration(seconds) {
+  const n = num(seconds);
+  if (n === null || n < 0) return "—";
+  if (n < 60) return `${Math.round(n)}s`;
+  const minutes = Math.round(n / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h ${String(minutes % 60).padStart(2, "0")}m`;
+  const days = Math.floor(hours / 24);
+  return `${days} d ${hours % 24} h`;
+}
+
+export function percent(part, whole) {
+  const a = num(part);
+  const b = num(whole);
+  if (a === null || !b) return null;
+  return Math.round((a / b) * 1000) / 10;
 }

@@ -145,3 +145,25 @@ test("filter options narrow by city and suburb", () => {
   assert.deepEqual(narrowFilterOptions({ suburbs, watches, orgSuburbs }, { suburbId: "s3" }).watches.map((w) => w.id), ["w3"]);
   assert.equal(narrowFilterOptions({ suburbs, watches }, {}).watches.length, 3);
 });
+
+test("phase 3 helpers: heat grid, rand, labels, durations, count rows", async () => {
+  const { heatMatrix, formatRand, labelize, formatDuration, countRows, percent, hourLabel } = await import("../analyticsView.js");
+  const h = heatMatrix([{ dow: 0, hour: 18, patrols: 3, hours: 6 }, { dow: 6, hour: 2, patrols: "5", hours: 4 }, { dow: 9, hour: 1, patrols: 99 }]);
+  assert.equal(h.grid.length, 7); assert.equal(h.grid[0].length, 24);
+  assert.deepEqual(h.grid[0][18], { patrols: 3, hours: 6 });
+  assert.equal(h.max, 5); assert.deepEqual(h.busiest, { dow: 6, hour: 2, patrols: 5 });
+  assert.equal(heatMatrix(null).max, 0);
+  assert.equal(hourLabel(7), "07:00");
+  assert.equal(formatRand(40000), "R 400"); assert.equal(formatRand(123450), "R 1,234.50"); assert.equal(formatRand(-500), "−R 5"); assert.equal(formatRand(null), "—");
+  assert.equal(labelize("contribute_cost"), "Contribute cost"); assert.equal(labelize("false_info"), "False info");
+  assert.equal(labelize("Suspicious person"), "Suspicious person"); assert.equal(labelize(""), "Unknown"); assert.equal(labelize("sos_alert"), "SOS alert");
+  assert.equal(formatDuration(45), "45s"); assert.equal(formatDuration(7200), "2h 00m"); assert.equal(formatDuration(3 * 86400 + 4 * 3600), "3 d 4 h"); assert.equal(formatDuration(null), "—");
+  assert.deepEqual(countRows([{ s: "open", n: 1 }, { s: "actioned", n: 3 }, { s: "x", n: 0 }], "s", "n"), [{ name: "Actioned", value: 3 }, { name: "Open", value: 1 }]);
+  assert.equal(percent(1, 3), 33.3); assert.equal(percent(1, 0), null);
+});
+
+test("distance KPI explains where kilometres come from", () => {
+  const k = buildKpis({ ...OVERVIEW, current: { ...OVERVIEW.current, distance_tracked_patrols: 120 } });
+  assert.equal(k.find((x) => x.key === "distance").sub, "GPS-tracked on 120 of 812 patrols");
+  assert.equal(buildKpis(OVERVIEW).find((x) => x.key === "distance").sub, "from routes and GPS tracks");
+});
