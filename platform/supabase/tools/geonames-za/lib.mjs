@@ -312,3 +312,24 @@ export function toCsv(rows, columns) {
   };
   return [columns.join(","), ...rows.map((r) => columns.map((c) => esc(r[c])).join(","))].join("\n") + "\n";
 }
+
+/** Reads a CSV written by toCsv() back into objects (quoted fields, doubled quotes). */
+export function parseCsv(text) {
+  const rows = [];
+  let row = [], cur = "", q = false;
+  const s = text.replace(/\r\n/g, "\n");
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) {
+      if (c === '"' && s[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') q = false;
+      else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(cur); cur = ""; }
+    else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+    else cur += c;
+  }
+  if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+  const [head, ...body] = rows;
+  return body.filter((r) => r.length > 1 || r[0] !== "").map((r) => Object.fromEntries(head.map((h, i) => [h, r[i] ?? ""])));
+}

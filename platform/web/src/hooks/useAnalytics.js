@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabase/client";
 import { friendlyError } from "../utils/friendlyError";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
+import { cityIdsInUse } from "../utils/analyticsView";
 
 const CACHE_MS = 5 * 60 * 1000;
 const resultCache = new Map(); // JSON(args) -> { at, value }
@@ -124,13 +125,29 @@ export function clearAnalyticsCache() {
   optionsCache = null;
 }
 
+const CITY_ID_BATCH = 100;
+
+/** Only the cities that have a suburb or a watch (the table lists every South African town). */
+async function loadCitiesInUse(ids) {
+  if (!ids.length) return { data: [], error: null };
+  const batches = [];
+  for (let i = 0; i < ids.length; i += CITY_ID_BATCH) batches.push(ids.slice(i, i + CITY_ID_BATCH));
+  const results = await Promise.all(batches.map((batch) => supabase.from("cities").select("id, name").in("id", batch)));
+  const failed = results.find((r) => r.error);
+  if (failed) return { data: null, error: failed.error };
+  const data = results.flatMap((r) => r.data || []).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  return { data, error: null };
+}
+
 async function loadFilterOptions() {
-  const [cities, suburbs, watches, orgSuburbs] = await Promise.all([
-    supabase.from("cities").select("id, name").order("name"),
+  const [suburbs, watches, orgSuburbs] = await Promise.all([
     supabase.from("suburbs").select("id, name, city_id").order("name"),
     supabase.from("organizations").select("id, name, status, city_id, primary_suburb_id").eq("type", "nw_group").order("name"),
     supabase.from("organization_suburbs").select("organization_id, suburb_id").eq("active", true),
   ]);
+  const cities = await loadCitiesInUse(
+    cityIdsInUse({ suburbs: suburbs.error ? [] : suburbs.data || [], watches: watches.error ? [] : watches.data || [] })
+  );
   return {
     cities: cities.error ? [] : cities.data || [],
     suburbs: suburbs.error ? [] : suburbs.data || [],
