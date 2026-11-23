@@ -29,6 +29,7 @@
     "lint": "eslint .",
     "contrast": "node scripts/contrast-report.mjs",
     "preview": "vite preview",
+    "test": "npm run test:unit",
     "test:unit": "node --test \"src/**/__tests__/*.test.js\" \"scripts/__tests__/*.test.js\""
   },
   "dependencies": {
