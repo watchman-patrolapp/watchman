@@ -73,7 +73,7 @@ On a phone: install that APK, sign in, start a patrol, confirm the map still fol
 | `supabase/archive/` | Old SQL Editor scripts. Not migrations. Do not re-run them to "fix" drift. |
 | `supabase/seed.sql` | Local `db reset` only. Sample security companies stay in migration `20260815059000`. |
 
-`npm run check:migrations` (repo root) fails when a new migration reuses a version prefix. Four historical pairs are allowlisted. See [`docs/SQL_CONVENTIONS.md`](docs/SQL_CONVENTIONS.md) and [`docs/MIGRATION_VERSION_REPAIR.md`](docs/MIGRATION_VERSION_REPAIR.md). Storage URL follow-up: [`docs/STORAGE_PRIVACY_PLAN.md`](docs/STORAGE_PRIVACY_PLAN.md).
+`npm run check:migrations` (repo root) fails when a new migration reuses a version prefix. Four historical pairs are allowlisted. Production migrations are applied manually in the SQL editor; record each live run in [`docs/MIGRATION_STATUS.md`](docs/MIGRATION_STATUS.md). See [`docs/SQL_CONVENTIONS.md`](docs/SQL_CONVENTIONS.md) and [`docs/MIGRATION_VERSION_REPAIR.md`](docs/MIGRATION_VERSION_REPAIR.md). Storage URL follow-up: [`docs/STORAGE_PRIVACY_PLAN.md`](docs/STORAGE_PRIVACY_PLAN.md).
 
 ## Edge Function secrets
 
