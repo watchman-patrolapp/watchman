@@ -350,7 +350,7 @@ SQL: trg_users_privilege_guard BEFORE UPDATE on public.users (rules in §4.5; on
 STEPS
 1. rg every client-side supabase.from('users').update( call and list which columns each writes; make sure none is blocked unintentionally (Profile edits, household mode, active_organization_id switch, patroller_request_status).
 2. rg signup/handle_new_user/assign/move functions: confirm they are SECURITY DEFINER (they bypass the guard). List any INVOKER ones in your summary.
-3. Write the trigger per §4.5 using GLOBAL_APP_ROLES from roleMatrix.js plus security_admin/city_admin as non-local roles.
+3. Historical instruction — **city_admin was retired in November 2026**. Write the trigger per §4.5 using GLOBAL_APP_ROLES from roleMatrix.js plus security_admin as a non-local role.
 4. Create platform/docs/SQL_CONVENTIONS.md.
 5. Output the live-check SQL (pg_policies for users) for me to run before applying.
 
