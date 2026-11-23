@@ -46,7 +46,8 @@ export type PurgePlan = {
 
 export type PurgeResult = {
   removed: Record<string, number>;
-  failed: Record<string, number>;
+  /** Failed Storage removals as bucket/path values, for manual retry. */
+  failed: string[];
   postsCleared: number;
 };
 
@@ -275,7 +276,7 @@ export async function runAccountMediaPurge(
   plan: PurgePlan,
   log = 'account-delete'
 ): Promise<PurgeResult> {
-  const result: PurgeResult = { removed: {}, failed: {}, postsCleared: 0 };
+  const result: PurgeResult = { removed: {}, failed: [], postsCleared: 0 };
   for (const bucket of PURGEABLE_BUCKETS) {
     const paths = plan?.objects?.[bucket] || [];
     for (const batch of chunk(paths)) {
@@ -284,7 +285,7 @@ export async function runAccountMediaPurge(
         if (error) throw error;
         result.removed[bucket] = (result.removed[bucket] || 0) + batch.length;
       } catch (e) {
-        result.failed[bucket] = (result.failed[bucket] || 0) + batch.length;
+        result.failed.push(...batch.map((path) => `${bucket}/${path}`));
         console.error(`${log} media purge [remove ${bucket}]:`, e instanceof Error ? e.message : String(e));
       }
     }

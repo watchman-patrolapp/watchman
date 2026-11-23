@@ -149,6 +149,34 @@ Deno.serve(async (req) => {
     // login is deleted. Incident photos and suspect alerts are never touched.
     const mediaPlan = await buildAccountMediaPurgePlan(supabaseAdmin, targetId, 'delete-my-account')
 
+    const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(targetId)
+    const authErrMsg = String(delErr?.message || '').toLowerCase()
+    const authUserAlreadyGone =
+      !!delErr &&
+      (authErrMsg.includes('user not found') || authErrMsg.includes('users not found'))
+    if (delErr && !authUserAlreadyGone) {
+      console.error('delete-my-account: auth delete failed:', delErr.message || delErr)
+      return new Response(JSON.stringify({ error: 'We could not delete your account right now. Please try again in a few minutes.' }), {
+        status: 400,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const mediaPurge = await runAccountMediaPurge(supabaseAdmin, mediaPlan, 'delete-my-account')
+    if (mediaPurge.failed.length) {
+      const { error: purgeAuditErr } = await supabaseAdmin.from('activity_logs').insert({
+        organization_id: profile?.organization_id || null,
+        user_id: targetId,
+        action: 'account_media_purge_failed',
+        details_json: {
+          subject_user_id: targetId,
+          failed_count: mediaPurge.failed.length,
+          failed: mediaPurge.failed.slice(0, 50),
+        },
+      })
+      if (purgeAuditErr) console.error('delete-my-account: media purge audit failed:', purgeAuditErr.message || purgeAuditErr)
+    }
+
     await safeCleanup('active_patrols', () =>
       supabaseAdmin.from('active_patrols').delete().eq('user_id', targetId)
     )
@@ -177,22 +205,6 @@ Deno.serve(async (req) => {
     await safeCleanup('criminal_profiles created_by', () =>
       supabaseAdmin.from('criminal_profiles').delete().eq('created_by', uidText)
     )
-
-    const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(targetId)
-    const authErrMsg = String(delErr?.message || '').toLowerCase()
-    const authUserAlreadyGone =
-      !!delErr &&
-      (authErrMsg.includes('user not found') || authErrMsg.includes('users not found'))
-    if (delErr && !authUserAlreadyGone) {
-      console.error('delete-my-account: auth delete failed:', delErr.message || delErr)
-      return new Response(JSON.stringify({ error: 'We could not delete your account right now. Please try again in a few minutes.' }), {
-        status: 400,
-        headers: { ...headers, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Never blocks the deletion: every failure is logged inside and the call never throws.
-    await runAccountMediaPurge(supabaseAdmin, mediaPlan, 'delete-my-account')
 
     const { error: profileErr } = await supabaseAdmin.from('users').delete().eq('id', targetId)
     if (profileErr) {

@@ -1,4 +1,4 @@
-import { assertEquals } from 'jsr:@std/assert@1';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 import {
   buildAccountMediaPurgePlan,
   chunk,
@@ -141,11 +141,11 @@ Deno.test('plan + run deletes personal media only and never incident photos', as
   assertEquals(admin.updates[0].values, { photo_urls: ['p1/copy_1.jpg'], document_attachments: [] });
 });
 
-Deno.test('a storage failure is logged and never throws', async () => {
+Deno.test('a storage failure is logged, returned as bucket paths, and never throws', async () => {
   const admin = fakeAdmin({ users: [{ id: U, avatar_url: null }] }, { avatars: [`${U}-1.jpg`] }, { failRemove: 'avatars' });
   const plan = await buildAccountMediaPurgePlan(admin, U, 'test');
   const res = await runAccountMediaPurge(admin, plan, 'test');
-  assertEquals(res.failed['avatars'], 1);
+  assertEquals(res.failed, [`avatars/${U}-1.jpg`]);
 });
 
 Deno.test('a broken client during planning yields an empty plan, not an error', async () => {
@@ -153,5 +153,19 @@ Deno.test('a broken client during planning yields an empty plan, not an error', 
   const plan = await buildAccountMediaPurgePlan(broken, U, 'test');
   assertEquals(plan.objects, {});
   const res = await runAccountMediaPurge(broken, { userId: U, objects: { avatars: ['a'] }, cityHubPosts: [] }, 'test');
-  assertEquals(res.failed['avatars'], 1);
+  assertEquals(res.failed, ['avatars/a']);
+});
+
+Deno.test('account deletion purges media before deleting referenced rows', async () => {
+  for (const entry of ['delete-my-account', 'admin-delete-user']) {
+    const source = await Deno.readTextFile(new URL(`../${entry}/index.ts`, import.meta.url));
+    const authDelete = source.indexOf('auth.admin.deleteUser(targetId)');
+    const mediaPurge = source.indexOf('runAccountMediaPurge(supabaseAdmin, mediaPlan');
+    const chatCleanup = source.indexOf("safeCleanup('chat_messages'");
+    const profileDelete = source.indexOf("from('users').delete().eq('id', targetId)");
+    assert(authDelete !== -1 && mediaPurge !== -1 && chatCleanup !== -1 && profileDelete !== -1);
+    assert(authDelete < mediaPurge);
+    assert(mediaPurge < chatCleanup);
+    assert(chatCleanup < profileDelete);
+  }
 });
