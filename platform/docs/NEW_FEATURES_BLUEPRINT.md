@@ -161,7 +161,7 @@ Confirmed by reading the repo at commit `55c5225` (21 Aug 2026), plus the untrac
 | Push | edge function `platform/supabase/functions/notify-resident-event` (types `vouch`, `broadcast`, `membership`; FCM via `user_push_tokens`) |
 | Emergency directory | table `public.emergency_directory_entries` (**global, has no `organization_id`**); `can_manage_emergency_directory()` (any `nw_admin`); `list_emergency_directory()`; `upsert_emergency_directory_entry(...)`. **gap → G3** |
 | Storage | public buckets `emergency-directory`, `security-branding`, `city-hub-photos`, `incident-photos`. `20260820090000_storage_public_buckets_no_listing.sql` removed public SELECT policies (public URLs still work, listing doesn't). Current upload paths are **not** org-prefixed (`incident-photos/{incident}/…`, `city-hub-photos/{post}/…`, `security-branding/{company}/…`, `emergency-directory/{owner}/…`). **gap → G4:** INSERT/UPDATE/DELETE policies check only `bucket_id`. `criminal-photos` is used in code but has no policies in the repo |
-| Orgs / members | `public.organizations (type nw_group/security_company/city_admin, status, settings_json …)`, `public.organization_members (organization_id, user_id, member_role, status)` |
+| Orgs / members | Historical schema note: `public.organizations (type nw_group/security_company/city_admin, status, settings_json …)`, `public.organization_members (organization_id, user_id, member_role, status)`. **city_admin was retired in November 2026.** |
 | Users columns used here | `role`, `platform_role`, `organization_id`, `active_organization_id`, `verified`, `verification_method`, `verified_by_user_id`, `full_name`, `phone`, `address`, `home_suburb_id`, `patroller_request_status`. Base `users` RLS lives in the dashboard, not the repo; `AdminResidents.jsx` promotes with a direct `users.update({ role })`. **gap → G5** |
 | Patrol & equipment grounding | `patrol_slots (id, date, start_time, end_time, zone, volunteer_uid, volunteer_name, organization_id)`, unique `(organization_id, date, start_time, volunteer_uid)`, written by `PatrolSchedule.jsx`; `patroller_profiles (user_id, organization_id, training_certified, certification_date, status active/inactive/suspended)`; `user_vehicles` (`Vehicles.jsx`); offline helpers `chat/hooks/useNetworkStatus.js`, `chat/components/OfflineBanner.jsx`, `chat_messages.client_message_id` idempotency (`20260820050000`), `@capacitor/preferences`; libs `exceljs`, `html2pdf.js`, `recharts`; no QR library; no test runner (eslint only) |
 | Definer hardening | `20260820080000_advisor_rpc_harden.sql` revoked PUBLIC/anon on existing SECURITY DEFINER functions once and moved internal ones (`notify_app_user`, `write_staff_activity`, trigger functions) to service_role. New functions must repeat this (§4.5 convention) |
@@ -503,7 +503,7 @@ BEGIN
       RAISE EXCEPTION 'forbidden';
     END IF;
     -- local staff can never mint global/platform roles or move users across orgs
-    IF new_role IN ('admin', 'technical_support', 'city_admin', 'security_admin')   -- GLOBAL_APP_ROLES + partner roles (roleMatrix.js)
+    IF new_role IN ('admin', 'technical_support', 'city_admin', 'security_admin')   -- Historical example; city_admin was retired in November 2026.
        OR NEW.platform_role IS DISTINCT FROM OLD.platform_role
        OR NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN
       RAISE EXCEPTION 'only platform staff can make that change';
@@ -522,7 +522,7 @@ CREATE TRIGGER aaa_users_privilege_guard BEFORE UPDATE ON public.users
 REVOKE ALL ON FUNCTION public.trg_users_privilege_guard() FROM PUBLIC, anon, authenticated;
 ```
 
-**Live check (must do):** `select policyname, cmd, roles, qual, with_check from pg_policies where tablename='users';` and `\df+` the signup and handle-new-user functions. If a signup trigger or RPC is **SECURITY INVOKER** and writes `role`/`organization_id` for the new user, it will hit rule 1. In that case make it DEFINER, or exempt `TG_OP`/first-login with an explicit flag. `GLOBAL_APP_ROLES = ['admin','technical_support']` (roleMatrix.js:312). The partner roles `security_admin`/`city_admin` are also blocked for local staff. Test `AdminResidents.jsx` promote, `move_member_to_neighborhood`, the household-mode switch, and Profile edit afterwards.
+**Live check (must do):** `select policyname, cmd, roles, qual, with_check from pg_policies where tablename='users';` and `\df+` the signup and handle-new-user functions. If a signup trigger or RPC is **SECURITY INVOKER** and writes `role`/`organization_id` for the new user, it will hit rule 1. In that case make it DEFINER, or exempt `TG_OP`/first-login with an explicit flag. `GLOBAL_APP_ROLES = ['admin','technical_support']` (roleMatrix.js:312). Historical note: `city_admin` was a blocked partner role; it was retired in November 2026. Test `AdminResidents.jsx` promote, `move_member_to_neighborhood`, the household-mode switch, and Profile edit afterwards.
 
 **Grant convention (applies to every new migration in this doc):**
 
@@ -1042,7 +1042,7 @@ AS $$
   SELECT
     COALESCE(p_org_id, public.working_organization_id()) IN (SELECT public.current_org_ids())
     AND (
-      public.can_moderate_incidents()          -- admin, tech, nw_admin, committee, city_admin + platform
+      public.can_moderate_incidents()          -- Historical role list; city_admin was retired in November 2026.
       OR public.has_org_capability('resident_moderator', COALESCE(p_org_id, public.working_organization_id()))
     );
 $$;

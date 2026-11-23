@@ -1,6 +1,6 @@
 # Neighborhood Watch Platform — Scale Roadmap
 
-*Last updated: 19 August 2026 (leaderboard fuel calculator, home pin/sector, area broadcasts, next of kin)*
+*Last updated: 23 November 2026 (organisation request review, retired city-admin role, SA places dataset, analytics and Android release 1.0.11)*
 
 Living status for scaling from **one live neighborhood (Theescombe)** to a multi-neighborhood product with residents, partners, and billing.
 
@@ -13,7 +13,7 @@ Canonical backend: `platform/supabase`
 
 ## Where we are
 
-The original patroller app is still the production core (patrols, incidents, chat, intelligence, Android). Since **14–15 August 2026** we added the **scale foundation**: organizations, platform vs neighborhood roles, working-area isolation, resident surfaces, City Hub, hotspots, billing *records*, role-based public signup, and **role-specific homes** for security companies and city admin / police.
+The original patroller app is still the production core (patrols, incidents, chat, intelligence, Android). Since **14–15 August 2026** we added the **scale foundation**: organizations, platform vs neighborhood roles, working-area isolation, resident surfaces, City Hub, hotspots, billing *records*, role-based public signup, and role-specific homes for security companies. The city-admin / police role was retired in November 2026: each neighborhood watch is independent, with only Main admin and Technical support above watches.
 
 This is **close to code-complete for a second-area pilot**, not a finished commercial SaaS. Remaining pilot work is proof and plumbing (isolation test, Theescombe fallbacks, suburb/invite UI, SOS resolve-after-acknowledge). Home pin/sector and the fuel calculator are in. Commercial work (Stripe, feature gates, partner review, ID upload, front/back sectors) is still open.
 
@@ -25,9 +25,9 @@ This is **close to code-complete for a second-area pilot**, not a finished comme
 | Role-based register forms | **Shipped in code** — apply `20260815031000_role_based_signup.sql` + `20260815033000` (do not demote staff on login) |
 | Layer 2 — Resident app | **Household home shipped** — SOS hold, reports, neighbour directory, staff + two-neighbour verification with **who verified**, **home pin + closest-10 sector**, next-of-kin, area broadcasts, away notices. ID/proof queue and SOS resolve-after-acknowledge still open |
 | City Hub | **Share + manage + photos/PDFs + author contacts + feed styling + premium banner with live counts** — pre-publish moderation, legal waiver, and radius targeting still incomplete |
-| Role-specific dashboards | **Security command + city admin/police + resident home shipped** — partner SOS is multi-area (`/security/sos`), not the watch `/sos` board |
+| Role-specific dashboards | **Security command + resident home shipped** — partner SOS is multi-area (`/security/sos`), not the watch `/sos` board. City-admin / police dashboard is retired. |
 | Revenue (NW annual fee) | **Manual records + suggested fees + admin list-price override** — no payment provider, no hard feature gates |
-| Security-company commercialization | **Command home + roster (view-only) + cover/logo profile + public directory cards** — signup still creates a `pending` org; review queue not built; not a paid product yet |
+| Security-company commercialization | **Command home + roster (view-only) + cover/logo profile + public directory cards** — signup creates a `pending` org; the November 2026 Pending requests panel on `/admin/organizations` can approve or reject requests through review RPCs; not a paid product yet |
 | 2–5 neighborhood pilots | **Not started operationally** |
 
 ---
@@ -42,9 +42,9 @@ Two different finish lines. Do not mix them.
 | **Second-neighborhood pilot** | **~78%** | Another Gqeberha suburb (e.g. Lorraine) can run isolated with residents, SOS, City Hub, Hotspots; home pins and sector lists exist |
 | **Commercial scale product** | **~50%** | Paid NW subscriptions, gated features, partner review, 2–5 live neighborhoods, compliance |
 
-**Pilot (~78%).** Resident, partner, and City Hub *screens* exist, including a public emergency directory, partner command SOS, home pins, and closest-10 sectors. The remaining ~22% is proving isolation vs a second org, dropping leftover Theescombe fallbacks, placing signups into a suburb from the app, finishing SOS after “I’m responding”, and a pending-org review queue.
+**Pilot (~78%).** Resident, partner, and City Hub *screens* exist, including a public emergency directory, partner command SOS, home pins, and closest-10 sectors. The remaining ~22% is proving isolation vs a second org, dropping leftover Theescombe fallbacks, placing signups into a suburb from the app, and finishing SOS after “I’m responding”. The pending-organisation review queue shipped in November 2026.
 
-**Commercial (~50%).** Billing still does not collect money or cut features (list price can be overridden by hand). Security companies can log in on a `pending` org with no activate/merge queue. City Hub has no legal waiver or radius RLS. There is no ID / proof-of-residence queue, no full front/back smart sectors, and no second neighborhood is live.
+**Commercial (~50%).** Billing still does not collect money or cut features (list price can be overridden by hand). Security-company and watch requests are reviewed through the Pending requests panel, but there is no paid product yet. City Hub has no legal waiver or radius RLS. There is no ID / proof-of-residence queue, no full front/back smart sectors, and no second neighborhood is live.
 
 Weighted against the original phase map: Phases 0–3 and 5b are the bulk of what shipped this weekend. Phases 4–5 (money + partner product) and **Pilots** are the long pole.
 
@@ -68,6 +68,14 @@ Weighted against the original phase map: Phases 0–3 and 5b are the bulk of wha
 - Neighborhood staff keep patrol/incident/user/moderation tools.
 - Global app roles: **Main admin** and **Technical support** are platform-wide (not billed as local members). **NW admin** is local per organization.
 - Migrations: `20260815021000`, `20260815023000`, `20260815024000`, `20260815026000`.
+
+### Organisation request review (November 2026)
+- **Built:** the Pending requests panel on `/admin/organizations` lists pending Neighborhood Watch and security-company requests.
+- Platform staff, Main admin, and Technical support can approve or reject requests through the organisation review RPCs. Approval activates the organisation and promotes its requester; rejection suspends the request and preserves the review record.
+
+### South African places (November 2026)
+- **Live:** the reference dataset contains **12,162** South African towns and cities, with aliases such as **Port Elizabeth → Gqeberha**.
+- The schema, aliases, and seed data are live. The dedicated city-picker UI is still to be built.
 - In-app Role Access Guide: `/admin/roles`.
 
 ### Resident MVP (pages exist)
@@ -108,12 +116,12 @@ Weighted against the original phase map: Phases 0–3 and 5b are the bulk of wha
 - **System vs author copy:** Neighborhood / Date / Type sit in a muted metadata box **above** the title; the write-up is the main text; the briefing note is a small italic footer.
 - **Feed cards:** stronger light-mode separation — grey surface, light shadow, type-coloured left bar, more gap between posts.
 - **Premium banner (16 Aug):** HTML title + coloured capability chips; map artwork is atmosphere only (no baked stats or fake suburb names). Live counts on the banner: **neighborhoods** (active watch groups), **active alerts** (published suspect + pattern posts), **shared reports** (all published hub posts — same source for every role). Back control sits *above* the card as a real button (security partners: **Back to command**).
-- **Back-nav:** City Hub and Hotspots use `homeBackNav` — security command, city admin, global admin, resident, or watch home — never send a partner to `/admin`.
+- **Back-nav:** City Hub and Hotspots use `homeBackNav` — security command, global admin, resident, or watch home — never send a partner to `/admin`. The city-admin destination is retired (November 2026).
 - Migrations: `20260815030000`, `20260815031000_city_hub_share_rls.sql`, `20260815032000`, `20260815034000`, `20260815035000`, `20260815036000`, `20260815037000`.
 
 ### Hotspots
 - Pins for **break-in**, **attempted break-in**, **cable theft**, and **attempted cable theft**. Theft from a shop/office after entry stays **break-in**; cable kinds are copper / street / telecom / municipal only (`20260815054000_hotspot_cable_theft_kinds.sql`).
-- **Edit pin** from the map overlay, Leaflet popup, selected-pin card, and Pins-in-range list. Staff can change kind, address, map location, date/time, and notes. Save keeps the pin selected. Write roles: committee, NW admin, main admin, technical support, security admin, city admin (`hotspotManage` / `is_hotspot_staff`). Patrollers view only.
+- **Edit pin** from the map overlay, Leaflet popup, selected-pin card, and Pins-in-range list. Staff can change kind, address, map location, date/time, and notes. Save keeps the pin selected. Write roles: committee, NW admin, main admin, technical support, and security admin (`hotspotManage` / `is_hotspot_staff`). The city-admin role is retired. Patrollers view only.
 - **Transparent threaded hot zone:** two or more pins within ~3 km form a see-through hull; a dashed purple **thread** joins them in date order (date-only pins still thread; clock time is no longer required). Travel-thread toggle shows/hides the corridor + dashed line.
 - Address search: Nominatim + Photon, Gqeberha retry, house-number drop, Theescombe bias, and intersection (“corner of X and Y”) pin at the road join.
 - Camera registry + rule-based footage suggestions (no live AI).
@@ -127,9 +135,9 @@ Weighted against the original phase map: Phases 0–3 and 5b are the bulk of wha
 ### Role-based public signup
 - `/register` starts with four buttons: **Resident**, **Patroller**, **Security company**, **Neighborhood Watch**.
 - Form fields change by role (residents skip vehicle/car details; security companies collect PSIRA/coverage; watches collect group name/area).
-- Privileged roles stay invite-only: investigator, committee, **city admin**, main admin, technical support.
-- Security-company signup creates a **`pending` org** and grants `security_admin` immediately — **login is not blocked** on admin verification. Review/activate queue is still pending.
-- City admin **cannot** self-register; an existing admin must assign the role.
+- Privileged roles stay invite-only: investigator, committee, main admin, technical support. **City admin is retired (November 2026).**
+- Security-company signup creates a **`pending` org** and grants `security_admin` immediately — **login is not blocked** on admin verification. The November 2026 Pending requests panel supplies review/approve/reject actions.
+- Historical note: city admin could not self-register; the role is now retired.
 - Guard so login does not overwrite staff roles to `resident` (`20260815033000_preserve_privileged_roles_on_signup.sql`). If someone is stuck as resident, restore `users.role` (same class of bug as the earlier admin / tech-support demotion).
 - Server whitelist + pending org creation: `20260815031000_role_based_signup.sql`.
 
@@ -137,7 +145,7 @@ Weighted against the original phase map: Phases 0–3 and 5b are the bulk of wha
 - **Watch home** `/dashboard` tile order: Patrol schedule → View incidents → Hotspots → Leaderboard → SOS board → Vehicles → Guide → About (Admin panel and City Hub stay full-width below).
 - **Security company** `/security` — see **Security command (16 Aug)** below (registered watch areas, view-only roster, multi-area SOS, company profile). The 15 Aug partner RPCs remain the base (`20260815038000`).
 - **Security insights** `/admin/security-insights` — platform snapshot of **counts only** (residents linked, verified, suburbs, incidents 30d). No resident names. Empty until households link a membership. Used later for partner commercialization, not live patrol ops.
-- **City admin / police** `/city-admin` — intelligence, reports, hotspots, City Hub, admin contacts per community.
+- **City admin / police** `/city-admin` — historical dashboard, **retired November 2026**.
 - Those roles redirect off the patroller dashboard after login. **Residents** land on `/resident`.
 - Partner data RPCs: `20260815038000_partner_city_dashboards.sql`. Areas/live patrols need suburb **security assignments**; residents appear when memberships are linked.
 
@@ -323,7 +331,7 @@ Priority is top-down.
 - [x] Photo + PDF attachments; full-image thumbnails; author contact card (including NW admin / patroller).
 - [x] System metadata separated from author text; stronger post-card separation.
 - [x] Premium banner with live neighborhood / active-alert / published-post counts (same numbers for every role).
-- [x] Role-aware back-nav (command / city admin / admin / resident / dashboard).
+- [x] Role-aware back-nav (command / **city admin, retired November 2026** / admin / resident / dashboard).
 - [ ] Moderation before publish for high-risk alerts.
 - [ ] Legal waiver captured at publish time.
 - [ ] Radius / selected-suburb visibility UI **and** RLS enforcement (schema has fields; UI is still mostly city-wide).
@@ -347,11 +355,11 @@ Priority is top-down.
 - [ ] Extra colour / card-style packs beyond cover + logo.
 - [ ] Consent before any resident-level partner visibility.
 - [ ] Time-series KPIs (insights page is a snapshot).
-- [ ] Activate/merge **pending** companies created at signup (login is **not** blocked today).
+- [x] Review **pending** companies and new watch groups from the November 2026 Pending requests panel on `/admin/organizations` (approve/reject RPCs; login remains unblocked for older pending companies).
 
 ### 7. Signup / onboarding follow-through
 - [ ] After register, place residents/patrollers into the requested suburb/org (today neighborhood is stored as text/notes).
-- [ ] Platform queue for pending security companies and new watch groups.
+- [x] Platform queue for pending security companies and new watch groups — Pending requests panel on `/admin/organizations`, with approve/reject RPCs (November 2026).
 - [ ] Update user-facing role guide (`USER_GUIDE_ROLES_AND_ACCESS.md`) — it still says members cannot pick a role at signup.
 
 ### 8. Compliance / hardening
@@ -374,7 +382,7 @@ Migrations: `20260820020000_dashboard_patrol_hardening`, `20260820030000_patrol_
 ### 9. Role-specific dashboards
 Each of these should land on its own home, not a trimmed copy of the patroller dashboard.
 - [x] **Security company dashboard** (`/security`) — assigned registered watch areas, live patrols (map when GPS exists) + patroller details, view-only roster, residents, approved incidents, **multi-area SOS** (`/security/sos`), hotspots, company profile. Apply `20260815038000` plus `58000`–`73000`.
-- [x] **City admin / police dashboard** (`/city-admin`) — intelligence, reports, hotspots, City Hub, and admin contacts for each community.
+- [x] **City admin / police dashboard** (`/city-admin`) — historical feature, **retired November 2026**.
 - [x] **Resident dashboard** (`/resident`) — **households only** after login: hold-to-SOS, activity reports, neighbourhood feed, verified badge vs unverified notice, Verify neighbours, My sector (**home pin + closest 10**), security membership, **Emergency contacts**, area broadcasts, away. Main admin / Technical support may preview from Admin (**View resident home** + **Back to admin**). Full front/back/left/right packing (8–10 houses) is not in this home yet.
 - [x] Keep **residents out of User Management**. Registered residents are on `/admin/residents`. User Management and Member profiles list watch / operational accounts only.
 
@@ -432,8 +440,8 @@ Do **not** turn on paid security-company access until isolation tests pass and a
 | 2 Resident MVP | Home, SOS, report, verification | **Household home + vouch + who-verified + pin/sector + next of kin shipped** — SOS resolve lifecycle + ID upload still open | **82%** |
 | 3 City Hub MVP | Cross-NW intel | **Share + manage + attachments + authors + feed styling + banner done** — pre-publish governance open | **75%** |
 | 4 NW subscription | Annual fee + entitlements | **Manual billing + list-price override done** — payments/gates open | **30%** |
-| 5 Security-company layer | Membership + partner analytics | **Command + branding + directory + multi-area SOS done** — pending-org review + commercial product open | **55%** |
-| 5b City admin / police | City-wide briefing home | **Dashboard shipped** (`/city-admin`) | **80%** |
+| 5 Security-company layer | Membership + partner analytics | **Command + branding + directory + multi-area SOS + pending-request review done** — commercial product open | **55%** |
+| 5b City admin / police | City-wide briefing home | **Retired November 2026**; each neighborhood watch is independent, with global admin/support above watches | — |
 | Pilots | 2–5 neighborhoods | **Not started** | **0%** |
 
 ---
@@ -442,7 +450,7 @@ Do **not** turn on paid security-company access until isolation tests pass and a
 
 **Public self-signup:** resident, patroller, security company (`security_admin` + **pending** org; can log in immediately), neighborhood watch (`nw_admin` + pending org).
 
-**Invite / assign only:** investigator, committee, **city admin**, main admin, technical support.
+**Invite / assign only:** investigator, committee, main admin, technical support. **City admin is retired (November 2026).**
 
 **Platform (your business):** `platform_owner`, `platform_ops`, `platform_support` — not the same as neighborhood `admin`.
 
@@ -450,7 +458,7 @@ Do **not** turn on paid security-company access until isolation tests pass and a
 
 **City Hub authors:** name + contact card for City Hub viewers (including NW admin and patrollers). Apply `36000` + `37000`.
 
-**Homes:** resident → `/resident` (households only). security company → `/security` (SOS → `/security/sos`; profile → `/security/profile`). City admin / police → `/city-admin`. Watch members → `/dashboard`. Main admin / Technical support may preview `/resident` from Admin. Emergency contacts: `/resident/contacts`, `/intelligence/contacts`, `/admin/contacts`.
+**Homes:** resident → `/resident` (households only). security company → `/security` (SOS → `/security/sos`; profile → `/security/profile`). Watch members → `/dashboard`. Main admin / Technical support may preview `/resident` from Admin. **City admin / police → `/city-admin` is retired (November 2026).** Emergency contacts: `/resident/contacts`, `/intelligence/contacts`, `/admin/contacts`.
 
-**Security vs city admin:** security admin = private security partner (no patrols; view intel; hotspot write). City admin = municipal / police coordination (no patrols; moderate incidents + intel; city-wide briefing home).
+**Security vs city admin:** security admin = private security partner (no patrols; view intel; hotspot write). City admin was the municipal / police coordination role; it is **retired November 2026**.
 

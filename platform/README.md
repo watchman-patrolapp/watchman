@@ -14,7 +14,7 @@ This folder holds everything that ships as the product:
 
 **Android debug APK:** from `platform/web`, run `npm run android:sync` then `npm run android:apk:debug` (or open `platform/android` in Android Studio). On macOS or Linux the Gradle wrapper is `npm run android:apk:debug:unix`.
 
-`applicationId` is `za.co.africuz.watchman` (Play package, permanent). The Java/Kotlin `namespace` stays `com.watchman.app`. `versionCode` / `versionName` default to **6** / **1.0.5** from [`android/version.properties`](android/version.properties). Override for one build with `-Pwatchman.versionCode` / `-Pwatchman.versionName` or `WATCHMAN_VERSION_CODE` / `WATCHMAN_VERSION_NAME` (flags, then env, then the file). Bump the file with:
+`applicationId` is `za.co.africuz.watchman` (Play package, permanent). The Java/Kotlin `namespace` stays `com.watchman.app`. `versionCode` / `versionName` are read from [`android/version.properties`](android/version.properties), currently **13** / **1.0.11**. Override for one build with `-Pwatchman.versionCode` / `-Pwatchman.versionName` or `WATCHMAN_VERSION_CODE` / `WATCHMAN_VERSION_NAME` (flags, then env, then the file). Bump the file with:
 
 ```bash
 node platform/android/scripts/bump-version.mjs --bump-code --name 1.0.6
