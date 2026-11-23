@@ -5,6 +5,7 @@ import {
   analyticsSearchString,
   buildKpis,
   buildNeedsAttention,
+  cityIdsInUse,
   formatAgo,
   formatBucketLabel,
   formatCount,
@@ -176,4 +177,12 @@ test("role group and month labels", async () => {
   assert.equal(monthLabel("2026-09"), "Sep 2026");
   assert.equal(monthLabel("bad"), "bad");
   assert.deepEqual(ANALYTICS_TABS.map((t) => t.id), ["overview", "patrols", "safety", "people", "residents", "community", "security", "watches"]);
+});
+
+test("cityIdsInUse keeps only cities that have a suburb or a watch", () => {
+  const suburbs = [{ id: "s1", city_id: "gq" }, { id: "s2", city_id: "gq" }, { id: "s3", city_id: null }];
+  const watches = [{ id: "w1", city_id: "ct" }, { id: "w2", city_id: null }, { id: "w3", city_id: "gq" }];
+  assert.deepEqual(cityIdsInUse({ suburbs, watches }), ["ct", "gq"]);
+  assert.deepEqual(cityIdsInUse({}), []);
+  assert.deepEqual(cityIdsInUse({ suburbs: [null], watches: undefined }), []);
 });

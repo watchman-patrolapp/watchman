@@ -1,0 +1,24 @@
+{
+  "_about": "Official South African place renames applied on top of GeoNames. Each entry is reviewed by hand. 'apply': false entries are documented but not applied. Sources: Government Gazette notices under the South African Geographical Names Council Act 118 of 1998 (DSAC), and the Minister's reply to PQ 2021-W1981 (pa.org.za) listing gazette dates.",
+  "renames": [
+    { "official": "Gqeberha", "former": ["Port Elizabeth", "PE"], "province": "ZA-EC", "geonames_id": 964420, "gazetted": "2021-02-23", "source": "Government Gazette 44181, GN 114", "apply": true },
+    { "official": "Kariega", "former": ["Uitenhage"], "province": "ZA-EC", "geonames_id": 946877, "gazetted": "2021-02-23", "source": "Government Gazette 44181, GN 114", "apply": true },
+    { "official": "Qonce", "former": ["King William's Town", "King Williams Town"], "province": "ZA-EC", "geonames_id": 990849, "gazetted": "2021-02-23", "source": "Government Gazette 44181, GN 114", "apply": true },
+    { "official": "Ntabozuko", "former": ["Berlin"], "province": "ZA-EC", "geonames_id": 1019883, "gazetted": "2021-02-23", "source": "Government Gazette 44181, GN 114", "apply": true },
+    { "official": "Nqanqarhu", "former": ["Maclear"], "province": "ZA-EC", "geonames_id": 980798, "gazetted": "2021-02-23", "source": "Government Gazette 44181, GN 114", "apply": true },
+    { "official": "Makhanda", "former": ["Grahamstown"], "province": "ZA-EC", "geonames_id": 1000501, "gazetted": "2018-06-29", "source": "Government Gazette 41738, GN 641", "apply": true },
+    { "official": "Komani", "former": ["Queenstown"], "province": "ZA-EC", "geonames_id": 963516, "gazetted": "2016-02-09", "source": "PQ 2021-W1981 reply (gazette 9 Feb 2016)", "apply": true },
+    { "official": "Dikeni", "former": ["Alice"], "province": "ZA-EC", "geonames_id": 1023332, "gazetted": "2016-06-17", "source": "PQ 2021-W1981 reply (gazette 17 Jun 2016)", "apply": true },
+    { "official": "Mahikeng", "former": ["Mafikeng", "Mafeking"], "province": "ZA-NW", "geonames_id": 980595, "gazetted": "2010", "source": "widely documented; GeoNames lists Mahikeng as the preferred English name", "apply": true },
+    { "official": "Mbombela", "former": ["Nelspruit"], "province": "ZA-MP", "geonames_id": 971534, "gazetted": "2009", "source": "already primary in GeoNames", "apply": true },
+    { "official": "Polokwane", "former": ["Pietersburg"], "province": "ZA-LP", "geonames_id": 965289, "gazetted": "2005", "source": "already primary in GeoNames", "apply": true },
+    { "official": "Mokopane", "former": ["Potgietersrus"], "province": "ZA-LP", "geonames_id": 964315, "gazetted": "2002", "source": "already primary in GeoNames", "apply": true },
+    { "official": "Modimolle", "former": ["Nylstroom"], "province": "ZA-LP", "geonames_id": 968665, "gazetted": "2002", "source": "already primary in GeoNames", "apply": true },
+    { "official": "Bela-Bela", "former": ["Warmbaths"], "province": "ZA-LP", "geonames_id": 7576313, "gazetted": "2002", "source": "already primary in GeoNames", "apply": true },
+    { "official": "Musina", "former": ["Messina"], "province": "ZA-LP", "geonames_id": 8030223, "gazetted": "2003", "source": "already primary in GeoNames", "apply": true },
+    { "official": "Lephalale", "former": ["Ellisras"], "province": "ZA-LP", "geonames_id": 7730334, "gazetted": "2002", "source": "already primary in GeoNames", "apply": true },
+    { "official": "Mthatha", "former": ["Umtata"], "province": "ZA-EC", "geonames_id": 946058, "gazetted": "2004", "source": "already primary in GeoNames", "apply": true },
+    { "official": "eMalahleni", "former": ["Witbank"], "province": "ZA-MP", "geonames_id": 939270, "gazetted": "2006", "source": "GeoNames spells it Emalahleni; official spelling eMalahleni", "apply": true },
+    { "official": "Makhado", "former": ["Louis Trichardt"], "province": "ZA-LP", "geonames_id": 981827, "gazetted": "2003", "source": "renamed 2003; the rename was challenged in court; owner decision 2026-11-23: show Makhado, keep Louis Trichardt as a search alias", "apply": true }
+  ]
+}

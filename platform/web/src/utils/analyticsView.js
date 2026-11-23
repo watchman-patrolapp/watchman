@@ -387,6 +387,17 @@ export function formatAgo(iso, nowMs) {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/**
+ * Cities worth offering in the analytics City filter: only those with a suburb or a watch.
+ * The cities table holds every South African town, so listing all of it would be thousands of rows.
+ */
+export function cityIdsInUse({ suburbs = [], watches = [] } = {}) {
+  const ids = new Set();
+  for (const s of suburbs) if (s?.city_id) ids.add(s.city_id);
+  for (const w of watches) if (w?.city_id) ids.add(w.city_id);
+  return [...ids].sort();
+}
+
 /** Filter options for the Suburb and Watch pickers, narrowed by the chosen city / suburb. */
 export function narrowFilterOptions({ suburbs = [], watches = [], orgSuburbs = [] } = {}, { cityId = "", suburbId = "" } = {}) {
   const suburbCity = new Map(suburbs.map((s) => [s.id, s.city_id]));
