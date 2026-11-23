@@ -19,3 +19,4 @@
 7576313	Bela-Bela	Bela-Bela	Warmbaths	-24.885	28.294	P	PPLA3	ZA		09	DC36			0			Africa/Johannesburg	2026-11-01
 990001	Nelson Mandela Bay Ward 10	x		-33.9	25.5	P	PPL	ZA		05	NMA			0			Africa/Johannesburg	2026-11-01
 990002	Kroonstad Farm	x		-27.6	27.2	S	FRM	ZA		03	DC20			0			Africa/Johannesburg	2026-11-01
+981827	Louis Trichardt	Louis Trichardt	LCD,Louis Trichardt,Луис-Тричард	-23.04385	29.90319	P	PPLA3	ZA		09	DC34	LIM344		86854		956	Africa/Johannesburg	2024-01-18

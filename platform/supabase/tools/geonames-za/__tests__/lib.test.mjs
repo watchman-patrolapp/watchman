@@ -52,7 +52,17 @@ test("official renames: new name primary, old names become old_name aliases", ()
   assert.ok(!gq.some((a) => /ポ/.test(a.alias)), "non-Latin dropped");
   assert.ok(!gq.some((a) => a.alias === "Port Elisabeth"), "French exonym dropped");
   assert.equal(byName(r, "eMalahleni")[0].geonames_id, 939270);
-  assert.equal(r.renamed.find((x) => x.official === "Makhado"), undefined, "apply:false is skipped");
+  const mak = byName(r, "Makhado");
+  assert.ok(mak.length === 1 && mak[0].geonames_id === 981827 && byName(r, "Louis Trichardt").length === 0);
+  assert.equal(r.aliases.find((a) => a.geonames_id === 981827 && a.alias_key === "louis trichardt").kind, "old_name");
+  assert.ok(!r.aliases.some((a) => a.alias === "LCD"), "airport code dropped");
+  const held = buildPlaces(parseGeonames(fx("ZA.sample.txt")), {
+    alternates: parseAlternates(fx("alt-ZA.sample.txt")),
+    renames: renames.map((x) => (x.official === "Makhado" ? { ...x, apply: false } : x)),
+    notPlaces,
+  });
+  assert.equal(byName(held, "Makhado").length, 0, "apply:false is skipped");
+  assert.equal(byName(held, "Louis Trichardt").length, 1);
 });
 
 test("duplicate points are folded; repeated names get a 'near' label", () => {

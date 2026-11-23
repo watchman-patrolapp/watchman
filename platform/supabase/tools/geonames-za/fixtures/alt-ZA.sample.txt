@@ -7,3 +7,5 @@
 7	1000501	xh	IRhini						
 8	939270		Witbank						
 9	7576313	en	Warmbaths				1		
+8489069	981827	en	Louis Trichardt						
+7484650	981827	iata	LCD						

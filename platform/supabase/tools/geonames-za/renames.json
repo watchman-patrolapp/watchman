@@ -19,6 +19,6 @@
     { "official": "Lephalale", "former": ["Ellisras"], "province": "ZA-LP", "geonames_id": 7730334, "gazetted": "2002", "source": "already primary in GeoNames", "apply": true },
     { "official": "Mthatha", "former": ["Umtata"], "province": "ZA-EC", "geonames_id": 946058, "gazetted": "2004", "source": "already primary in GeoNames", "apply": true },
     { "official": "eMalahleni", "former": ["Witbank"], "province": "ZA-MP", "geonames_id": 939270, "gazetted": "2006", "source": "GeoNames spells it Emalahleni; official spelling eMalahleni", "apply": true },
-    { "official": "Makhado", "former": ["Louis Trichardt"], "province": "ZA-LP", "geonames_id": 981827, "gazetted": "2003 (set aside by court 2007)", "source": "contested; keep Louis Trichardt until confirmed", "apply": false }
+    { "official": "Makhado", "former": ["Louis Trichardt"], "province": "ZA-LP", "geonames_id": 981827, "gazetted": "2003", "source": "renamed 2003; the rename was challenged in court; owner decision 2026-11-23: show Makhado, keep Louis Trichardt as a search alias", "apply": true }
   ]
 }
