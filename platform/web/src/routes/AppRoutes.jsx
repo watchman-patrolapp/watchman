@@ -19,7 +19,6 @@ import {
   PATROL_MEMBER_ROLES,
   SOS_BOARD_ROLES,
   SECURITY_DASHBOARD_ROLES,
-  CITY_ADMIN_DASHBOARD_ROLES,
   EMERGENCY_DIRECTORY_MANAGER_ROLES,
   AREA_BROADCAST_ROLES,
   GLOBAL_APP_ROLES,
@@ -103,7 +102,6 @@ import {
   EquipmentAdminMaintenance,
   EquipmentHandover,
   NeedsAdmin,
-  CityAdminDashboard,
   SosEscalationBoard,
   PilotReadiness,
   RoleAccessGuide,
@@ -207,16 +205,8 @@ export default function AppRoutes() {
 
         <Route path="/security/branding" element={<Navigate to="/security/profile" replace />} />
 
-        <Route
-          path="/city-admin"
-          element={
-            <PrivateRoute>
-              <RequireRole allowedRoles={CITY_ADMIN_DASHBOARD_ROLES} allowPlatformConsole>
-                <CityAdminDashboard />
-              </RequireRole>
-            </PrivateRoute>
-          }
-        />
+        {/* City admin was retired (Nov 2026); old links land on the user's home. */}
+        <Route path="/city-admin" element={<Navigate to="/" replace />} />
 
         <Route
           path="/resident"

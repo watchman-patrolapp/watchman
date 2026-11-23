@@ -11,7 +11,6 @@ export const PATROL_ROLES = new Set([
   "admin",
   "technical_support",
   "security_admin",
-  "city_admin",
 ]);
 
 export const AREA_THEMES = [

@@ -81,7 +81,6 @@ export const EquipmentAdminCertifications = lazy(() => import("../pages/equipmen
 export const EquipmentAdminMaintenance = lazy(() => import("../pages/equipment/admin/EquipmentAdminMaintenance"));
 export const EquipmentHandover = lazy(() => import("../pages/equipment/EquipmentHandover"));
 export const NeedsAdmin = lazy(() => import("../pages/admin/NeedsAdmin"));
-export const CityAdminDashboard = lazy(() => import("../pages/CityAdminDashboard"));
 export const SosEscalationBoard = lazy(() => import("../pages/SosEscalationBoard"));
 export const PilotReadiness = lazy(() => import("../pages/PilotReadiness"));
 export const RoleAccessGuide = lazy(() => import("../pages/RoleAccessGuide"));

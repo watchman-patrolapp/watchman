@@ -594,9 +594,9 @@ SELECT pg_temp.expect_error('ROLE', 'A resident changes another A user -> forbid
 SELECT pg_temp.expect_error('ROLE', 'A nw_admin sets admin -> refused',
   pg_temp.id('a_admin'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_res'), 'admin'),
   'cannot be assigned');
-SELECT pg_temp.expect_error('ROLE', 'A nw_admin sets city_admin -> platform staff only',
+SELECT pg_temp.expect_error('ROLE', 'A nw_admin sets city_admin -> retired role refused',
   pg_temp.id('a_admin'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_res'), 'city_admin'),
-  'only platform staff');
+  'unknown role');
 SELECT pg_temp.expect_error('ROLE', 'A committee appoints nw_admin -> refused (D1)',
   pg_temp.id('a_comm'), format('SELECT public.admin_set_user_role(%L, %L)', pg_temp.id('a_res'), 'nw_admin'),
   'only an NW admin');

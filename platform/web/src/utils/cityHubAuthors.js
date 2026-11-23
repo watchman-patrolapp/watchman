@@ -5,7 +5,6 @@ const CITY_HUB_AUTHOR_ROLE_LABELS = {
   admin: "Main admin",
   technical_support: "Technical support",
   nw_admin: "Neighborhood admin",
-  city_admin: "City admin",
   security_admin: "Security admin",
   committee: "Committee",
   investigator: "Investigator",

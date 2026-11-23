@@ -138,7 +138,6 @@ export const ROLE_LABELS = {
   committee: "Committee",
   security_admin: "Security staff",
   security_company: "Security staff",
-  city_admin: "City admins",
   admin: "Global admins",
   technical_support: "Support",
   unknown: "Not set",

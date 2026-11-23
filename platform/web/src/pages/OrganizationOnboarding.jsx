@@ -9,6 +9,7 @@ import { isGlobalAppRole } from "../auth/roleMatrix";
 import { fetchParentCity } from "../utils/cityScope";
 import { canAccessPlatformConsole } from "../auth/platformRoles";
 import OrganizationRequestsPanel from "../components/admin/OrganizationRequestsPanel";
+import CommunityContactsPanel from "../components/admin/CommunityContactsPanel";
 import { DEFAULT_CITY_FULL_NAME } from "../config/neighborhoodRegions";
 import {
   DEFAULT_BILLING_CATALOG,
@@ -33,7 +34,6 @@ const EMPTY_FORM = {
 const TYPE_LABELS = {
   nw_group: "Neighborhood Watch",
   security_company: "Security Company",
-  city_admin: "City Admin",
 };
 
 function orgToForm(org) {
@@ -279,6 +279,7 @@ function OrganizationConsole() {
         />
 
         <OrganizationRequestsPanel onChanged={reloadOrganizations} />
+        <CommunityContactsPanel />
 
         <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow space-y-4">
           <div className="flex items-start justify-between gap-3">
@@ -312,14 +313,11 @@ function OrganizationConsole() {
               >
                 <option value="nw_group">Neighborhood Watch (area)</option>
                 <option value="security_company">Security Company (resident dropdown)</option>
-                <option value="city_admin">City Admin</option>
               </select>
               <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
                 {form.type === "security_company"
                   ? "This is what residents pick when they link a company. Sample partners (Tacnet, Atlas, …) and companies you create here share that list."
-                  : form.type === "nw_group"
-                    ? "This is a neighborhood area, not a security company. It will not appear on the resident company dropdown."
-                    : "City-wide operator. Not a neighborhood area and not a security-company listing."}
+                  : "This is a neighborhood area, not a security company. It will not appear on the resident company dropdown."}
               </span>
             </label>
             <label className="block">
@@ -408,20 +406,18 @@ function OrganizationConsole() {
           </section>
         ) : null}
 
-        {["nw_group", "security_company", "city_admin"].map((type) => {
+        {["nw_group", "security_company"].map((type) => {
           const rows = orgs
             .filter((org) => org.type === type)
             .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" }));
           const titles = {
             nw_group: "Neighborhood areas",
             security_company: "Security companies",
-            city_admin: "City admin",
           };
           const hints = {
             nw_group: "These are the working areas in the admin Area picker. Patrol and incident data stay per neighborhood.",
             security_company:
               "Partners that cover one or more areas. Pending means not yet verified — click Verify company after you confirm the business. Verified companies keep their place in the A–Z resident dropdown.",
-            city_admin: "City-wide operators. Not a neighborhood area.",
           };
           if (loading && orgs.length === 0) return null;
           return (
@@ -538,6 +534,7 @@ function OrganizationRequestsOnly() {
           backLabel="Back to admin"
         />
         <OrganizationRequestsPanel />
+        <CommunityContactsPanel />
       </div>
     </div>
   );

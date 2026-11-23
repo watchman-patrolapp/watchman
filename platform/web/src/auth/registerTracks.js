@@ -1,6 +1,6 @@
 /**
  * Public self-signup tracks. Privileged roles (admin, technical_support,
- * city_admin, investigator, committee) stay invite-only.
+ * investigator, committee) stay invite-only.
  */
 
 export const REGISTER_TRACKS = [

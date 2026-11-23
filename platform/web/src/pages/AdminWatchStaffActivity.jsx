@@ -53,7 +53,6 @@ function roleLabel(role) {
     committee: "Committee",
     technical_support: "Technical support",
     security_admin: "Security admin",
-    city_admin: "City admin",
     admin: "Main admin",
     patroller: "Patroller",
     volunteer: "Volunteer",

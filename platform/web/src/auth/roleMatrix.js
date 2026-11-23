@@ -115,17 +115,6 @@ export const ROLE_MATRIX = {
     incidentModerate: false,
     feedbackReview: false,
   },
-  city_admin: {
-    adminPanel: true,
-    patrolSchedule: false,
-    patrolStartStop: false,
-    intelligenceView: true,
-    intelligenceModerate: true,
-    hotspotManage: true,
-    incidentReport: true,
-    incidentModerate: true,
-    feedbackReview: false,
-  },
 };
 
 function roleConfig(role) {
@@ -225,9 +214,8 @@ export const CITY_HUB_VIEW_ROLES = [
   "admin",
   "technical_support",
   "security_admin",
-  "city_admin",
 ];
-export const CITY_HUB_PUBLISH_ROLES = ["admin", "technical_support", "nw_admin", "city_admin", "security_admin"];
+export const CITY_HUB_PUBLISH_ROLES = ["admin", "technical_support", "nw_admin", "security_admin"];
 export const AREA_BROADCAST_ROLES = ["admin", "technical_support", "nw_admin", "committee"];
 
 const BROADCAST_CAPABILITIES = ["resident_broadcaster", "resident_moderator"];
@@ -296,14 +284,11 @@ export function canReviewPatrollerRequests(role) {
 }
 
 export const SECURITY_DASHBOARD_ROLES = ["security_admin"];
-export const CITY_ADMIN_DASHBOARD_ROLES = ["city_admin", "admin", "technical_support"];
 
-export function homePathForRole(role, platformRole) {
+export function homePathForRole(role) {
   const normalized = normalizeAppRole(role);
   if (normalized === "resident") return "/resident";
   if (normalized === "security_admin") return "/security";
-  if (normalized === "city_admin") return "/city-admin";
-  if (canAccessPlatformConsole(platformRole) && normalized === "city_admin") return "/city-admin";
   return "/dashboard";
 }
 
@@ -314,9 +299,7 @@ export function homeBackNav(role, platformRole) {
   const backLabel =
     backTo === "/security"
       ? "Back to command"
-      : backTo === "/city-admin"
-        ? "Back to city admin"
-        : backTo === "/admin"
+      : backTo === "/admin"
           ? "Back to admin"
           : backTo === "/resident"
             ? "Back to home"
