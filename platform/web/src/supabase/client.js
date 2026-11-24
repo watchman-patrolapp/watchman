@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { appAuthStorage } from './appAuthStorage';
 import { Capacitor } from '@capacitor/core';
 import { offlineAwareFetch } from '../offline/supabaseFetch';
+import { installPasswordRecoveryListener } from '../auth/passwordRecovery';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -29,6 +30,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     fetch: offlineAwareFetch,
   },
 });
+
+// Register before React mounts so PASSWORD_RECOVERY is not missed after the hash is consumed.
+installPasswordRecoveryListener(supabase.auth);
 
 // Evidence management functions
 export const evidenceService = {

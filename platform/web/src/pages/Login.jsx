@@ -1,13 +1,18 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useAuth } from "../auth/useAuth";
 import AuthShell from "../components/layout/AuthShell";
 import Button from "../components/ui/Button";
 import FormField from "../components/ui/FormField";
 import IconButton from "../components/ui/IconButton";
+import { supabase } from "../supabase/client";
 import { setPreferSessionAuth } from "../supabase/authStorage";
 import { formatAuthErrorMessage } from "../utils/authErrorMessage";
+import {
+  loginShouldRedirectToUpdatePassword,
+  updatePasswordLocation,
+} from "../auth/passwordRecovery";
 
 function emailErrorFor(value) {
   const email = value.trim();
@@ -23,6 +28,7 @@ function passwordErrorFor(value) {
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +38,28 @@ export default function Login() {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const hrefFor = () =>
+      typeof window !== "undefined"
+        ? window.location.href
+        : `${location.pathname}${location.search}${location.hash}`;
+    const goToUpdatePassword = () => {
+      navigate(updatePasswordLocation(hrefFor()), { replace: true });
+    };
+    if (loginShouldRedirectToUpdatePassword(hrefFor())) {
+      goToUpdatePassword();
+      return undefined;
+    }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY" || loginShouldRedirectToUpdatePassword(hrefFor())) {
+        goToUpdatePassword();
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [navigate, location.pathname, location.search, location.hash]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
