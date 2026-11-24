@@ -1,5 +1,11 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-import { Suspense } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Suspense, useEffect, useState } from "react";
+import { supabase } from "../supabase/client";
+import {
+  hasPasswordRecoveryFlag,
+  rootRedirectTarget,
+  urlHasRecoveryType,
+} from "../auth/passwordRecovery";
 import RequireRole from "../components/RequireRole";
 import RequirePlatformRole from "../components/RequirePlatformRole";
 import RequireCapability from "../components/RequireCapability";
@@ -109,6 +115,68 @@ import {
   ShareCardFixtures,
   AdminAnalytics,
 } from "./lazyPages";
+
+function RootRedirect() {
+  const location = useLocation();
+  const href =
+    typeof window !== "undefined"
+      ? window.location.href
+      : `${location.pathname}${location.search}${location.hash}`;
+  const [target, setTarget] = useState(() => {
+    const next = rootRedirectTarget(href);
+    return next === "wait" ? null : next;
+  });
+
+  useEffect(() => {
+    if (target) return undefined;
+    let cancelled = false;
+    let decided = false;
+    const finish = (next) => {
+      if (cancelled || decided) return;
+      decided = true;
+      setTarget(next);
+    };
+    if (hasPasswordRecoveryFlag() || urlHasRecoveryType(window.location.href)) {
+      finish("update-password");
+      return undefined;
+    }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY" || hasPasswordRecoveryFlag()) {
+        finish("update-password");
+        return;
+      }
+      if (event === "INITIAL_SESSION" || event === "SIGNED_OUT") {
+        finish(hasPasswordRecoveryFlag() ? "update-password" : "dashboard");
+      }
+    });
+    void supabase.auth.getSession().finally(() => {
+      window.setTimeout(() => {
+        finish(hasPasswordRecoveryFlag() ? "update-password" : "dashboard");
+      }, 50);
+    });
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
+  }, [target]);
+
+  if (!target) {
+    return <PageSkeleton message="Signing you in…" />;
+  }
+
+  return (
+    <Navigate
+      to={{
+        pathname: target === "update-password" ? "/update-password" : "/dashboard",
+        search: location.search,
+        hash: location.hash,
+      }}
+      replace
+    />
+  );
+}
 
 export default function AppRoutes() {
   return (
@@ -1084,7 +1152,7 @@ export default function AppRoutes() {
           }
         />
         
-        <Route path="/" element={<Navigate to="/dashboard" />} />
+        <Route path="/" element={<RootRedirect />} />
       </Routes>
     </Suspense>
   );

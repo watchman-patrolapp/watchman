@@ -3,6 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/client';
 import AuthShell from '../components/layout/AuthShell';
 import { formatAuthErrorMessage } from '../utils/authErrorMessage';
+import {
+  clearPasswordRecovery,
+  updatePasswordFormIsReady,
+} from '../auth/passwordRecovery';
 
 export default function UpdatePassword() {
   const navigate = useNavigate();
@@ -10,16 +14,19 @@ export default function UpdatePassword() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [recoveryReady, setRecoveryReady] = useState(() =>
+    updatePasswordFormIsReady(typeof window !== 'undefined' ? window.location.href : ''),
+  );
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
+    const href = window.location.href;
+    if (updatePasswordFormIsReady(href)) {
       setRecoveryReady(true);
     }
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      if (event === 'PASSWORD_RECOVERY' || updatePasswordFormIsReady(window.location.href)) {
         setRecoveryReady(true);
       }
     });
@@ -42,6 +49,7 @@ export default function UpdatePassword() {
     try {
       const { error: updErr } = await supabase.auth.updateUser({ password });
       if (updErr) throw updErr;
+      clearPasswordRecovery();
       // Do not await — missing/undeployed Edge Function causes long CORS/preflight hangs.
       void supabase.functions.invoke('notify-password-changed', { body: {} }).then(({ error: notifyErr }) => {
         if (notifyErr) console.warn('Password change notification email:', notifyErr.message);
