@@ -21,7 +21,7 @@ import RegisterVehicleFields from "../components/register/RegisterVehicleFields"
 import { setPreferSessionAuth } from "../supabase/authStorage";
 import { formatAuthErrorMessage } from "../utils/authErrorMessage";
 import { loadPublicSignupOptions, securityCompanyOptionLabel } from "../utils/signupOptions";
-import { CURRENT_TERMS_VERSION } from "../utils/termsGate";
+import { CURRENT_TERMS_VERSION, allRequiredAgreementsAccepted } from "../utils/termsGate";
 import CityPicker from "../components/places/CityPicker";
 import { loadCity } from "../utils/places";
 import { cityUsesSignupAreaList } from "../utils/placesView";
@@ -115,7 +115,7 @@ function buildSignupMetadata(track, form, acceptedAt) {
     popia_accepted_at: acceptedAt,
     terms_accepted_at: acceptedAt,
     terms_version: CURRENT_TERMS_VERSION,
-    consent_version: "2026-08-15",
+    consent_version: CURRENT_TERMS_VERSION,
   };
 
   if (track.requiresSop || track.requiresPartnerAgreement) {
@@ -367,7 +367,7 @@ function Register() {
       setError("Please choose a suburb / neighborhood from the list.");
       return;
     }
-    if (!acceptedAge18 || !acceptedPopia || !acceptedTerms) {
+    if (!allRequiredAgreementsAccepted({ acceptedAge18, acceptedPopia, acceptedTerms })) {
       setError("You must confirm you are 18 or older and accept POPIA and terms to register.");
       return;
     }

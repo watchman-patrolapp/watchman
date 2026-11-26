@@ -62,6 +62,12 @@ Production Supabase migrations are applied by hand in the SQL editor, not throug
 | `20261123040105_sa_places_seed_05.sql` | Loads SA places seed 05 of 07 from GeoNames. | Live | 2026-11-23 |
 | `20261123040106_sa_places_seed_06.sql` | Loads SA places seed 06 of 07 from GeoNames. | Live | 2026-11-23 |
 | `20261123040107_sa_places_seed_07.sql` | Loads SA places seed 07 of 07 from GeoNames. | Live | 2026-11-23 |
+| `20261126010000_sa_places_search.sql` | Adds city search, the watch list for a city, suburb suggestions, and suburb or watch requests. | Live | 2026-11-26 |
+| `20261126020000_sa_places_review.sql` | Extends the approval queue with resident requesters, possible duplicates, merge into an existing watch, and watch join requests. | Live | 2026-11-26 |
+| `20261126030000_sa_places_profile.sql` | Adds a saved home city, `my_home_area`, `set_my_home_city`, and `switch_my_watch`. | Live | 2026-11-26 |
+| `20261126040000_sa_places_city_defaults.sql` | Makes the default city caller-based, keeps an explicit city, applies the sign-up city, and lists contacts with city and suburb. | Live | 2026-11-26 |
+
+All 7 SA places seed chunks (12,162 places) were verified live as of 2026-11-26.
 
 ## Edge functions
 

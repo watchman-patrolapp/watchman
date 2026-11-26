@@ -75,7 +75,7 @@ export default function PrivacyPolicy() {
             Effective date: 15 November 2026 (Africa/Johannesburg)
           </p>
           <p className="text-sm text-text-secondary">
-            Last updated: 17 November 2026. Android package:{" "}
+            Last updated: 26 November 2026. Android package:{" "}
             <code className="font-mono text-xs text-text-primary">za.co.africuz.watchman</code>
           </p>
         </header>
@@ -170,6 +170,17 @@ export default function PrivacyPolicy() {
               see your password in plain text.
             </li>
           </ul>
+          <p className={bodyClass}>
+            Some of these details are mandatory and some are optional (POPIA s18(1)(d) and (e)).
+            Every account needs your name, surname, phone number, email address, a password,
+            confirmation that you are 18 or older, consent to this Privacy Policy, and acceptance
+            of the platform terms. Depending on the type of account, we may also require your city
+            or town, home address, an emergency contact, and (for a new watch or a security company)
+            the organisation&apos;s name and address. A profile photo, a home map pin, and extra
+            vehicle details are optional, except that a patroller sign-up needs vehicle or
+            patrol-mode details for the live map. We cannot create an account without the mandatory
+            details.
+          </p>
 
           <h4 className={subheadingClass}>3.2 Location</h4>
           <p className={bodyClass}>We collect precise location in these cases:</p>
@@ -466,7 +477,7 @@ export default function PrivacyPolicy() {
         <section className="space-y-3" id="rights">
           <h3 className={headingClass}>9. Your rights under POPIA</h3>
           <p className={bodyClass}>
-            Subject to POPIA and reasonable proof of identity, you may ask us to:
+            Subject to POPIA and reasonable proof of identity, you may:
           </p>
           <ul className={`${bodyClass} list-disc space-y-1 pl-5`}>
             <li>Access the personal information we hold about you</li>
@@ -474,7 +485,17 @@ export default function PrivacyPolicy() {
             <li>Delete information, where the law allows</li>
             <li>Object to certain processing</li>
             <li>
-              Lodge a complaint with the Information Regulator (South Africa) at{" "}
+              Withdraw consent, where consent is the lawful ground for the processing (POPIA
+              s11(2)(b)). Withdrawal is as easy as giving consent: email the Information Officer,
+              or delete your account in the app (see section 10). Withdrawal does not undo
+              processing already carried out, and we may continue where another lawful ground
+              applies (for example a legal obligation, or the legitimate safety function of the
+              watch).
+            </li>
+            <li>
+              Lodge a complaint with the Information Regulator (South Africa). Please contact the
+              Information Officer first so we can try to resolve the issue. If you still wish to
+              complain, use Form 5, available at{" "}
               <a className={linkClass} href="https://inforegulator.org.za">
                 https://inforegulator.org.za
               </a>
@@ -484,7 +505,17 @@ export default function PrivacyPolicy() {
             To make a request, email <MailLink subject="Data request — access / correction / deletion">{email}</MailLink>{" "}
             with the subject “Data request — access / correction / deletion”, your name, the email on
             your account, a short description of what you need, and proof of identity. We aim to
-            respond within 30 days, or longer if POPIA allows an extension.
+            respond within 30 days, or longer if POPIA allows an extension. You do not have to use
+            a particular form. If you prefer, you may send the Information Regulator&apos;s Form 1
+            (objection under s11(3)) or Form 2 (correction or deletion under s24). We accept both
+            free of charge.
+          </p>
+          <p className={bodyClass}>
+            The wording of these rights is adapted from Venus One&apos;s POPIA Compliance Kit (
+            <a className={linkClass} href="https://github.com/VenusOne-Lee/popia-compliance">
+              https://github.com/VenusOne-Lee/popia-compliance
+            </a>
+            ), used under CC BY 4.0.
           </p>
         </section>
 

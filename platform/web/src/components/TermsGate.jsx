@@ -3,15 +3,24 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import { recordAcceptance, useTermsGateDecision } from "../auth/useTermsGate";
 import toast from "../utils/notify";
+import {
+  REQUIRED_AGREEMENT_LABELS,
+  allRequiredAgreementsAccepted,
+} from "../utils/termsGate";
 import AuthShell from "./layout/AuthShell";
 
 const linkClass = "font-medium text-text-link underline";
+const checkboxClass = "mt-1 h-5 w-5 shrink-0";
+const labelClass = "flex items-start gap-3 rounded-xl border border-subtle p-3 text-sm text-text-primary";
 
 function TermsAcceptanceScreen({ userId }) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
-  const [agreed, setAgreed] = useState(false);
+  const [acceptedAge18, setAcceptedAge18] = useState(false);
+  const [acceptedPopia, setAcceptedPopia] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [saving, setSaving] = useState(false);
+  const agreed = allRequiredAgreementsAccepted({ acceptedAge18, acceptedPopia, acceptedTerms });
 
   async function handleAccept() {
     if (!agreed || saving) return;
@@ -63,25 +72,46 @@ function TermsAcceptanceScreen({ userId }) {
           </Link>
         </p>
 
-        <label className="flex items-start gap-3 rounded-xl border border-subtle p-3 text-sm text-text-primary">
-          <input
-            type="checkbox"
-            className="mt-1 h-5 w-5 shrink-0"
-            checked={agreed}
-            onChange={(e) => setAgreed(e.target.checked)}
-          />
-          <span>
-            I am 18 or older and agree to the{" "}
-            <Link to="/terms" className={linkClass}>
-              Terms of Use
-            </Link>{" "}
-            and{" "}
-            <Link to="/privacy" className={linkClass}>
-              Privacy Policy
-            </Link>
-            .
-          </span>
-        </label>
+        <div className="space-y-2">
+          <label className={labelClass}>
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={acceptedAge18}
+              onChange={(e) => setAcceptedAge18(e.target.checked)}
+            />
+            <span>{REQUIRED_AGREEMENT_LABELS.acceptedAge18}</span>
+          </label>
+          <label className={labelClass}>
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={acceptedPopia}
+              onChange={(e) => setAcceptedPopia(e.target.checked)}
+            />
+            <span>
+              {REQUIRED_AGREEMENT_LABELS.acceptedPopia}{" "}
+              <Link to="/privacy" className={linkClass}>
+                Privacy policy
+              </Link>
+            </span>
+          </label>
+          <label className={labelClass}>
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+            />
+            <span>
+              I accept the{" "}
+              <Link to="/terms" className={linkClass}>
+                platform terms
+              </Link>{" "}
+              and community conduct rules.
+            </span>
+          </label>
+        </div>
 
         <div className="flex flex-wrap gap-3">
           <button

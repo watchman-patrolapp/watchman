@@ -4,7 +4,7 @@
  * Bump CURRENT_TERMS_VERSION whenever the Terms of Use or the Privacy Policy change
  * materially. Every member is then asked to accept again before using the app.
  */
-export const CURRENT_TERMS_VERSION = "2026-11-21";
+export const CURRENT_TERMS_VERSION = "2026-11-26";
 
 /**
  * Profile fields the gate reads. termsColumnPresent is false until the
@@ -55,4 +55,21 @@ export function termsGateDecision({
   if (!online) return "pass";
   if (acceptedAtSignup(user.termsSignupMetadata ?? user.user_metadata, version)) return "signup";
   return "ask";
+}
+
+/** The three required agreements, shared by Register and the post-sign-in TermsGate. */
+export const REQUIRED_AGREEMENT_LABELS = {
+  acceptedAge18: "I confirm I am 18 years of age or older.",
+  acceptedPopia:
+    "I consent to POPIA-compliant processing of my personal information for neighborhood watch operations.",
+  acceptedTerms: "I accept the platform terms and community conduct rules.",
+};
+
+/** True only when all three required agreement checkboxes are ticked. */
+export function allRequiredAgreementsAccepted({
+  acceptedAge18 = false,
+  acceptedPopia = false,
+  acceptedTerms = false,
+} = {}) {
+  return Boolean(acceptedAge18 && acceptedPopia && acceptedTerms);
 }
