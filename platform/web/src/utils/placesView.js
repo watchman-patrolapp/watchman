@@ -195,3 +195,89 @@ export function mySuburbRequestLabel(row) {
 export function cityUsesSignupAreaList(chosenCityId, signupCityId) {
   return Boolean(chosenCityId) && Boolean(signupCityId) && String(chosenCityId) === String(signupCityId);
 }
+
+// ---------------------------------------------------------------------------
+// SA places P4: Profile / Choose area
+// ---------------------------------------------------------------------------
+
+/** my_home_area payload -> { city, citySaved, watch, waiting, canChangeWatch }. Never carries counts. */
+export function normalizeHomeArea(data) {
+  const c = data?.city;
+  const w = data?.watch;
+  const city = c && str(c.id) && str(c.name)
+    ? { id: str(c.id), name: str(c.name), province: str(c.province), provinceCode: str(c.province_code), nearLabel: str(c.near_label), formerly: "", alsoKnownAs: "" }
+    : null;
+  const watch = w && str(w.organization_id) && str(w.name)
+    ? { id: str(w.organization_id), name: str(w.name), suburb: str(w.suburb), cityId: str(w.city_id), myRole: str(w.my_role) }
+    : null;
+  const waiting = Array.isArray(data?.waiting)
+    ? data.waiting
+        .map((x) => ({ id: str(x?.organization_id), name: str(x?.name), suburb: str(x?.suburb) }))
+        .filter((x) => x.id && x.name)
+    : [];
+  return { city, citySaved: data?.city_saved === true, watch, waiting, canChangeWatch: data?.can_change_watch === true };
+}
+
+/** "Theescombe Neighbourhood Watch · Theescombe" (suburb left out when it repeats the name). */
+export function homeWatchLine(watch) {
+  if (!watch?.name) return "";
+  const suburb = str(watch.suburb);
+  if (!suburb || placeQueryKey(watch.name).includes(placeQueryKey(suburb))) return watch.name;
+  return `${watch.name} · ${suburb}`;
+}
+
+/** True when the person's watch is in a different city from the one they say they live in. */
+export function watchInOtherCity(area) {
+  return Boolean(area?.watch?.cityId && area?.city?.id && area.watch.cityId !== area.city.id);
+}
+
+/** Confirm text before moving from one watch to another. */
+export function switchConfirmText(fromWatch, toWatch) {
+  const to = toWatch?.name || "this watch";
+  if (!fromWatch?.name) return `Join ${to}?`;
+  return `Move from ${fromWatch.name} to ${to}?\nYou'll leave ${fromWatch.name} and its groups straight away.`;
+}
+
+/** Friendly copy after switch_my_watch. */
+export function switchResultCopy(result) {
+  const name = str(result?.name) || "the watch";
+  if (result?.status === "switched") {
+    return { tone: "success", title: `You've moved to ${name}`, body: result?.from_name ? `You're no longer in ${result.from_name}.` : "" };
+  }
+  if (result?.status === "joined") return { tone: "success", title: `Welcome to ${name}`, body: "You're in. Your dashboard now shows this watch." };
+  if (result?.status === "already_member") return { tone: "info", title: `You're already in ${name}`, body: "" };
+  return null;
+}
+
+/** Friendly copy after set_my_home_city. */
+export function cityChangeCopy(result, hasWatch) {
+  if (result?.status !== "saved") return null;
+  const city = str(result?.city) || "your city";
+  if (result?.watch_in_other_city) {
+    return { tone: "info", title: `Saved: you live in ${city}`, body: `Your watch is in another city. Pick a watch in ${city} below to move.` };
+  }
+  return { tone: "success", title: `Saved: you live in ${city}`, body: hasWatch ? "" : `Now pick your watch in ${city}.` };
+}
+
+/**
+ * Staff "Choose an area": group areas under their city, filtered by typed text
+ * (area or city name). Areas with no known city go last under "Other areas".
+ */
+export function groupAreasByCity(orgs, cityByOrg, filter = "") {
+  const list = Array.isArray(orgs) ? orgs : [];
+  const map = cityByOrg instanceof Map ? cityByOrg : new Map();
+  const k = placeQueryKey(filter);
+  const groups = new Map();
+  for (const org of list) {
+    if (!org?.id) continue;
+    const city = map.get(org.id) || null;
+    const cityName = city?.name || "";
+    if (k && !placeQueryKey(`${org.name || ""} ${cityName}`).includes(k)) continue;
+    const gk = city?.id || "";
+    if (!groups.has(gk)) groups.set(gk, { cityId: gk, cityName: cityName || "Other areas", orgs: [] });
+    groups.get(gk).orgs.push(org);
+  }
+  return [...groups.values()]
+    .map((g) => ({ ...g, orgs: [...g.orgs].sort((a, b) => placeQueryKey(a.name).localeCompare(placeQueryKey(b.name))) }))
+    .sort((a, b) => (a.cityId ? 0 : 1) - (b.cityId ? 0 : 1) || placeQueryKey(a.cityName).localeCompare(placeQueryKey(b.cityName)));
+}

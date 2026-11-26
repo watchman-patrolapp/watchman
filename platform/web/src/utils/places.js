@@ -3,6 +3,7 @@ import { friendlyError } from "./friendlyError";
 import { isRpcNotFoundError } from "./isRpcNotFound";
 import {
   normalizeCityResults,
+  normalizeHomeArea,
   normalizeMySuburbRequests,
   normalizeSuburbSuggestions,
   normalizeWatchList,
@@ -87,4 +88,18 @@ export async function mySuburbRequests() {
   } catch {
     return [];
   }
+}
+
+/** Profile / Choose area: your city, your watch (name + suburb), waits, and whether you can change watch. */
+export async function myHomeArea() {
+  return normalizeHomeArea(await rpc("my_home_area", {}, "Couldn't load your area. Please try again."));
+}
+
+export async function setMyHomeCity(cityId) {
+  return rpc("set_my_home_city", { p_city_id: cityId }, "Couldn't save your city. Please try again.");
+}
+
+/** Move to another approved watch (or join one if you're not in a watch yet). */
+export async function switchMyWatch(orgId) {
+  return rpc("switch_my_watch", { p_org_id: orgId }, "Couldn't change your watch. Please try again.");
 }

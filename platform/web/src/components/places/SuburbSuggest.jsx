@@ -15,7 +15,7 @@ import PlacesNotice from "./PlacesNotice";
  * "My suburb isn't listed": live suggestions while typing (Join an existing suburb's watch),
  * and a new-suburb request only after "It's not one of these". Requests go for approval.
  */
-export default function SuburbSuggest({ city, onJoined, onRequested }) {
+export default function SuburbSuggest({ city, onJoined, onRequested, currentWatchId = "", onMove }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -53,6 +53,9 @@ export default function SuburbSuggest({ city, onJoined, onRequested }) {
   }, [open, city?.id, query]);
 
   const waiting = checking || name !== query;
+  // Someone already in a watch can move to a listed suburb's watch, but a brand-new suburb
+  // needs support to move them (the server refuses new requests from watch members).
+  const inWatch = Boolean(currentWatchId);
   const state = suburbRequestState({ name, suggestions, confirmed, loading: waiting });
 
   const handleJoin = async (watch) => {
@@ -157,8 +160,12 @@ export default function SuburbSuggest({ city, onJoined, onRequested }) {
                       {s.watches.map((w) => (
                         <li key={w.id} className="flex items-center justify-between gap-3 text-sm">
                           <span className="text-text-secondary">{w.name}</span>
-                          {w.myStatus === "active" ? (
-                            <span className="font-medium text-emerald-700 dark:text-emerald-400">You're a member</span>
+                          {w.myStatus === "active" || w.id === currentWatchId ? (
+                            <span className="font-medium text-emerald-700 dark:text-emerald-400">Your watch</span>
+                          ) : inWatch && onMove ? (
+                            <Button type="button" variant="secondary" onClick={() => onMove(w)}>
+                              Move here
+                            </Button>
                           ) : (
                             <Button
                               type="button"
@@ -183,7 +190,13 @@ export default function SuburbSuggest({ city, onJoined, onRequested }) {
             </ul>
           ) : null}
 
-          {state.needsConfirm ? (
+          {inWatch && !state.exact && !state.tooShort && !waiting ? (
+            <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:bg-sky-900/30 dark:text-sky-100">
+              You're in a watch now. If your new suburb isn't listed, please ask support to set it up and move you.
+            </p>
+          ) : null}
+
+          {!inWatch && state.needsConfirm ? (
             <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
@@ -195,7 +208,7 @@ export default function SuburbSuggest({ city, onJoined, onRequested }) {
             </label>
           ) : null}
 
-          {!state.exact && !state.tooShort ? (
+          {!inWatch && !state.exact && !state.tooShort ? (
             <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
@@ -214,9 +227,11 @@ export default function SuburbSuggest({ city, onJoined, onRequested }) {
           ) : null}
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" loading={sending} disabled={!state.canSubmit} onClick={() => void handleSubmit()}>
-              Ask for this suburb
-            </Button>
+            {inWatch ? null : (
+              <Button type="button" loading={sending} disabled={!state.canSubmit} onClick={() => void handleSubmit()}>
+                Ask for this suburb
+              </Button>
+            )}
             <button
               type="button"
               onClick={() => {

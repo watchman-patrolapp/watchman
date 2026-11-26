@@ -154,3 +154,90 @@ test("only the platform's home city uses the sign-up area list", () => {
   assert.equal(cityUsesSignupAreaList("", "c1"), false);
   assert.equal(cityUsesSignupAreaList("c1", ""), false);
 });
+
+// --- P4: Profile / Choose area -------------------------------------------------
+import {
+  cityChangeCopy,
+  groupAreasByCity,
+  homeWatchLine,
+  normalizeHomeArea,
+  switchConfirmText,
+  switchResultCopy,
+  watchInOtherCity,
+} from "../placesView.js";
+
+test("home area keeps display fields only", () => {
+  const area = normalizeHomeArea({
+    city: { id: "c1", name: "Gqeberha", province: "Eastern Cape", province_code: "ZA-EC", near_label: null, population: 9 },
+    city_saved: true,
+    watch: { organization_id: "o1", name: "Theescombe NW", suburb: "Theescombe", city_id: "c1", my_role: "resident", member_count: 40 },
+    waiting: [{ organization_id: "o2", name: "Walmer Watch", suburb: null }, { organization_id: "" }],
+    can_change_watch: true,
+  });
+  assert.deepEqual(area, {
+    city: { id: "c1", name: "Gqeberha", province: "Eastern Cape", provinceCode: "ZA-EC", nearLabel: "", formerly: "", alsoKnownAs: "" },
+    citySaved: true,
+    watch: { id: "o1", name: "Theescombe NW", suburb: "Theescombe", cityId: "c1", myRole: "resident" },
+    waiting: [{ id: "o2", name: "Walmer Watch", suburb: "" }],
+    canChangeWatch: true,
+  });
+  assert.ok(!/count|population/.test(JSON.stringify(area)));
+  assert.deepEqual(normalizeHomeArea(null), { city: null, citySaved: false, watch: null, waiting: [], canChangeWatch: false });
+  assert.equal(normalizeHomeArea({ can_change_watch: "yes" }).canChangeWatch, false);
+});
+
+test("watch line drops a suburb the name already says", () => {
+  assert.equal(homeWatchLine({ name: "Walmer Watch", suburb: "Walmer Heights" }), "Walmer Watch · Walmer Heights");
+  assert.equal(homeWatchLine({ name: "Theescombe Neighbourhood Watch", suburb: "Theescombe" }), "Theescombe Neighbourhood Watch");
+  assert.equal(homeWatchLine({ name: "No Area Watch", suburb: "" }), "No Area Watch");
+  assert.equal(homeWatchLine(null), "");
+});
+
+test("watch in another city is spotted", () => {
+  assert.equal(watchInOtherCity({ city: { id: "c2" }, watch: { cityId: "c1" } }), true);
+  assert.equal(watchInOtherCity({ city: { id: "c1" }, watch: { cityId: "c1" } }), false);
+  assert.equal(watchInOtherCity({ city: { id: "c1" }, watch: null }), false);
+  assert.equal(watchInOtherCity({ city: null, watch: { cityId: "c1" } }), false);
+});
+
+test("switch confirm and result copy", () => {
+  assert.equal(switchConfirmText(null, { name: "Walmer Watch" }), "Join Walmer Watch?");
+  assert.equal(switchConfirmText({ name: "Theescombe NW" }, { name: "Walmer Watch" }),
+    "Move from Theescombe NW to Walmer Watch?\nYou'll leave Theescombe NW and its groups straight away.");
+  assert.deepEqual(switchResultCopy({ status: "switched", name: "Walmer Watch", from_name: "Theescombe NW" }),
+    { tone: "success", title: "You've moved to Walmer Watch", body: "You're no longer in Theescombe NW." });
+  assert.equal(switchResultCopy({ status: "joined", name: "W" }).title, "Welcome to W");
+  assert.equal(switchResultCopy({ status: "already_member", name: "W" }).tone, "info");
+  assert.equal(switchResultCopy({}), null);
+});
+
+test("city change copy points to the next step", () => {
+  assert.match(cityChangeCopy({ status: "saved", city: "Makhanda", watch_in_other_city: true }, true).body, /Pick a watch in Makhanda/);
+  assert.equal(cityChangeCopy({ status: "saved", city: "Makhanda" }, false).body, "Now pick your watch in Makhanda.");
+  assert.equal(cityChangeCopy({ status: "saved", city: "Makhanda" }, true).body, "");
+  assert.equal(cityChangeCopy({ status: "nope" }, true), null);
+});
+
+test("staff areas group under their city, filterable, unknown city last", () => {
+  const orgs = [
+    { id: "o3", name: "Gardens Watch" },
+    { id: "o1", name: "Walmer Watch" },
+    { id: "o2", name: "Theescombe NW" },
+    { id: "o4", name: "Legacy Area" },
+  ];
+  const cities = new Map([
+    ["o1", { id: "gq", name: "Gqeberha" }],
+    ["o2", { id: "gq", name: "Gqeberha" }],
+    ["o3", { id: "ct", name: "Cape Town" }],
+  ]);
+  const groups = groupAreasByCity(orgs, cities);
+  assert.deepEqual(groups.map((g) => [g.cityName, g.orgs.map((o) => o.id)]), [
+    ["Cape Town", ["o3"]],
+    ["Gqeberha", ["o2", "o1"]],
+    ["Other areas", ["o4"]],
+  ]);
+  assert.deepEqual(groupAreasByCity(orgs, cities, "gqeb").map((g) => g.orgs.length), [2]);
+  assert.deepEqual(groupAreasByCity(orgs, cities, "walmer")[0].orgs.map((o) => o.id), ["o1"]);
+  assert.deepEqual(groupAreasByCity(orgs, null).map((g) => g.cityName), ["Other areas"]);
+  assert.deepEqual(groupAreasByCity(null, cities), []);
+});

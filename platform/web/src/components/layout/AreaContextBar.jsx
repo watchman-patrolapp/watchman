@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useActiveOrganization } from "../../auth/useActiveOrganization";
-import { fetchParentCity } from "../../utils/cityScope";
+import { fetchOrganizationCities, fetchParentCity } from "../../utils/cityScope";
 import { DEFAULT_CITY_FULL_NAME, displayWatchAreaName } from "../../config/neighborhoodRegions";
 
 export default function AreaContextBar({ className = "" }) {
@@ -12,15 +12,18 @@ export default function AreaContextBar({ className = "" }) {
   } = useActiveOrganization();
   const [cityName, setCityName] = useState(DEFAULT_CITY_FULL_NAME);
 
+  // The working area's own city; the parent city only when it isn't known yet.
   useEffect(() => {
     let ignore = false;
-    void fetchParentCity().then((city) => {
+    void (async () => {
+      const byOrg = activeOrganizationId ? await fetchOrganizationCities([activeOrganizationId]) : new Map();
+      const city = byOrg.get(activeOrganizationId) || (await fetchParentCity());
       if (!ignore && city?.name) setCityName(city.name);
-    });
+    })();
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [activeOrganizationId]);
 
   if (!isGlobalOperator || organizations.length === 0) return null;
 

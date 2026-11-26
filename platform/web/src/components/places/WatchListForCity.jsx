@@ -4,8 +4,11 @@ import { joinWatch, listCityWatches } from "../../utils/places";
 import { filterWatches, joinResultCopy } from "../../utils/placesView";
 import PlacesNotice from "./PlacesNotice";
 
-/** Approved watches in one city: name and suburb only, each with Join. Signed-in only (D6). */
-export default function WatchListForCity({ city, onJoined, reloadKey = 0 }) {
+/**
+ * Approved watches in one city: name and suburb only, each with Join. Signed-in only (D6).
+ * With `onMove`, someone already in a watch (`currentWatchId`) gets "Move here" instead (P4).
+ */
+export default function WatchListForCity({ city, onJoined, reloadKey = 0, currentWatchId = "", onMove, moveBusyId = "" }) {
   const [watches, setWatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,6 +41,7 @@ export default function WatchListForCity({ city, onJoined, reloadKey = 0 }) {
 
   const shown = useMemo(() => filterWatches(watches, filter), [watches, filter]);
   const alreadyIn = watches.some((w) => w.myStatus === "active");
+  const canMove = Boolean(onMove && currentWatchId);
 
   const handleJoin = async (watch) => {
     if (joiningId) return;
@@ -98,8 +102,18 @@ export default function WatchListForCity({ city, onJoined, reloadKey = 0 }) {
                 <p className="truncate font-medium text-gray-900 dark:text-white">{w.name}</p>
                 {w.suburb ? <p className="truncate text-sm text-text-tertiary">{w.suburb}</p> : null}
               </div>
-              {w.myStatus === "active" ? (
-                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">You're a member</span>
+              {w.myStatus === "active" || w.id === currentWatchId ? (
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Your watch</span>
+              ) : canMove ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={moveBusyId === w.id}
+                  disabled={Boolean(moveBusyId)}
+                  onClick={() => onMove(w)}
+                >
+                  Move here
+                </Button>
               ) : w.myStatus === "pending" ? (
                 <span className="text-sm font-medium text-amber-700 dark:text-amber-400">Requested</span>
               ) : alreadyIn ? null : (
