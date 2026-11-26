@@ -8,14 +8,14 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Skip electoral wards / metro ward noise (e.g. "Nelson Mandela Bay Ward 10"). */
+/** Skip electoral wards / metro ward noise (e.g. "<metro> Ward 10", any municipality). */
 function isUnwantedAreaLabel(s) {
   if (!s || typeof s !== 'string') return true;
   const t = s.trim();
   if (/\b[WW]ard\s*\d+\b/i.test(t)) return true;
-  if (/Nelson Mandela Bay\s+Ward/i.test(t)) return true;
-  if (/Buffalo City\s+Ward/i.test(t)) return true;
+  if (/\b(?:metro|municipality|local municipality)\b.*\bward\b/i.test(t)) return true;
   if (/metropolitan.*\bward\b/i.test(t)) return true;
+  if (/\bward\s*$/i.test(t)) return true;
   if (t.length > 120) return true;
   return false;
 }
@@ -74,7 +74,7 @@ function fallbackFromDisplayName(displayName) {
 }
 
 /**
- * @returns {Promise<string>} e.g. "Liebenberg Road, Gelvandale" or "Kragga Kamma Road, Theescombe"
+ * @returns {Promise<string>} e.g. "Main Road, Sea Point"
  */
 export async function reverseGeocodeRoadName(lat, lng) {
   if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {

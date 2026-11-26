@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { FaAddressBook, FaPhone } from "react-icons/fa";
+import { FaAddressBook, FaMapMarkerAlt, FaPhone } from "react-icons/fa";
 import { listCommunityAdminContacts } from "../../utils/communityContacts";
-import { contactRoleLabel, filterContacts, groupContacts } from "../../utils/communityContactsView";
+import {
+  contactCities,
+  contactPlaceLine,
+  contactRoleLabel,
+  filterContacts,
+  filterContactsByCity,
+  groupContacts,
+} from "../../utils/communityContactsView";
 
 /**
  * Admin contact for every neighbourhood watch and security company.
@@ -14,6 +21,7 @@ export default function CommunityContactsPanel() {
   const [message, setMessage] = useState("");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [city, setCity] = useState("");
 
   useEffect(() => {
     if (!open) return undefined;
@@ -38,7 +46,11 @@ export default function CommunityContactsPanel() {
     };
   }, [open]);
 
-  const groups = useMemo(() => groupContacts(filterContacts(rows, query)), [rows, query]);
+  const cities = useMemo(() => contactCities(rows), [rows]);
+  const groups = useMemo(
+    () => groupContacts(filterContactsByCity(filterContacts(rows, query), city)),
+    [rows, query, city],
+  );
 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow">
@@ -61,13 +73,31 @@ export default function CommunityContactsPanel() {
 
       {open ? (
         <div className="mt-4 space-y-4">
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by organisation, name, email or phone"
-            className="input border w-full"
-          />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by organisation, name, email, phone, city or suburb"
+              className="input border w-full"
+              aria-label="Search contacts"
+            />
+            {cities.length > 1 ? (
+              <select
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="input border sm:w-56"
+                aria-label="Filter by city"
+              >
+                <option value="">All cities</option>
+                {cities.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
           {loading ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">Loading contacts…</p>
           ) : message ? (
@@ -85,6 +115,11 @@ export default function CommunityContactsPanel() {
                     {group.rows.map((row) => (
                       <article key={row.organization_id} className="rounded-lg border p-3 dark:border-gray-700">
                         <p className="font-medium text-gray-900 dark:text-white">{row.organization_name}</p>
+                        {contactPlaceLine(row) ? (
+                          <p className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                            <FaMapMarkerAlt className="h-3 w-3 text-teal-600" aria-hidden /> {contactPlaceLine(row)}
+                          </p>
+                        ) : null}
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {row.status} · {row.member_count || 0} active members
                         </p>

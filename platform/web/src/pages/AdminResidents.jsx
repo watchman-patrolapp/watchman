@@ -30,6 +30,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { listNeighborhoodNextOfKin, resolveEmergencyContacts } from "../utils/emergencyContact";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
+import { shouldIncludeUnscopedProfiles } from "../utils/organizationScope";
 import { parsePatrolTime } from "../utils/watchTime";
 
 export default function AdminResidents() {
@@ -83,14 +84,14 @@ export default function AdminResidents() {
       if (!isResidentAppRole(u.role)) return false;
       if (u.organizationId === activeOrganizationId || memberUserIds.has(u.uid)) return true;
       if (nearbyUserIds.has(u.uid)) return true;
-      // Null-org only for Theescombe legacy (includeUnscoped); never list in every area.
+      // Null-org rows are legacy data of the first watch only; never list them in every area.
       if (!u.organizationId) {
-        return /theescombe/i.test(String(activeOrganization?.name || ""));
+        return shouldIncludeUnscopedProfiles(activeOrganization);
       }
       const notes = String(profilesByUser[u.uid]?.notes || "").toLowerCase();
       return Boolean(orgName && notes.includes(orgName));
     });
-  }, [users, activeOrganizationId, activeOrganization?.name, memberUserIds, nearbyUserIds, profilesByUser]);
+  }, [users, activeOrganizationId, activeOrganization, memberUserIds, nearbyUserIds, profilesByUser]);
 
   const usersById = useMemo(() => Object.fromEntries(users.map((u) => [u.uid, u])), [users]);
 

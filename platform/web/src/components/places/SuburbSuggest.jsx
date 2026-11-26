@@ -133,7 +133,7 @@ export default function SuburbSuggest({ city, onJoined, onRequested, currentWatc
               type="text"
               autoComplete="off"
               maxLength={80}
-              placeholder="e.g. Theescombe"
+              placeholder="e.g. your suburb's name"
               value={name}
               onChange={(e) => {
                 setName(e.target.value);

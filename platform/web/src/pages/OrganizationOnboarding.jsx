@@ -10,7 +10,9 @@ import { fetchParentCity } from "../utils/cityScope";
 import { canAccessPlatformConsole } from "../auth/platformRoles";
 import OrganizationRequestsPanel from "../components/admin/OrganizationRequestsPanel";
 import CommunityContactsPanel from "../components/admin/CommunityContactsPanel";
-import { DEFAULT_CITY_FULL_NAME } from "../config/neighborhoodRegions";
+import CityPicker from "../components/places/CityPicker";
+import { friendlyError } from "../utils/friendlyError";
+import { orgCityError, orgCityValue, suburbAfterCityChange, suburbsForCity } from "../utils/orgCityForm";
 import {
   DEFAULT_BILLING_CATALOG,
   annualFeeScheduleCopy,
@@ -26,6 +28,7 @@ const EMPTY_FORM = {
   name: "",
   type: "nw_group",
   primary_suburb_id: "",
+  city: null,
   subscription_tier: "beta",
   status: "active",
   annual_fee_zar: "",
@@ -36,15 +39,26 @@ const TYPE_LABELS = {
   security_company: "Security Company",
 };
 
-function orgToForm(org) {
+function orgToForm(org, citiesById) {
   return {
     name: org.name || "",
     type: org.type || "nw_group",
     primary_suburb_id: org.primary_suburb_id || "",
+    city: orgCityValue(org, citiesById),
     subscription_tier: org.subscription_tier || "beta",
     status: org.status || "active",
     annual_fee_zar: org.annual_fee_zar == null ? "" : String(org.annual_fee_zar),
   };
+}
+
+/** id -> { name, province } for the cities these organisations are in (empty map if unreadable). */
+async function loadCityNames(orgs) {
+  const ids = [...new Set(orgs.map((o) => o.city_id).filter(Boolean))];
+  const out = new Map();
+  if (!ids.length) return out;
+  const { data, error } = await supabase.from("cities").select("id, name, province").in("id", ids);
+  if (!error) for (const c of data || []) out.set(c.id, c);
+  return out;
 }
 
 function OrganizationConsole() {
@@ -54,7 +68,8 @@ function OrganizationConsole() {
   const [orgs, setOrgs] = useState([]);
   const [memberCounts, setMemberCounts] = useState({});
   const [suburbs, setSuburbs] = useState([]);
-  const [parentCity, setParentCity] = useState({ id: null, name: DEFAULT_CITY_FULL_NAME });
+  const [parentCity, setParentCity] = useState({ id: null, name: "" });
+  const [citiesById, setCitiesById] = useState(() => new Map());
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [verifyingId, setVerifyingId] = useState(null);
@@ -81,7 +96,7 @@ function OrganizationConsole() {
           catalog,
         ] = await Promise.all([
           supabase.from("organizations").select("*").order("created_at", { ascending: false }),
-          supabase.from("suburbs").select("id, name, active").eq("active", true).order("name"),
+          supabase.from("suburbs").select("id, name, active, city_id").eq("active", true).order("name"),
           supabase.from("organization_members").select("organization_id, user_id").eq("status", "active"),
           supabase.from("users").select("id").in("role", ["admin", "technical_support"]),
           fetchParentCity(),
@@ -94,7 +109,12 @@ function OrganizationConsole() {
         if (!ignore) {
           setOrgs(organizations || []);
           setSuburbs(suburbRows || []);
-          setParentCity(cityRow || { id: null, name: DEFAULT_CITY_FULL_NAME });
+          setCitiesById(await loadCityNames(organizations || []));
+          setParentCity(cityRow || { id: null, name: "" });
+          // A new organisation starts in your city; change it with the city search.
+          if (cityRow?.id) {
+            setForm((prev) => (prev.city ? prev : { ...prev, city: { id: cityRow.id, name: cityRow.name, province: "", nearLabel: "" } }));
+          }
           setBillingCatalog(catalog);
           setMemberCounts(
             countLocalMembersByOrg(
@@ -116,14 +136,27 @@ function OrganizationConsole() {
     };
   }, [reloadKey]);
 
+  const blankForm = () => ({
+    ...EMPTY_FORM,
+    city: parentCity?.id ? { id: parentCity.id, name: parentCity.name, province: "", nearLabel: "" } : null,
+  });
+
+  const chooseCity = (city) => {
+    setForm((prev) => ({
+      ...prev,
+      city: city || null,
+      primary_suburb_id: suburbAfterCityChange(suburbs, prev.primary_suburb_id, city?.id),
+    }));
+  };
+
   const cancelEdit = () => {
     setEditingOrg(null);
-    setForm(EMPTY_FORM);
+    setForm(blankForm());
   };
 
   const startEdit = (org) => {
     setEditingOrg(org);
-    setForm(orgToForm(org));
+    setForm(orgToForm(org, citiesById));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -134,8 +167,9 @@ function OrganizationConsole() {
       toast.error("Organization name is required.");
       return;
     }
-    if (!parentCity?.id && !editingOrg) {
-      toast.error("City data is still loading. Wait a moment and try again.");
+    const cityError = orgCityError(form, Boolean(editingOrg));
+    if (cityError) {
+      toast.error(cityError);
       return;
     }
     setSaving(true);
@@ -148,7 +182,8 @@ function OrganizationConsole() {
         status: form.status,
         annual_fee_zar: parseListPriceZar(form.annual_fee_zar),
       };
-      if (parentCity?.id) payload.city_id = parentCity.id;
+      // Only send a city the form has; an edit without one keeps the organisation's own city.
+      if (form.city?.id) payload.city_id = form.city.id;
 
       if (editingOrg) {
         const { data: updated, error: updateErr } = await supabase
@@ -159,8 +194,9 @@ function OrganizationConsole() {
           .single();
         if (updateErr) throw updateErr;
         setOrgs((prev) => prev.map((org) => (org.id === updated.id ? updated : org)));
+        if (form.city?.id) setCitiesById((prev) => new Map(prev).set(form.city.id, { name: form.city.name, province: form.city.province }));
         setEditingOrg(null);
-        setForm(EMPTY_FORM);
+        setForm(blankForm());
         toast.success(
           updated.type === "security_company" && updated.status === "active"
             ? "Security company updated and listed as verified."
@@ -186,7 +222,7 @@ function OrganizationConsole() {
 
         setOrgs((prev) => [inserted, ...prev]);
         setMemberCounts((prev) => ({ ...prev, [inserted.id]: isGlobalAppRole(user?.role) ? 0 : 1 }));
-        setForm(EMPTY_FORM);
+        setForm(blankForm());
         toast.success(
           inserted.type === "security_company"
             ? "Security company created. It now appears on the resident signup and Profile company lists."
@@ -199,7 +235,7 @@ function OrganizationConsole() {
       await refreshOrganizations({ silent: true });
     } catch (err) {
       console.error(err);
-      toast.error(err.message || (editingOrg ? "Could not update organization." : "Could not create organization."));
+      toast.error(friendlyError(err, editingOrg ? "Could not update organization." : "Could not create organization."));
     } finally {
       setSaving(false);
     }
@@ -256,7 +292,7 @@ function OrganizationConsole() {
       setOrgs((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
       if (editingOrg?.id === org.id) {
         setEditingOrg(updated);
-        setForm(orgToForm(updated));
+        setForm(orgToForm(updated, citiesById));
       }
       await refreshOrganizations({ silent: true });
       toast.success(`${org.name} is verified. It stays on the resident list without the pending label.`);
@@ -273,7 +309,7 @@ function OrganizationConsole() {
       <div className="max-w-5xl mx-auto space-y-6">
         <PageHeader
           title="Organization setup"
-          subtitle={`${parentCity.name} is the parent city. Neighborhood watches are areas. Security companies are partners that cover those areas.`}
+          subtitle="Every watch and security company belongs to a city or town. Neighborhood watches are areas; security companies are partners that cover them."
           backTo="/admin"
           backLabel="Back to admin"
         />
@@ -320,6 +356,16 @@ function OrganizationConsole() {
                   : "This is a neighborhood area, not a security company. It will not appear on the resident company dropdown."}
               </span>
             </label>
+            <div className="block md:col-span-2">
+              <CityPicker
+                id="org-city"
+                label="City or town"
+                value={form.city}
+                onChange={chooseCity}
+                required={!editingOrg}
+                hint="The city this watch or company is in. The suburb list below follows it."
+              />
+            </div>
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Primary suburb
@@ -330,7 +376,7 @@ function OrganizationConsole() {
                 className="input border w-full"
               >
                 <option value="">Not pinned to a suburb yet</option>
-                {suburbs.map((suburb) => (
+                {suburbsForCity(suburbs, form.city?.id).map((suburb) => (
                   <option key={suburb.id} value={suburb.id}>
                     {suburb.name}
                   </option>
@@ -338,8 +384,8 @@ function OrganizationConsole() {
               </select>
               <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
                 {form.type === "security_company"
-                  ? "Home suburb this company mainly covers. Tacnet should be Theescombe. Leave blank if they work across several areas. Active and pending companies appear on the resident signup and Profile dropdowns; Suspended hides them."
-                  : "The real suburb this neighborhood watch belongs to, e.g. Theescombe. Used for SOS place names and to place new residents in that suburb."}
+                  ? "Home suburb this company mainly covers. Leave blank if they work across several areas. Active and pending companies appear on the resident signup and Profile dropdowns; Suspended hides them."
+                  : "The real suburb this neighborhood watch belongs to. Used for SOS place names and to place new residents in that suburb."}
               </span>
             </label>
             <label className="block">
@@ -383,7 +429,7 @@ function OrganizationConsole() {
             </label>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Parent city is {parentCity.name}. New areas inherit it automatically.{" "}
+            {parentCity.name ? `New organisations start in ${parentCity.name}; pick another city above if needed. ` : ""}
             {annualFeeScheduleCopy("nw_group", billingCatalog)} {annualFeeScheduleCopy("security_company", billingCatalog)}{" "}
             Set a custom price above, or change the defaults on Billing. Residents stay free. Pending companies stay on the
             resident dropdown until you click Verify company. Suspend hides a neighborhood from the Area picker, or a company

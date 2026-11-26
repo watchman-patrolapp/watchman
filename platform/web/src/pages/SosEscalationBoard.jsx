@@ -330,7 +330,7 @@ export default function SosEscalationBoard() {
           subtitle={
             householdView
               ? "Active means the emergency is still open. Patrol and your security company also see these. Earlier means a responder marked it resolved."
-              : "Alerts for the selected neighborhood only (Theescombe while that is the working area). Active = still open until Mark resolved. Admin, tech, and neighborhood admin can delete accidental alerts."
+              : "Alerts for the selected neighborhood only (your working area). Active = still open until Mark resolved. Admin, tech, and neighborhood admin can delete accidental alerts."
           }
           backTo={homePath}
           backLabel="Back to home"

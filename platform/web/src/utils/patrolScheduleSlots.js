@@ -1,6 +1,6 @@
 import { watchDayStamp, addCalendarDays } from "./watchTime.js";
 
-/** Shared 2-hour patrol windows used by Theescombe and every other watch area. */
+/** Shared 2-hour patrol windows used by every watch area. */
 export const PATROL_TIME_SLOTS = [
   { label: "19:00–21:00", start: "19:00", end: "21:00" },
   { label: "21:00–23:00", start: "21:00", end: "23:00" },

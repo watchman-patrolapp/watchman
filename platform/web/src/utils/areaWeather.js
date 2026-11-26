@@ -1,9 +1,10 @@
 import { SEARCH_BIAS } from "./nominatimLookup";
 import { supabase } from "../supabase/client";
-import { displayWatchAreaName, watchAreaCenterFromName } from "../config/neighborhoodRegions";
+import { displayWatchAreaName } from "../config/neighborhoodRegions";
 import { parsePatrolTime } from "./watchTime";
 
 const WEATHER_TTL_MS = 20 * 60 * 1000;
+// Last resort when no area or city has coordinates (no network / data yet).
 const CITY_FALLBACK = { lat: -33.9608, lng: 25.6022 };
 
 export function weatherLabel(code) {
@@ -223,21 +224,36 @@ async function coordsFromSuburbName(name) {
     .select("center_lat, center_lng")
     .ilike("name", label)
     .maybeSingle();
-  if (error || !Number.isFinite(data?.center_lat) || !Number.isFinite(data?.center_lng)) {
-    return watchAreaCenterFromName(label);
-  }
+  if (error || !Number.isFinite(data?.center_lat) || !Number.isFinite(data?.center_lng)) return null;
   return { lat: Number(data.center_lat), lng: Number(data.center_lng) };
 }
 
+async function coordsFromCity(cityId) {
+  if (!cityId) return null;
+  const { data, error } = await supabase
+    .from("cities")
+    .select("center_lat, center_lng")
+    .eq("id", cityId)
+    .maybeSingle();
+  if (error || !Number.isFinite(data?.center_lat) || !Number.isFinite(data?.center_lng)) return null;
+  return { lat: Number(data.center_lat), lng: Number(data.center_lng) };
+}
+
+/**
+ * Where to read the weather for an area: its suburb, else its own city, else (no organisation)
+ * a suburb with that name, else the signed-in person's city, else a fixed fallback point.
+ */
 export async function resolveAreaCoords(organizationId, organizationName) {
   if (organizationId) {
     const { data: org } = await supabase
       .from("organizations")
-      .select("name, primary_suburb_id")
+      .select("name, primary_suburb_id, city_id")
       .eq("id", organizationId)
       .maybeSingle();
     const fromSuburb = await coordsFromSuburb(org?.primary_suburb_id);
     if (fromSuburb) return fromSuburb;
+    const fromCity = await coordsFromCity(org?.city_id);
+    if (fromCity) return fromCity;
     const fromName = await coordsFromSuburbName(org?.name || organizationName);
     if (fromName) return fromName;
   } else {
@@ -245,14 +261,12 @@ export async function resolveAreaCoords(organizationId, organizationName) {
     if (fromName) return fromName;
   }
 
-  const { data: city } = await supabase
-    .from("cities")
-    .select("center_lat, center_lng")
-    .ilike("name", "%gqeberha%")
-    .limit(1)
-    .maybeSingle();
-  if (Number.isFinite(city?.center_lat) && Number.isFinite(city?.center_lng)) {
-    return { lat: Number(city.center_lat), lng: Number(city.center_lng) };
+  try {
+    const { data: cityId } = await supabase.rpc("default_city_id");
+    const fromCaller = await coordsFromCity(cityId);
+    if (fromCaller) return fromCaller;
+  } catch {
+    /* not available yet */
   }
 
   return { lat: SEARCH_BIAS.lat || CITY_FALLBACK.lat, lng: SEARCH_BIAS.lng || CITY_FALLBACK.lng };

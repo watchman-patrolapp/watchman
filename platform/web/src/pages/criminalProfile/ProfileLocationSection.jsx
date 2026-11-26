@@ -29,7 +29,7 @@ export default function ProfileLocationSection({
               onChange={(e) => onUpdateField('common_presence', e.target.value || null)}
               rows={3}
               className={`${DETAIL_INPUT} resize-y min-h-[4.5rem]`}
-              placeholder="e.g. Theescombe retail strip, evenings near park entrance"
+              placeholder="e.g. retail strip, evenings near park entrance"
             />
           ) : (
             <p className="font-medium dark:text-gray-100 whitespace-pre-wrap">

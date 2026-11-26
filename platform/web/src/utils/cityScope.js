@@ -1,34 +1,28 @@
 import { supabase } from "../supabase/client";
-import { DEFAULT_CITY_FULL_NAME } from "../config/neighborhoodRegions";
+import { cityResult } from "./cityScopeView.js";
 
-export { DEFAULT_CITY_FULL_NAME };
+export { cityResult };
 
 /**
- * Parent city for every neighborhood in this deployment.
- * Falls back to the Gqeberha label if the cities table is empty or SQL is not applied yet.
+ * The signed-in person's city: the city of the organisation they are working in, else the city
+ * they live in, else the platform fallback (the database's default_city_id(), which is caller-based
+ * from SA places P6). Never guesses a city by name. Returns { id: null, name: "" } if unknown.
  */
-export async function fetchParentCity() {
+export async function fetchParentCity(activeOrganizationId = null) {
   try {
-    const { data: named, error: namedErr } = await supabase
-      .from("cities")
-      .select("id, name")
-      .ilike("name", "%gqeberha%")
-      .limit(1)
-      .maybeSingle();
-    if (!namedErr && named?.name) return { id: named.id, name: named.name };
-
-    const { data, error } = await supabase
-      .from("cities")
-      .select("id, name")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (error) throw error;
-    if (data?.name) return { id: data.id, name: data.name };
+    if (activeOrganizationId) {
+      const byOrg = await fetchOrganizationCities([activeOrganizationId]);
+      const own = byOrg.get(activeOrganizationId);
+      if (own?.id) return own;
+    }
+    const { data: cityId, error } = await supabase.rpc("default_city_id");
+    if (error || !cityId) return cityResult(null);
+    const { data: city } = await supabase.from("cities").select("id, name").eq("id", cityId).maybeSingle();
+    return cityResult(city);
   } catch {
     /* cities table or RLS not ready */
   }
-  return { id: null, name: DEFAULT_CITY_FULL_NAME };
+  return cityResult(null);
 }
 
 /**

@@ -189,7 +189,7 @@ export function mySuburbRequestLabel(row) {
 }
 
 /**
- * Sign-up: does the chosen city use the existing area list (today's Gqeberha flow)?
+ * Sign-up: does the chosen city use the existing area list (the platform's first city's flow)?
  * Other cities skip it; their watches show after the account exists (D6).
  */
 export function cityUsesSignupAreaList(chosenCityId, signupCityId) {
@@ -218,7 +218,7 @@ export function normalizeHomeArea(data) {
   return { city, citySaved: data?.city_saved === true, watch, waiting, canChangeWatch: data?.can_change_watch === true };
 }
 
-/** "Theescombe Neighbourhood Watch · Theescombe" (suburb left out when it repeats the name). */
+/** "Sea Point Neighbourhood Watch · Sea Point" (suburb left out when it repeats the name). */
 export function homeWatchLine(watch) {
   if (!watch?.name) return "";
   const suburb = str(watch.suburb);

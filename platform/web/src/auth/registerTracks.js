@@ -57,6 +57,8 @@ export const REGISTER_TRACKS = [
     requiresCompanyProfile: true,
     requiresWatchProfile: false,
     showEmergencyContact: false,
+    // SA places P6: the company's city (its request, and whole-city cover, use it).
+    requiresCity: true,
   },
   {
     id: "neighborhood_watch",
@@ -75,6 +77,8 @@ export const REGISTER_TRACKS = [
     requiresCompanyProfile: false,
     requiresWatchProfile: true,
     showEmergencyContact: true,
+    // SA places P6: the city the new watch is in.
+    requiresCity: true,
   },
 ];
 
@@ -199,6 +203,12 @@ export function validateRegisterForm(track, form) {
     return "Please choose a security company from the list.";
   }
 
+  if (track.requiresCity && blank(form.homeCityId)) {
+    return track.requiresWatchProfile
+      ? "Please choose the city or town your watch is in."
+      : "Please choose the city or town your company is based in.";
+  }
+
   if (track.requiresCompanyProfile) {
     if (!form.companyName.trim()) return "Company name is required.";
     if (!form.companyRegistration.trim()) {
@@ -208,6 +218,9 @@ export function validateRegisterForm(track, form) {
     if (form.coverageScope === "city") {
       // Whole-city coverage is valid without picking neighborhoods.
     } else if (form.coverageScope === "areas") {
+      if (form.homeCityUsesAreaList === false) {
+        return "Choose whole-city coverage for now. You can add neighbourhoods after approval.";
+      }
       if (!Array.isArray(form.coverageOrganizationIds) || form.coverageOrganizationIds.length === 0) {
         return "Select at least one neighborhood, or choose whole-city coverage.";
       }
@@ -222,4 +235,23 @@ export function validateRegisterForm(track, form) {
   }
 
   return "";
+}
+
+/** Tracks that ask which city or town the person (or their watch / company) is in. */
+export function trackAsksForCity(track) {
+  return Boolean(track?.requiresNeighborhood || track?.requiresCity);
+}
+
+/** home_city_id / home_city_name for the sign-up metadata (empty object when not asked). */
+export function signupCityMetadata(track, form) {
+  if (!trackAsksForCity(track)) return {};
+  return {
+    home_city_id: String(form?.homeCityId || "").trim() || null,
+    home_city_name: String(form?.homeCityName || "").trim() || null,
+  };
+}
+
+/** Text saved as the coverage area for whole-city cover: the picked city's name. */
+export function cityCoverageLabel(form) {
+  return String(form?.homeCityName || "").trim();
 }

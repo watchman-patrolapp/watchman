@@ -232,7 +232,7 @@ export default function ServiceListingForm() {
             <fieldset className="space-y-3">
               <legend className="text-sm font-semibold uppercase tracking-wide text-gray-500">Area & hours</legend>
               <Field label="Area you serve (optional)">
-                <input className={input} maxLength={120} value={form.service_area} onChange={(e) => set({ service_area: e.target.value })} placeholder="e.g. Theescombe and surrounds" />
+                <input className={input} maxLength={120} value={form.service_area} onChange={(e) => set({ service_area: e.target.value })} placeholder="e.g. your suburb and surrounds" />
               </Field>
               <Field label="Hours (optional)">
                 <input className={input} maxLength={200} value={form.hours} onChange={(e) => set({ hours: e.target.value })} placeholder="Mon–Fri 8am–5pm" />

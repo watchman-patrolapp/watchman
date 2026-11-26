@@ -1,6 +1,6 @@
 /**
  * Neighbourhood watch time is Africa/Johannesburg (UTC+2, no DST).
- * Browser / UTC calendars must not decide "this week" for Gqeberha patrols.
+ * Browser / UTC calendars must not decide "this week" for South African patrols.
  */
 
 export const WATCH_TIME_ZONE = "Africa/Johannesburg";
