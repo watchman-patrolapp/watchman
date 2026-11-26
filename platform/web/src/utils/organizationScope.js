@@ -1,31 +1,20 @@
 import { useCallback, useMemo } from "react";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
+import {
+  shouldIncludeUnscopedProfiles,
+  scopeToOrganization,
+} from "./organizationScopeCore";
 
-/** Empty UUID so an unscoped query returns no rows instead of every neighborhood. */
-const NO_ORGANIZATION_ID = "00000000-0000-0000-0000-000000000000";
-
-let workingOrganizationId = null;
-let workingOrganizationName = "";
-
-export function setWorkingOrganization(organization) {
-  workingOrganizationId = organization?.id || null;
-  workingOrganizationName = organization?.name || "";
-}
-
-export function getWorkingOrganizationId() {
-  return workingOrganizationId;
-}
-
-/**
- * Rows from before watches had an organisation (organization_id is null) all belong to the first
- * watch. Historical data only, not a default area: new rows always carry their organisation.
- * Retire once those rows are backfilled (see the SA places plan, R5).
- */
-const LEGACY_UNSCOPED_WATCH = /theescombe/i;
-
-export function getWorkingOrganizationIncludeUnscoped() {
-  return LEGACY_UNSCOPED_WATCH.test(workingOrganizationName);
-}
+export {
+  setWorkingOrganization,
+  getWorkingOrganizationId,
+  getWorkingOrganizationIncludeUnscoped,
+  shouldIncludeUnscopedProfiles,
+  scopeToOrganization,
+  belongsToActiveOrganization,
+  applyWorkingOrganizationScope,
+  messageBelongsToWorkingOrganization,
+} from "./organizationScopeCore";
 
 export function useScopedOrganization() {
   const { activeOrganizationId, activeOrganization } = useActiveOrganization();
@@ -42,42 +31,5 @@ export function useScopedOrganization() {
       scope,
     }),
     [activeOrganizationId, activeOrganization, includeUnscoped, scope]
-  );
-}
-
-export function shouldIncludeUnscopedProfiles(organization) {
-  return LEGACY_UNSCOPED_WATCH.test(organization?.name || "");
-}
-
-export function scopeToOrganization(query, organizationId, includeUnscoped = false) {
-  if (!organizationId) {
-    return query.eq("organization_id", NO_ORGANIZATION_ID);
-  }
-  if (includeUnscoped) {
-    return query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
-  }
-  return query.eq("organization_id", organizationId);
-}
-
-export function belongsToActiveOrganization(row, organizationId, includeUnscoped = false) {
-  if (!organizationId) return false;
-  if (row?.organization_id === organizationId) return true;
-  return Boolean(includeUnscoped && row?.organization_id == null);
-}
-
-/** For services and hooks that cannot call React hooks. */
-export function applyWorkingOrganizationScope(query) {
-  return scopeToOrganization(
-    query,
-    getWorkingOrganizationId(),
-    getWorkingOrganizationIncludeUnscoped()
-  );
-}
-
-export function messageBelongsToWorkingOrganization(row) {
-  return belongsToActiveOrganization(
-    row,
-    getWorkingOrganizationId(),
-    getWorkingOrganizationIncludeUnscoped()
   );
 }

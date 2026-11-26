@@ -12,7 +12,6 @@ const PATTERN = /gqeberha|port elizabeth|nelson mandela|theescombe/i;
 const ALLOWED = {
   "components/places/CityPicker.jsx": "search hint: old place names still work (Port Elizabeth -> Gqeberha)",
   "config/neighborhoodRegions.js": "legacy 'Zone A' rows were the first watch area",
-  "utils/organizationScope.js": "legacy rows with no organisation belong to the first watch (retire after backfill)",
   "utils/geoSearchPlace.js": "address search fallback when no city is known",
   "utils/leaderboardFunFacts.js": "landmark distance fun facts (content, not a default)",
   "pages/DeleteAccount.jsx": "legal operator address",
