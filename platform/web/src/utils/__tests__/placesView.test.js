@@ -143,6 +143,8 @@ test("my suburb requests read in plain words", () => {
   assert.equal(mySuburbRequestLabel(rows[0]), "Kabega, Gqeberha: approved");
   assert.equal(mySuburbRequestLabel(rows[1]), "Mill Park: waiting for approval");
   assert.equal(mySuburbRequestLabel({ suburb: "A", state: "merged" }), "A: joined to an existing suburb");
+  assert.equal(mySuburbRequestLabel({ suburb: "A", state: "merged", mergedInto: "Theescombe" }), "A: joined to Theescombe");
+  assert.equal(normalizeMySuburbRequests([{ suburb_id: "s", suburb: "A", state: "merged", merged_into: "B" }])[0].mergedInto, "B");
   assert.equal(mySuburbRequestLabel({ suburb: "A", state: "not_approved" }), "A: not approved");
 });
 

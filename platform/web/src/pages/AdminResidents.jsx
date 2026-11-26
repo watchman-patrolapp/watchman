@@ -6,6 +6,7 @@ import { isGlobalAppRole, isResidentAppRole, canStaffVerifyResident, canReviewPa
 import ResidentCapabilityDialog from "../components/admin/ResidentCapabilityDialog";
 import ResidentCard from "../components/admin/residents/ResidentCard";
 import ResidentCapabilityList from "../components/admin/ResidentCapabilityList";
+import WatchJoinRequestsPanel from "../components/admin/WatchJoinRequestsPanel";
 import { listCapabilityBadges } from "../utils/orgCapabilities";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import AreaContextBar from "../components/layout/AreaContextBar";
@@ -60,6 +61,7 @@ export default function AdminResidents() {
   const canVerify = canStaffVerifyResident(currentRole);
   const canReviewPatroller = canReviewPatrollerRequests(currentRole);
   const canManageCaps = canManageCapabilities(currentRole, currentUser?.platformRole);
+  const [residentsReloadKey, setResidentsReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -318,7 +320,7 @@ export default function AdminResidents() {
     return () => {
       cancelled = true;
     };
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, residentsReloadKey]);
 
   const markLinkedToOrg = (uid, organizationId) => {
     setMemberUserIds((prev) => {
@@ -589,6 +591,8 @@ export default function AdminResidents() {
           </button>
         ) : null}
       </div>
+
+      <WatchJoinRequestsPanel onChanged={() => setResidentsReloadKey((k) => k + 1)} />
 
       <div className="bg-white dark:bg-gray-800 p-4 rounded shadow overflow-x-auto">
         <h2 className="text-lg font-semibold dark:text-white mb-3">

@@ -159,7 +159,7 @@ export function joinResultCopy(result) {
   return null;
 }
 
-/** my_suburb_requests rows -> { id, suburb, city, state }. */
+/** my_suburb_requests rows -> { id, suburb, city, state, mergedInto }. */
 export function normalizeMySuburbRequests(data) {
   if (!Array.isArray(data)) return [];
   const states = new Set(["pending", "approved", "merged", "not_approved"]);
@@ -169,6 +169,7 @@ export function normalizeMySuburbRequests(data) {
       suburb: str(row?.suburb),
       city: str(row?.city),
       state: states.has(row?.state) ? row.state : "pending",
+      mergedInto: str(row?.merged_into),
     }))
     .filter((row) => row.id && row.suburb);
 }
@@ -179,7 +180,7 @@ export function mySuburbRequestLabel(row) {
     case "approved":
       return `${where}: approved`;
     case "merged":
-      return `${where}: joined to an existing suburb`;
+      return row.mergedInto ? `${where}: joined to ${row.mergedInto}` : `${where}: joined to an existing suburb`;
     case "not_approved":
       return `${where}: not approved`;
     default:
