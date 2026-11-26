@@ -2,7 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   CURRENT_TERMS_VERSION,
+  REQUIRED_AGREEMENT_LABELS,
   acceptedAtSignup,
+  allRequiredAgreementsAccepted,
   termsFieldsFromUsersRow,
   termsGateDecision,
   termsSignupMetadataFrom,
@@ -70,4 +72,16 @@ test("sign-up metadata is copied onto the profile", () => {
   assert.deepEqual(meta, { terms_version: V, terms_accepted_at: "t" });
   assert.equal(termsGateDecision({ user: loaded({ termsSignupMetadata: meta }) }), "signup");
   assert.deepEqual(termsSignupMetadataFrom(null), { terms_version: null, terms_accepted_at: null });
+});
+
+test("all three agreement checkboxes must be ticked", () => {
+  assert.equal(allRequiredAgreementsAccepted(), false);
+  assert.equal(allRequiredAgreementsAccepted({ acceptedAge18: true, acceptedPopia: true }), false);
+  assert.equal(
+    allRequiredAgreementsAccepted({ acceptedAge18: true, acceptedPopia: true, acceptedTerms: true }),
+    true,
+  );
+  assert.match(REQUIRED_AGREEMENT_LABELS.acceptedAge18, /18 years of age or older/);
+  assert.match(REQUIRED_AGREEMENT_LABELS.acceptedPopia, /POPIA-compliant processing/);
+  assert.match(REQUIRED_AGREEMENT_LABELS.acceptedTerms, /platform terms/);
 });

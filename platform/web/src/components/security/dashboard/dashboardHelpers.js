@@ -76,7 +76,7 @@ export function themeForIndex(index) {
 
 export const PANELS = {
   overview: { title: "Overview", sub: "Registered neighborhood areas, coverage, and live duty" },
-  schedule: { title: "Roster & schedule", sub: "Theescombe time grid for each registered neighborhood" },
+  schedule: { title: "Roster & schedule", sub: "Shared time grid for each registered neighborhood" },
   areas: { title: "Areas", sub: "Live snapshot of each registered neighborhood" },
   incidents: { title: "Incidents by area", sub: "Approved patrol incidents, grouped by neighborhood" },
   reports: { title: "Resident reports", sub: "SOS and household activity reports from assigned areas" },

@@ -74,7 +74,7 @@ export default function ResidentCapabilityDialog({ target, onClose, onGranted })
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value.slice(0, 60))}
-            placeholder="Street rep - Theescombe Ave"
+            placeholder="Street rep - Oak Avenue"
             className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white"
           />
         </label>

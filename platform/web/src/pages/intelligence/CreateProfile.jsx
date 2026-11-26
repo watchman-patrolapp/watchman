@@ -810,7 +810,7 @@ export default function CreateProfile() {
                 onChange={(e) => setCommonPresence(e.target.value)}
                 rows={3}
                 className={`${formInput} resize-y min-h-[4.5rem]`}
-                placeholder="e.g. Theescombe retail strip, evenings near park entrance"
+                placeholder="e.g. retail strip, evenings near park entrance"
               />
             </div>
             <div>

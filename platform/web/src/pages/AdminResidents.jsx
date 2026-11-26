@@ -6,6 +6,7 @@ import { isGlobalAppRole, isResidentAppRole, canStaffVerifyResident, canReviewPa
 import ResidentCapabilityDialog from "../components/admin/ResidentCapabilityDialog";
 import ResidentCard from "../components/admin/residents/ResidentCard";
 import ResidentCapabilityList from "../components/admin/ResidentCapabilityList";
+import WatchJoinRequestsPanel from "../components/admin/WatchJoinRequestsPanel";
 import { listCapabilityBadges } from "../utils/orgCapabilities";
 import { useActiveOrganization } from "../auth/useActiveOrganization";
 import AreaContextBar from "../components/layout/AreaContextBar";
@@ -29,6 +30,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import BrandedLoader from "../components/layout/BrandedLoader";
 import { listNeighborhoodNextOfKin, resolveEmergencyContacts } from "../utils/emergencyContact";
 import { displayWatchAreaName } from "../config/neighborhoodRegions";
+import { shouldIncludeUnscopedProfiles } from "../utils/organizationScope";
 import { parsePatrolTime } from "../utils/watchTime";
 
 export default function AdminResidents() {
@@ -60,6 +62,7 @@ export default function AdminResidents() {
   const canVerify = canStaffVerifyResident(currentRole);
   const canReviewPatroller = canReviewPatrollerRequests(currentRole);
   const canManageCaps = canManageCapabilities(currentRole, currentUser?.platformRole);
+  const [residentsReloadKey, setResidentsReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,14 +84,14 @@ export default function AdminResidents() {
       if (!isResidentAppRole(u.role)) return false;
       if (u.organizationId === activeOrganizationId || memberUserIds.has(u.uid)) return true;
       if (nearbyUserIds.has(u.uid)) return true;
-      // Null-org only for Theescombe legacy (includeUnscoped); never list in every area.
+      // Null-org rows are legacy data of the first watch only; never list them in every area.
       if (!u.organizationId) {
-        return /theescombe/i.test(String(activeOrganization?.name || ""));
+        return shouldIncludeUnscopedProfiles(activeOrganization);
       }
       const notes = String(profilesByUser[u.uid]?.notes || "").toLowerCase();
       return Boolean(orgName && notes.includes(orgName));
     });
-  }, [users, activeOrganizationId, activeOrganization?.name, memberUserIds, nearbyUserIds, profilesByUser]);
+  }, [users, activeOrganizationId, activeOrganization, memberUserIds, nearbyUserIds, profilesByUser]);
 
   const usersById = useMemo(() => Object.fromEntries(users.map((u) => [u.uid, u])), [users]);
 
@@ -318,7 +321,7 @@ export default function AdminResidents() {
     return () => {
       cancelled = true;
     };
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, residentsReloadKey]);
 
   const markLinkedToOrg = (uid, organizationId) => {
     setMemberUserIds((prev) => {
@@ -589,6 +592,8 @@ export default function AdminResidents() {
           </button>
         ) : null}
       </div>
+
+      <WatchJoinRequestsPanel onChanged={() => setResidentsReloadKey((k) => k + 1)} />
 
       <div className="bg-white dark:bg-gray-800 p-4 rounded shadow overflow-x-auto">
         <h2 className="text-lg font-semibold dark:text-white mb-3">

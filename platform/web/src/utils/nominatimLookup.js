@@ -1,12 +1,15 @@
 import { reverseGeocodeRoadName } from './reverseGeocodeNominatim';
+import { FALLBACK_PLACE, cityStreetVariants, searchPlace, swapSuburbForCity, viewboxAround } from './geoSearchPlace.js';
+
+export { searchPlace, viewboxAround };
 
 const USER_AGENT = 'NeighbourhoodWatchPlatform/1.0 (hotspots; contact: local admin)';
 
-/** Theescombe / western Gqeberha — OSM rarely tags local streets with the suburb name. */
+/**
+ * Fallback map centre and search bias when no city is known (the first live watch area).
+ * Pass biasLat / biasLng and cityName to searchNominatim() to search around another city.
+ */
 export const SEARCH_BIAS = { lat: -33.978, lng: 25.505 };
-
-/** Nominatim viewbox: west,north,east,south around Greater Gqeberha. */
-const VIEWBOX = '25.40,-33.88,25.72,-34.05';
 
 const STREET_SUFFIX =
   /\b(road|rd|street|st|avenue|ave|drive|dr|lane|ln|way|crescent|cres|close|boulevard|blvd)\b/i;
@@ -103,7 +106,7 @@ export function parseIntersectionQuery(raw) {
   return null;
 }
 
-function queryVariants(raw) {
+export function queryVariants(raw, place = FALLBACK_PLACE) {
   const q = expandAbbreviations(raw);
   const variants = [];
   const seen = new Set();
@@ -119,19 +122,13 @@ function queryVariants(raw) {
   };
 
   const street = ensureStreetSuffix(stripLeadingHouseNumber(q.split(',')[0] || ''));
-  const swapped = /\btheescombe\b/i.test(q)
-    ? q.replace(/\btheescombe\b/gi, 'Gqeberha')
-    : q;
+  const swapped = swapSuburbForCity(q, place);
 
-  if (street) {
-    add(`${street}, Gqeberha`);
-    add(`${street}, Port Elizabeth`);
-    add(street);
-  }
+  if (street) for (const v of cityStreetVariants(street, place)) add(v);
   add(stripLeadingHouseNumber(swapped));
   add(swapped);
   add(q);
-  if (street) add(`${street}, Eastern Cape`);
+  if (street && place?.province) add(`${street}, ${place.province}`);
 
   return variants;
 }
@@ -256,16 +253,16 @@ function nearestCorner(linesA, linesB) {
   return best;
 }
 
-async function nominatimSearch(q, { polygon = false } = {}) {
+async function nominatimSearch(q, { polygon = false, viewbox = '' } = {}) {
   const params = new URLSearchParams({
     format: 'json',
     addressdetails: '1',
     countrycodes: 'za',
     limit: '8',
     q,
-    viewbox: VIEWBOX,
     bounded: '0',
   });
+  if (viewbox) params.set('viewbox', viewbox);
   if (polygon) params.set('polygon_geojson', '1');
   const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
     headers: {
@@ -319,14 +316,14 @@ async function photonSearch(q, bias) {
 }
 
 async function collectHits(query, bias, { polygon = false } = {}) {
-  const variants = queryVariants(query);
+  const variants = queryVariants(query, bias?.place);
   const collected = [];
   let nominatimCalls = 0;
 
   for (const variant of variants) {
     if (nominatimCalls >= 3) break;
     if (nominatimCalls > 0) await sleep(1100);
-    const rows = await nominatimSearch(variant, { polygon });
+    const rows = await nominatimSearch(variant, { polygon, viewbox: bias?.viewbox });
     nominatimCalls += 1;
     collected.push(...rows);
     if (collected.length) break;
@@ -351,7 +348,11 @@ async function streetGeometry(query, bias) {
   let lines = named.flatMap((h) => h.lines || []);
   if (!lines.length && named[0]?.name) {
     await sleep(1100);
-    const retry = await nominatimSearch(`${named[0].name}, Gqeberha`, { polygon: true });
+    const city = bias?.place?.city;
+    const retry = await nominatimSearch(city ? `${named[0].name}, ${city}` : named[0].name, {
+      polygon: true,
+      viewbox: bias?.viewbox,
+    });
     lines = retry.flatMap((h) => h.lines || []);
     if (retry[0]?.name) named = retry;
   }
@@ -380,17 +381,17 @@ async function searchIntersection(streets, bias) {
 }
 
 /**
- * Forward-geocode an address. Biased to Theescombe / Gqeberha.
- * OSM often omits the suburb on local streets, so "…, Theescombe" is retried as Gqeberha / street-only.
+ * Forward-geocode an address near options.biasLat / biasLng (else the fallback bias).
+ * options.cityName / cityAliases / province / suburb steer the retries ("…, <city>", street only);
+ * without them the fallback place's names are used.
  * @returns {Promise<{ lat: number, lng: number, label: string } | null>}
  */
 export async function searchNominatim(query, options = {}) {
   const q = String(query || '').trim();
   if (!q) return null;
-  const bias = {
-    lat: Number(options.biasLat) || SEARCH_BIAS.lat,
-    lng: Number(options.biasLng) || SEARCH_BIAS.lng,
-  };
+  const lat = Number(options.biasLat) || SEARCH_BIAS.lat;
+  const lng = Number(options.biasLng) || SEARCH_BIAS.lng;
+  const bias = { lat, lng, place: searchPlace(options), viewbox: viewboxAround(lat, lng) };
 
   const intersection = parseIntersectionQuery(q);
   if (intersection) {

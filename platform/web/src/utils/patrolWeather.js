@@ -1,7 +1,7 @@
 import { isFogCode, isRainCode, isStormCode, toJohannesburgHourKey } from "./areaWeather";
 import { parsePatrolTime } from "./watchTime";
 
-/** Coastal Gqeberha: 28°C is properly hot; berg winds can run higher. */
+/** Coastal default: 28°C is properly hot; berg winds can run higher. */
 export const HEAT_C = 28;
 export const COLD_NIGHT_C = 10;
 

@@ -75,7 +75,7 @@ function displayTimeIsoFromRow(row) {
 
 /**
  * Keep only the last contiguous run (by time) where each step is < maxM — drops a ghost prefix
- * (e.g. Cape Town) when the current patrol is in Gqeberha under the same patrol_id.
+ * (e.g. another city) when the current patrol is elsewhere under the same patrol_id.
  */
 /** Postgres numeric / JSON may return strings; Leaflet needs real numbers. */
 function normalizeLocationRow(row) {
@@ -355,7 +355,7 @@ export default function LivePatrolMap() {
   const [patrolPhotoPreview, setPatrolPhotoPreview] = useState(null);
   const initialMapFetchDoneRef = useRef(false);
 
-  // Default center (Theescombe, Gqeberha)
+  // Fallback centre when no patrol position is known yet
   const defaultCenter = [-33.95, 25.58];
 
   useEffect(() => {

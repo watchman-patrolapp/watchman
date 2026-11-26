@@ -5,7 +5,7 @@ import { capabilityErrorMessage, listMyCapabilityGrants, revokeCapability } from
 import { capabilityLabel } from "../../auth/capabilities";
 import { useOrgCapabilities } from "../../hooks/useOrgCapabilities";
 
-/** Profile badge row ("Street rep - Theescombe Ave") with a Step down link per grant. */
+/** Profile badge row ("Street rep - Oak Avenue") with a Step down link per grant. */
 export default function MyCapabilities({ user }) {
   const userId = user?.id ?? null;
   const { refetch } = useOrgCapabilities();

@@ -354,7 +354,7 @@ function ContactForm({ form, saving, uploading, canChooseCityScope, onChange, on
         <input
           type="text"
           required
-          placeholder="Name, e.g. Dr Naidoo — Theescombe"
+          placeholder="Name, e.g. Dr Naidoo — local GP"
           value={form.name}
           onChange={(e) => onChange({ name: e.target.value })}
           className="input border w-full md:col-span-2"

@@ -1,5 +1,4 @@
 import { supabase } from "../supabase/client";
-import { DEFAULT_CITY_FULL_NAME } from "../config/neighborhoodRegions";
 
 function sortByName(list) {
   return [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
@@ -37,7 +36,7 @@ export async function loadPublicSignupOptions() {
   const city =
     payload.city && typeof payload.city === "object" && payload.city.name
       ? { id: payload.city.id || null, name: String(payload.city.name) }
-      : { id: null, name: DEFAULT_CITY_FULL_NAME };
+      : { id: null, name: "" };
   return {
     city,
     areas: asOptionList(payload.areas),

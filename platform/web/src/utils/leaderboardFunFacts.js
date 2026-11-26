@@ -484,7 +484,7 @@ export const FUN_FACT_TEMPLATES = [
     when: (c) => c.nightCount >= 3,
     build: (c) => fact("night-count", 60, "After dark",
       `${c.nightCount} night patrols`,
-      `Starts between midnight and 06:00, while most of Gqeberha is asleep.`,
+      `Starts between midnight and 06:00, while most of the neighbourhood is asleep.`,
       "🌙"),
   },
   {
@@ -733,7 +733,7 @@ export const FUN_FACT_TEMPLATES = [
     when: (c) => (c.stats.seasonCounts?.summer || 0) >= 3,
     build: (c) => fact("summer-count", 87, "Summer",
       `${c.stats.seasonCounts.summer} patrols in December–February`,
-      "High summer in Gqeberha.",
+      "High summer.",
       "🏖️"),
   },
   {

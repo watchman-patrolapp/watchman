@@ -38,6 +38,8 @@ import { hasHomePin, setMyHomePin } from '../utils/homePin';
 import { ensureMyHouseholdProfile } from '../utils/householdProfile';
 import { HOUSEHOLD_MODE_INTRO, markHouseholdIntroSeen } from '../utils/householdModeIntro';
 import { useScopedOrganization } from '../utils/organizationScope';
+import { useActiveOrganization } from '../auth/useActiveOrganization';
+import MyAreaSection from '../components/places/MyAreaSection';
 import { resolveAreaCoords } from '../utils/areaWeather';
 import { displayWatchAreaName } from '../config/neighborhoodRegions';
 import { parsePatrolTime } from '../utils/watchTime';
@@ -58,6 +60,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { user, refreshUser, signOut } = useAuth();
   const { activeOrganizationId, activeOrganization } = useScopedOrganization();
+  const { isGlobalOperator } = useActiveOrganization();
   const [loading, setLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [pwdLoading, setPwdLoading] = useState(false);
@@ -659,6 +662,8 @@ export default function Profile() {
             </p>
           </section>
         ) : null}
+
+        {!isGlobalOperator ? <MyAreaSection className="mb-6" /> : null}
 
         <section
           id="home-pin"

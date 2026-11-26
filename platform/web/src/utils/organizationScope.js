@@ -16,8 +16,15 @@ export function getWorkingOrganizationId() {
   return workingOrganizationId;
 }
 
+/**
+ * Rows from before watches had an organisation (organization_id is null) all belong to the first
+ * watch. Historical data only, not a default area: new rows always carry their organisation.
+ * Retire once those rows are backfilled (see the SA places plan, R5).
+ */
+const LEGACY_UNSCOPED_WATCH = /theescombe/i;
+
 export function getWorkingOrganizationIncludeUnscoped() {
-  return /theescombe/i.test(workingOrganizationName);
+  return LEGACY_UNSCOPED_WATCH.test(workingOrganizationName);
 }
 
 export function useScopedOrganization() {
@@ -39,7 +46,7 @@ export function useScopedOrganization() {
 }
 
 export function shouldIncludeUnscopedProfiles(organization) {
-  return /theescombe/i.test(organization?.name || "");
+  return LEGACY_UNSCOPED_WATCH.test(organization?.name || "");
 }
 
 export function scopeToOrganization(query, organizationId, includeUnscoped = false) {

@@ -1,12 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
-import { FaCheck, FaTimes, FaInbox } from "react-icons/fa";
+import { FaCheck, FaTimes, FaInbox, FaCodeBranch } from "react-icons/fa";
 import toast from "../../utils/notify";
 import {
   approveOrganizationRequest,
   listOrganizationRequests,
+  mergeSuburbRequest,
   rejectOrganizationRequest,
+  reviewWatchJoin,
 } from "../../utils/organizationRequests";
-import { requestPeople, requestSummary, requestedRoleLabel, sortRequests } from "../../utils/organizationRequestsView";
+import {
+  canMergeRequest,
+  duplicateReasonLabel,
+  isMemberJoinPerson,
+  joinRequestNote,
+  mergeConfirmText,
+  mergeResultMessage,
+  requestDuplicates,
+  requestPeople,
+  requestSuburbLine,
+  requestSummary,
+  requestedRoleLabel,
+  sortRequests,
+} from "../../utils/organizationRequestsView";
+import MergeRequestPicker from "./MergeRequestPicker";
 
 function formatWhen(value) {
   if (!value) return "";
@@ -24,6 +40,7 @@ export default function OrganizationRequestsPanel({ onChanged }) {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
+  const [mergingId, setMergingId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,7 +59,43 @@ export default function OrganizationRequestsPanel({ onChanged }) {
     void load();
   }, [load]);
 
+  const merge = async (item, target) => {
+    if (!window.confirm(mergeConfirmText(item, target))) return;
+    const note = window.prompt("Optional note for the record (not sent to them):", "");
+    setBusy(`merge:${item.organization_id}`);
+    try {
+      const result = await mergeSuburbRequest(item.organization_id, target.id, note || null);
+      toast.success(mergeResultMessage(result));
+      setMergingId("");
+      await load();
+      onChanged?.();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const reviewMember = async (approve, item, person) => {
+    if (!approve && !window.confirm(`Decline ${person.name}'s request to join ${item.name}?`)) return;
+    setBusy(`member:${item.organization_id}:${person.user_id}`);
+    try {
+      await reviewWatchJoin(item.organization_id, person.user_id, approve, null);
+      toast.success(approve ? `${person.name} is now a member of ${item.name}.` : `${person.name}'s request was declined.`);
+      await load();
+      onChanged?.();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const act = async (kind, item, person = null) => {
+    if (person && isMemberJoinPerson(person)) {
+      await reviewMember(kind === "approve", item, person);
+      return;
+    }
     const who = person ? person.name : item.name;
     if (kind === "reject") {
       const ok = window.confirm(
@@ -80,7 +133,8 @@ export default function OrganizationRequestsPanel({ onChanged }) {
             Pending requests
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            New watches and security companies from the sign-up form. The person stays a resident until you approve.
+            New watches, suburbs and security companies, and people waiting to join a watch. Nobody gets access
+            until you approve. Merge a duplicate into the existing watch instead of approving it.
           </p>
         </div>
         <button type="button" onClick={() => void load()} className="btn-ghost text-sm" disabled={loading}>
@@ -104,12 +158,18 @@ export default function OrganizationRequestsPanel({ onChanged }) {
           {items.map((item) => {
             const people = requestPeople(item);
             const isJoin = item.kind === "join";
+            const duplicates = requestDuplicates(item);
+            const mergeable = canMergeRequest(item);
+            const suburbLine = requestSuburbLine(item);
             return (
               <li key={`${item.kind}-${item.organization_id}`} className="rounded-lg border p-3 dark:border-gray-700">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium text-gray-900 dark:text-white break-words">{item.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{requestSummary(item)}</p>
+                    {suburbLine ? (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Suburb: {suburbLine}</p>
+                    ) : null}
                     <p className="text-xs text-gray-400 dark:text-gray-500">
                       Requested {formatWhen(item.requested_at)}
                       {item.registration ? ` · Registration ${item.registration}` : ""}
@@ -125,6 +185,17 @@ export default function OrganizationRequestsPanel({ onChanged }) {
                       >
                         <FaCheck className="h-3 w-3" aria-hidden /> Approve
                       </button>
+                      {mergeable ? (
+                        <button
+                          type="button"
+                          className="btn-secondary text-sm inline-flex items-center gap-1"
+                          disabled={Boolean(busy)}
+                          aria-expanded={mergingId === item.organization_id}
+                          onClick={() => setMergingId((id) => (id === item.organization_id ? "" : item.organization_id))}
+                        >
+                          <FaCodeBranch className="h-3 w-3" aria-hidden /> Merge into…
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="btn-ghost text-sm inline-flex items-center gap-1 text-red-700 dark:text-red-300"
@@ -136,6 +207,40 @@ export default function OrganizationRequestsPanel({ onChanged }) {
                     </div>
                   ) : null}
                 </div>
+                {!isJoin && duplicates.length ? (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-sm dark:border-amber-800 dark:bg-amber-900/20">
+                    <p className="text-xs font-semibold text-amber-900 dark:text-amber-100">Possible duplicates</p>
+                    <ul className="mt-1 space-y-1">
+                      {duplicates.map((d) => (
+                        <li key={d.id} className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="min-w-0 text-amber-900 dark:text-amber-100">
+                            {d.name}
+                            {d.suburb ? <span className="text-xs"> · {d.suburb}</span> : null}
+                            <span className="ml-1 text-xs opacity-80">({duplicateReasonLabel(d.reason)})</span>
+                          </span>
+                          {mergeable ? (
+                            <button
+                              type="button"
+                              className="btn-ghost text-xs inline-flex items-center gap-1"
+                              disabled={Boolean(busy)}
+                              onClick={() => void merge(item, d)}
+                            >
+                              <FaCodeBranch className="h-3 w-3" aria-hidden /> Merge into this
+                            </button>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {mergingId === item.organization_id && mergeable ? (
+                  <MergeRequestPicker
+                    item={item}
+                    busy={Boolean(busy)}
+                    onPick={(target) => void merge(item, target)}
+                    onCancel={() => setMergingId("")}
+                  />
+                ) : null}
                 {people.length ? (
                   <ul className="mt-2 space-y-1.5">
                     {people.map((p) => (
@@ -146,7 +251,7 @@ export default function OrganizationRequestsPanel({ onChanged }) {
                         <span className="min-w-0">
                           <span className="font-medium text-gray-800 dark:text-gray-100">{p.name}</span>
                           <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
-                            {requestedRoleLabel(p.member_role)}
+                            {isJoin && isMemberJoinPerson(p) ? joinRequestNote(p) : requestedRoleLabel(p.member_role)}
                             {p.membership_status === "pending" ? " · waiting" : " · already active"}
                           </span>
                           <span className="block text-xs text-gray-500 dark:text-gray-400 break-all">

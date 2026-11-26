@@ -27,6 +27,7 @@ import { useOrgCapabilities } from "../hooks/useOrgCapabilities";
 import { listWishlistItems } from "../utils/equipmentWishlist";
 import ResidentHomeHero from "../components/resident/ResidentHomeHero";
 import OrgRequestStatusBanner from "../components/resident/OrgRequestStatusBanner";
+import FindWatchPrompt from "../components/places/FindWatchPrompt";
 import ActiveSosBanner from "../components/patrol/ActiveSosBanner";
 import { useScopedOrganization } from "../utils/organizationScope";
 import { isRpcNotFoundError } from "../utils/isRpcNotFound";
@@ -314,6 +315,7 @@ export default function ResidentDashboard() {
           </div>
         ) : null}
         {householdUser ? <OrgRequestStatusBanner userId={user?.uid || user?.id} /> : null}
+        {householdUser && !staffPreview && !user?.organizationId && !user?.activeOrganizationId ? <FindWatchPrompt /> : null}
         <header>
           <ResidentHomeHero
             firstName={firstNameFrom(user?.fullName)}
