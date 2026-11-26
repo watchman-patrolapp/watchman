@@ -112,6 +112,7 @@ import {
   PilotReadiness,
   RoleAccessGuide,
   ChooseArea,
+  FindWatch,
   ShareCardFixtures,
   AdminAnalytics,
 } from "./lazyPages";
@@ -234,6 +235,15 @@ export default function AppRoutes() {
           element={
             <PrivateRoute>
               <ChooseArea />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/find-watch"
+          element={
+            <PrivateRoute>
+              <FindWatch />
             </PrivateRoute>
           }
         />

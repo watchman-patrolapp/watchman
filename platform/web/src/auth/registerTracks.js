@@ -111,6 +111,11 @@ export function emptyRegisterForm() {
     address: "",
     neighborhoodOrganizationId: "",
     neighborhoodName: "",
+    // City chosen at sign-up (SA places). The area list below is only used for the
+    // platform's home city; other cities pick their watch after the account exists.
+    homeCityId: "",
+    homeCityName: "",
+    homeCityUsesAreaList: true,
     vehicleType: "car",
     carType: "",
     regNumber: "",
@@ -173,8 +178,12 @@ export function validateRegisterForm(track, form) {
     return "Home address is required.";
   }
 
-  if (track.requiresNeighborhood && blank(form.neighborhoodOrganizationId)) {
-    return "Please choose a suburb / neighborhood from the list.";
+  if (track.requiresNeighborhood) {
+    if (form.homeCityUsesAreaList === false) {
+      if (blank(form.homeCityId)) return "Please choose your city or town from the list.";
+    } else if (blank(form.neighborhoodOrganizationId)) {
+      return "Please choose a suburb / neighborhood from the list.";
+    }
   }
 
   if (track.showEmergencyContact) {

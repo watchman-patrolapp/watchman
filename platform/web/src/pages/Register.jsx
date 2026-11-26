@@ -20,6 +20,9 @@ import { formatAuthErrorMessage } from "../utils/authErrorMessage";
 import { loadPublicSignupOptions, securityCompanyOptionLabel } from "../utils/signupOptions";
 import { CURRENT_TERMS_VERSION } from "../utils/termsGate";
 import { DEFAULT_CITY_FULL_NAME } from "../config/neighborhoodRegions";
+import CityPicker from "../components/places/CityPicker";
+import { loadCity } from "../utils/places";
+import { cityUsesSignupAreaList } from "../utils/placesView";
 import {
   isLightMobilityVehicleType,
   getLightMobilityDefaultModel,
@@ -41,6 +44,7 @@ function fieldIdForValidationMessage(message) {
     ["Passwords do not match.", "reg-confirm-password"],
     ["Home address is required.", "reg-address"],
     ["Please choose a suburb", "reg-neighborhood"],
+    ["Please choose your city", "reg-city"],
     ["Emergency contact name is required.", "reg-emergency-first-name"],
     ["Emergency contact surname is required.", "reg-emergency-last-name"],
     ["Emergency contact phone is required.", "reg-emergency-phone"],
@@ -119,8 +123,11 @@ function buildSignupMetadata(track, form, acceptedAt) {
   }
 
   if (track.requiresNeighborhood) {
-    metadata.neighborhood_organization_id = form.neighborhoodOrganizationId || null;
-    metadata.neighborhood_name = form.neighborhoodName.trim() || null;
+    const usesAreaList = form.homeCityUsesAreaList !== false;
+    metadata.neighborhood_organization_id = usesAreaList ? form.neighborhoodOrganizationId || null : null;
+    metadata.neighborhood_name = usesAreaList ? form.neighborhoodName.trim() || null : null;
+    metadata.home_city_id = form.homeCityId || null;
+    metadata.home_city_name = form.homeCityName.trim() || null;
   }
 
   if (track.showEmergencyContact) {
@@ -197,7 +204,10 @@ function Register() {
   const [areas, setAreas] = useState([]);
   const [securityCompanies, setSecurityCompanies] = useState([]);
   const [signupCityName, setSignupCityName] = useState(DEFAULT_CITY_FULL_NAME);
+  const [signupCityId, setSignupCityId] = useState("");
+  const [homeCity, setHomeCity] = useState(null);
   const [signupOptionsLoading, setSignupOptionsLoading] = useState(true);
+  const usesAreaList = form.homeCityUsesAreaList !== false;
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +219,20 @@ function Register() {
         setAreas(options.areas);
         setSecurityCompanies(options.securityCompanies);
         if (options.city?.name) setSignupCityName(options.city.name);
+        if (options.city?.id) {
+          // Start on the platform's home city so today's area list keeps working.
+          setSignupCityId(options.city.id);
+          const full = await loadCity(options.city.id);
+          if (cancelled) return;
+          const startCity = full || { id: options.city.id, name: options.city.name, province: "", nearLabel: "" };
+          setHomeCity(startCity);
+          setForm((prev) => ({
+            ...prev,
+            homeCityId: startCity.id,
+            homeCityName: startCity.name,
+            homeCityUsesAreaList: true,
+          }));
+        }
       } catch (err) {
         console.warn("Register: could not load signup options", err);
         if (!cancelled) {
@@ -224,6 +248,21 @@ function Register() {
       cancelled = true;
     };
   }, []);
+
+  function chooseHomeCity(city) {
+    const homeId = signupCityId;
+    setHomeCity(city);
+    setFieldErrors({});
+    const usesList = city ? cityUsesSignupAreaList(city.id, homeId) : !homeId;
+    setForm((prev) => ({
+      ...prev,
+      homeCityId: city?.id || "",
+      homeCityName: city?.name || "",
+      homeCityUsesAreaList: usesList,
+      neighborhoodOrganizationId: usesList ? prev.neighborhoodOrganizationId : "",
+      neighborhoodName: usesList ? prev.neighborhoodName : "",
+    }));
+  }
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -313,7 +352,7 @@ function Register() {
         return;
       }
     }
-    if (track.requiresNeighborhood && !form.neighborhoodOrganizationId) {
+    if (track.requiresNeighborhood && usesAreaList && !form.neighborhoodOrganizationId) {
       setError("Please choose a suburb / neighborhood from the list.");
       return;
     }
@@ -515,16 +554,39 @@ function Register() {
         {track.requiresAddress || track.requiresNeighborhood ? (
           <section className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Location</h3>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                City
-              </p>
-              <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{signupCityName}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                All neighborhoods on this platform sit under this city.
-              </p>
-            </div>
-            {track.requiresNeighborhood ? (
+            {track.requiresNeighborhood && signupCityId ? (
+              <div id="reg-city">
+                <CityPicker
+                  id="reg-city-search"
+                  label="Where do you live?"
+                  value={homeCity}
+                  onChange={(city) => chooseHomeCity(city)}
+                  required
+                />
+                {fieldErrors["reg-city"] ? (
+                  <p className="mt-1 text-sm text-danger" role="alert">
+                    {fieldErrors["reg-city"]}
+                  </p>
+                ) : null}
+                {homeCity?.id && !usesAreaList ? (
+                  <p className="mt-2 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:bg-teal-900/30 dark:text-teal-100">
+                    Once your account is set up and you've signed in, you'll see the watches in {homeCity.name} and can
+                    join yours, or ask for your suburb if it isn't listed yet.
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  City
+                </p>
+                <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{signupCityName}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  All neighborhoods on this platform sit under this city.
+                </p>
+              </div>
+            )}
+            {track.requiresNeighborhood && usesAreaList && (homeCity?.id || !signupCityId) ? (
               <Field
                 id="reg-neighborhood"
                 label="Suburb / neighborhood"
@@ -776,7 +838,12 @@ function Register() {
                 required
               />
             </Field>
-            <Field id="reg-watch-area" label="Primary suburb / area" required>
+            <Field
+              id="reg-watch-area"
+              label="Primary suburb / area"
+              required
+              hint={`Starting a watch outside ${signupCityName}? Register as a resident, then ask for your suburb from your dashboard.`}
+            >
               <input
                 id="reg-watch-area"
                 name="watchArea"
@@ -963,7 +1030,7 @@ function Register() {
         <Button
           type="submit"
           loading={loading}
-          disabled={track.requiresNeighborhood && (signupOptionsLoading || areas.length === 0)}
+          disabled={track.requiresNeighborhood && usesAreaList && (signupOptionsLoading || areas.length === 0)}
           className="w-full"
         >
           {loading ? "Registering…" : `Register as ${track.label}`}
